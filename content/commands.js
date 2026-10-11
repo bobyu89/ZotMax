@@ -498,13 +498,6 @@
 				let t = writingTarget(sel);
 				return ZB().reviewDraft.run(t.items, t.scope, t.context);
 			} },
-		{ id: "ebhc-report", group: "ai", l10n: "zotero-bridge-menu-ebhc-report", label: "產生實證健康照護報告草稿（AI）",
-			features: ["ebhcReport"], needs: "itemsOrCollection", menus: ["item", "collection"],
-			keywords: [...KW.ai, "實證", "實證報告", "ebhc", "ebp", "evidence-based", "evidence based", "護理學會", "twna", "報告", "report", "草稿", "draft", "pico"],
-			run: (sel) => {
-				let t = writingTarget(sel);
-				return ZB().ebhcReport.run(t.items, t.scope, t.context);
-			} },
 		{ id: "progress-report", group: "ai", l10n: "zotero-bridge-menu-progress-report", label: "產生進度報告（給指導教授）",
 			features: ["progressReport"], needs: null, menus: [],
 			keywords: ["進度", "進度報告", "progress", "progress report", "指導教授", "advisor", "supervisor", "meeting", "會議", "meeting notes"],
@@ -583,9 +576,9 @@
 		{ id: "pubmedWatch", label: "PubMed 新文獻追蹤", features: ["pubmedWatch"], keywords: ["pubmed", "追蹤", "watch", "新文獻", "檢索式"] },
 		{ id: "citationChase", label: "引文追蹤", features: ["citationChase"], keywords: ["引文追蹤", "citation", "openalex"] },
 		{ id: "screening", label: "篩選", features: ["screening"], keywords: ["篩選", "screening", "prisma", "排除原因", "exclusion reasons"] },
-		{ id: "ai", label: "AI 服務", features: ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "ebhcReport", "progressReport", "conceptsAI"],
+		{ id: "ai", label: "AI 服務", features: ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "progressReport", "conceptsAI"],
 			keywords: ["ai", "api key", "claude", "openai", "anthropic", "模型", "model", "提示詞", "prompt"] },
-		{ id: "usage", label: "本月 AI 用量", features: ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "ebhcReport", "progressReport", "conceptsAI"],
+		{ id: "usage", label: "本月 AI 用量", features: ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "progressReport", "conceptsAI"],
 			keywords: ["用量", "費用", "usage", "cost", "token", "花費"] },
 	];
 	for (let s of SECTIONS) {

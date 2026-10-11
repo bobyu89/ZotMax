@@ -5,7 +5,7 @@
  * The form is prefilled from the AI note's 嚴格評讀 section (AI 初評) and saved as its own child note
  * (tag zotero-bridge-appraisal: a readable table plus a JSON block), so the AI note is never
  * overwritten. Once the user ticks 「我已核對」, the form's tool and overall verdict replace the AI
- * values in Obsidian, Notion, the screening evidence table and the EBHC report.
+ * values in Obsidian, Notion and the screening evidence table.
  *
  * The checklists and pure helpers are in appraisal-tools.js. The functions down to "Zotero" are
  * pure (Node tests); the rest needs Zotero.
@@ -234,43 +234,6 @@
 			appraisal_tool: tool ? tool.name : study.appraisal_tool,
 			appraisal_overall: record.overall || study.appraisal_overall,
 		});
-	}
-
-	/** The verified form in the AI note's own 「嚴格評讀」 format (for the EBHC report prompt). */
-	function appraisalSection(record) {
-		let tool = tools.getTool(record.tool);
-		return [
-			`## ${AI_HEADING}`,
-			`- 評讀工具：${tool.name}（研究者已逐題核對${record.verifiedAt ? `，${record.verifiedAt}` : ""}）`,
-			"",
-			tools.toMarkdownTable(tool, record.answers),
-			"",
-			`- 整體評價：${overallLine(record)}`,
-		].join("\n");
-	}
-
-	/** Replace (or add) the 嚴格評讀 section of a Markdown note. */
-	function replaceAppraisalSection(md, section) {
-		let text = String(md || "");
-		let m = new RegExp(`^(#{1,6})\\s*${AI_HEADING}\\s*$`, "m").exec(text);
-		if (!m) return (text.trim() ? text.trim() + "\n\n" : "") + section;
-		let after = text.slice(m.index + m[0].length);
-		let next = new RegExp(`^#{1,${m[1].length}}\\s`, "m").exec(after);
-		let end = next ? m.index + m[0].length + next.index : text.length;
-		return text.slice(0, m.index) + section + (next ? "\n\n" + text.slice(end) : "");
-	}
-
-	/**
-	 * EBHC report hook: a source { data, aiMarkdown, study } whose item has a verified form gets the
-	 * form as its 嚴格評讀 section and the form's tool and verdict in its structured data.
-	 */
-	function applyToSource(src) {
-		let record = src && src.data && src.data.appraisalNote ? readNoteHTML(src.data.appraisalNote.html) : null;
-		if (!record || !record.verified || !tools.getTool(record.tool)) return src;
-		src.aiMarkdown = replaceAppraisalSection(src.aiMarkdown, appraisalSection(record));
-		src.study = overrideStudy(src.study, record);
-		src.appraisalVerified = true;
-		return src;
 	}
 
 	// ---------- collection summary (pure) ----------
@@ -1066,7 +1029,7 @@
 		NOTE_TAG, NOTE_TITLE, DATA_HEADING, SECTION_HEADING, KAPPA_FORMULA, REVIEW_FOLDER,
 		// pure
 		hasContent, statusOf, statusText, prefill, mergeAI, noteHTML, readNoteHTML, sectionMarkdown, recordFor, syncInfo,
-		overrideStudy, appraisalSection, replaceAppraisalSection, applyToSource,
+		overrideStudy,
 		summaryPaths, counts, agreement, summaryBody, summaryCSV, summaryFrontmatter, buildSummaryNote, wordDocument,
 		// Zotero
 		getFormNote, loadRecord, initialRecord, saveRecord, stateFor, renderPaneRow, paneSummary, insertNotionTable, overrideStudyForItem,

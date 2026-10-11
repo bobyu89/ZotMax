@@ -127,7 +127,6 @@ pref("extensions.zotero-bridge.feature.screening", true);
 pref("extensions.zotero-bridge.feature.appraisalForm", true);
 pref("extensions.zotero-bridge.feature.synthesis", false);
 pref("extensions.zotero-bridge.feature.reviewDraft", false);
-pref("extensions.zotero-bridge.feature.ebhcReport", false);
 pref("extensions.zotero-bridge.feature.progressReport", false);
 pref("extensions.zotero-bridge.feature.conceptsAI", false);
 pref("extensions.zotero-bridge.feature.aiHighlights", false);

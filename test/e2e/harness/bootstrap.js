@@ -362,7 +362,6 @@ const TESTS = [
 				citationChase: ["chaseCollection", "chaseItems", "importChecked"],
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "menuTargets", "relatedFor", "showMore", "openTarget"],
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "batchParams", "parseResults"],
-				ebhcReport: ["run", "askOptions", "processReport", "buildReportNote"],
 				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "stateFor", "exportSummary", "exportCollections"],
 				appraisalCoach: ["readiness", "buildPrompt", "parseResponse", "verifyItems", "compare", "decide", "summaryLine", "run", "runFromCommand", "renderRowButton", "renderFormSection", "blockedReason"],
 				progressReport: ["run", "askOptions", "logStatusChange", "latestReport"],
@@ -2168,7 +2167,7 @@ const TESTS = [
 			// Off in 研究生引導, on in 進階 (features.js); none of these has its own onShowing condition
 			// (entries of the item and collection menus' 「ZotMax ▸」 submenus, from content/commands.js)
 			const GATED = [
-				"zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report",
+				"zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft",
 				"zotero-bridge-toolbar-chase-items", "zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
 				"zotero-bridge-cmd-appraisal-coach",
 			];
@@ -2189,7 +2188,7 @@ const TESTS = [
 			};
 			// The toolbar menu's entries (content/toolbar.js), off in 研究生引導 / on in both
 			const TOOLBAR_GATED = ["pubmed-watch", "chase-items", "chase-included", "chase-import", "synthesis", "review-draft",
-				"ebhc-report", "progress-report", "concepts-ai", "appraisal-coach"];
+				"progress-report", "concepts-ai", "appraisal-coach"];
 			const TOOLBAR_ALWAYS = ["palette", "sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status", "classify", "dashboard", "concepts",
 				"bibliography", "export-collection", "quick-search", "search-item", "screen", "dedup", "prisma", "appraisal-summary", "regenerate", "settings"];
 			let button = mainWindow().document.getElementById(ZB.toolbar.BUTTON_ID);
