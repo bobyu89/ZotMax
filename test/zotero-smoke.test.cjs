@@ -350,10 +350,10 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 		["zotero-bridge-collection", "main/library/collection"], ["zotero-bridge-tools", "main/menubar/tools"]]);
 	assert.equal(env.panes[0].paneID, "zotero-bridge-ai-note");
 	// The ZotMax submenus (items and collections) end with the AI group: AI notes, then the drafts
-	// (review-draft.js, ebhc-report.js)
+	// (review-draft.js)
 	for (let i of [0, 1]) {
-		assert.deepEqual([...env.menus[i].menus[0].menus.slice(-6).map(m => m.l10nID || m.menuType)],
-			["separator", "zotero-bridge-toolbar-group-ai", "zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report"]);
+		assert.deepEqual([...env.menus[i].menus[0].menus.slice(-5).map(m => m.l10nID || m.menuType)],
+			["separator", "zotero-bridge-toolbar-group-ai", "zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft"]);
 	}
 
 	let { MockItem, addChild } = env;

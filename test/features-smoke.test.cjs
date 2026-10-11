@@ -232,7 +232,6 @@ function noneShown(env, id, context) {
 const GATED_IN_GUIDED = {
 	"synthesis": "synthesis",
 	"review-draft": "reviewDraft",
-	"ebhc-report": "ebhcReport",
 	"pubmed-watch": "pubmedWatch",
 	"chase-items": "citationChase",
 	"chase-included": "citationChase",
@@ -324,12 +323,11 @@ test("switched-off features do no background work and make no network calls", as
 	let b = new env.MockItem("journalArticle", { title: "B" });
 	await ZB.main.runSynthesis([a, b], { label: "x" });
 	await ZB.reviewDraft.run([a, b], { label: "x" }, {});
-	await ZB.ebhcReport.run([a, b], { label: "x" }, {});
 	await ZB.progressReport.run();
 	await ZB.concepts.synthesizeFromMenu();
 	await ZB.citationChase.chaseItems([a]);
 	await ZB.pubmedWatch.runAll();
-	assert.equal(env.descriptions.length, 7);
+	assert.equal(env.descriptions.length, 6);
 	for (let text of env.descriptions) assert.match(text, /目前關閉。要使用的話：設定 → ZotMax → 功能，把它打開。/);
 
 	// After a manual sync: the dashboard, concept cards and references.json are skipped when off
@@ -756,7 +754,7 @@ test("settings pane: a tab whose features are all off says which and leads to �
 	assert.equal(box.getAttribute("no-highlight"), "true");
 	let text = box.querySelector("p");
 	assert.equal(text.getAttribute("data-l10n-id"), "zotero-bridge-prefs-tab-empty");
-	assert.match(text.textContent, /^這一頁的功能都關著：AI 文獻筆記、批次 API、文獻比較表、文獻探討草稿、實證報告草稿、進度報告、概念卡片 AI 綜整。/);
+	assert.match(text.textContent, /^這一頁的功能都關著：AI 文獻筆記、批次 API、文獻比較表、文獻探討草稿、進度報告、概念卡片 AI 綜整。/);
 	assert.equal(JSON.parse(text.getAttribute("data-l10n-args")).features.split("、")[0], "AI 文獻筆記");
 	p.window.ZoteroBridgePrefs.selectTab("ai");
 	let go = box.querySelector("button");

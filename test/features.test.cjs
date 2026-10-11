@@ -45,14 +45,14 @@ test("catalog: unique IDs, known groups and requirements, both presets on every 
 
 test("presets: 研究生引導 leaves finding literature and writing to the user; 進階 turns everything on", () => {
 	let offInGuided = F.FEATURES.filter(f => !f.presets.guided).map(f => f.id).sort();
-	assert.deepEqual(offInGuided, ["aiBatch", "aiHighlights", "appraisalCoach", "citationChase", "classifyAI", "conceptsAI", "ebhcReport", "progressReport", "pubmedWatch", "reviewDraft", "statsExplainer", "synthesis"]);
+	assert.deepEqual(offInGuided, ["aiBatch", "aiHighlights", "appraisalCoach", "citationChase", "classifyAI", "conceptsAI", "progressReport", "pubmedWatch", "reviewDraft", "statsExplainer", "synthesis"]);
 	assert.ok(F.FEATURES.every(f => f.presets.advanced), "advanced: all on");
 	// The features that help the user do it themselves stay on
 	for (let id of ["sync", "aiNotes", "status", "apaZh", "dashboard", "concepts", "autoClassify", "toolbarButton", "bibliography", "screening", "searchLinks", "appraisalForm", "annotationImages", "fullTextMarkdown"]) {
 		assert.equal(F.get(id).presets.guided, true, id);
 	}
 	// Every AI feature is marked, and so is every feature that goes online on its own
-	for (let id of ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "ebhcReport", "conceptsAI", "classifyAI", "aiHighlights", "appraisalCoach", "statsExplainer"]) {
+	for (let id of ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "conceptsAI", "classifyAI", "aiHighlights", "appraisalCoach", "statsExplainer"]) {
 		assert.equal(F.get(id).usesAI, true, id);
 		assert.equal(F.get(id).usesNetwork, true, id);
 	}

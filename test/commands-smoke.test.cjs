@@ -39,7 +39,6 @@ const OLD_ENTRIES = [
 	["zotero-bridge-item", "zotero-bridge-menu-notion", "sync-notion", ["item", "collection"]],
 	["zotero-bridge-item", "zotero-bridge-menu-synthesis", "synthesis", ["item", "collection"]],
 	["zotero-bridge-item", "zotero-bridge-menu-review-draft", "review-draft", ["item", "collection"]],
-	["zotero-bridge-item", "zotero-bridge-menu-ebhc-report", "ebhc-report", ["item", "collection"]],
 	// Item menu: the other registrations
 	["zotero-bridge-screening-item", "zotero-bridge-screen-menu", "screen", ["item"]],
 	["zotero-bridge-chase-item", "zotero-bridge-chase-items", "chase-items", ["item"]],
@@ -483,14 +482,14 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"zotero-bridge-classify-tools", "zotero-bridge-cmd-zh-meta", "zotero-bridge-search-menu ▸", "zotero-bridge-toolbar-chase-items", "zotero-bridge-toolbar-screen ▸",
 		"zotero-bridge-cmd-appraisal-coach",
-		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report",
+		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft",
 	]);
 	same(shown(collMenu, cctx).filter(x => !x.startsWith("#") && x !== "—"), [
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"zotero-bridge-classify-tools", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
 		"zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
 		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary",
-		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-menu-ebhc-report",
+		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft",
 	]);
 	// Tools: 設定… and 快速指令… always; the batch entries only while they apply
 	let tools = env.menus.find(o => o.menuID === "zotero-bridge-tools").menus;

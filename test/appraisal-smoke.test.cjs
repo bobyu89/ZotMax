@@ -478,7 +478,7 @@ test("文獻評讀表: pane prefilled from the AI note → answers, B reviewer, 
 	await vm.runInContext("shutdown()", env.context);
 });
 
-test("文獻評讀表: changing the tool after own answers asks first; discard reloads; screening and EBHC use the verified form", async () => {
+test("文獻評讀表: changing the tool after own answers asks first; discard reloads; screening uses the verified form", async () => {
 	let env = makeEnv({ fetch: async () => { throw new Error("no network"); }, prefs: { "extensions.zotero-bridge.llm.enabled": false } });
 	await vm.runInContext(`startup({ id: "zb", version: "0", rootURI: ${JSON.stringify(ROOT_URI)} })`, env.context);
 	let ZB = env.context.ZB;
@@ -507,15 +507,12 @@ test("文獻評讀表: changing the tool after own answers asks first; discard r
 	assert.equal(row().querySelector('[data-zb-item="1"] [aria-pressed="true"]'), null);
 	assert.equal(row().querySelector('[data-zb-action="discard"]'), null);
 
-	// A verified form for the screening evidence table and the EBHC report
+	// A verified form for the screening evidence table
 	let record = ZB.appraisalTools.normalizeRecord({ tool: "jbi-qualitative", answers: { 1: "是" }, overall: "排除", verified: true, verifiedAt: "2026-10-08" });
 	await ZB.appraisalForm.saveRecord(item, record);
 	let study = { study_design: "qualitative", appraisal_tool: "CASP Qualitative Checklist", appraisal_overall: "納入" };
 	assert.deepEqual(JSON.parse(JSON.stringify(ZB.appraisalForm.overrideStudyForItem(item, study))),
 		Object.assign({}, study, { appraisal_tool: "JBI Checklist for Qualitative Research", appraisal_overall: "排除" }));
-	let data = await ZB.adapter.extractItemData(item, {});
-	let src = ZB.appraisalForm.applyToSource({ data, aiMarkdown: ZB.main.readAINote(data.aiNote.html).md, study });
-	assert.match(src.aiMarkdown, /## 嚴格評讀\n- 評讀工具：JBI Checklist for Qualitative Research（研究者已逐題核對，2026-10-08）/);
 	assert.deepEqual(env.errors, []);
 	await vm.runInContext("shutdown()", env.context);
 });

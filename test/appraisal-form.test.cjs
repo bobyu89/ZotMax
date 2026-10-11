@@ -1,5 +1,5 @@
 // 文獻評讀表 sync and summary (appraisal-form.js, pure parts): AI prefill, the child note round trip,
-// the Obsidian section and frontmatter, Notion properties and blocks, the EBHC/screening hooks, and
+// the Obsidian section and frontmatter, Notion properties and blocks, the screening hook, and
 // the collection summary (traffic-light matrix, CSV, Word version, Cohen's kappa).
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -210,27 +210,15 @@ test("Notion: Appraisal Verified checkbox; the verified form's tool and verdict;
 	assert.deepEqual(messages, ["⚠️ Notion 文獻評讀表：Notion API 500"]);
 });
 
-test("EBHC and screening hooks: a verified form replaces the 嚴格評讀 section and the tool/verdict; unverified changes nothing", () => {
-	let html = form.noteHTML(verifiedRecord());
-	let src = { data: { appraisalNote: { html } }, aiMarkdown: AI_MD, study: AI_DATA };
-	form.applyToSource(src);
-	assert.equal(src.appraisalVerified, true);
-	assert.match(src.aiMarkdown, /## 嚴格評讀\n- 評讀工具：CASP Checklist: For Randomised Controlled Trials \(RCTs\) \(2024\)（研究者已逐題核對，2026-10-08）\n\n\| 評讀項目 \| 評讀結果 \| 評析根據 \|/);
-	assert.match(src.aiMarkdown, /- 整體評價：納入 — 整體可信\n\n## 證據等級\nLevel 2$/);
-	assert.doesNotMatch(src.aiMarkdown, /JBI Checklist/);
-	assert.match(src.aiMarkdown, /^## 一句話摘要/);
-	assert.equal(src.study.appraisal_tool, tools.getTool("casp-rct").name);
-	assert.equal(src.study.sample_size, 120);
+test("screening hook: a verified form replaces the tool/verdict in the structured data; unverified changes nothing", () => {
+	let study = form.overrideStudy(AI_DATA, verifiedRecord());
+	assert.equal(study.appraisal_tool, tools.getTool("casp-rct").name);
+	assert.equal(study.sample_size, 120);
 	assert.equal(AI_DATA.appraisal_tool, "JBI Checklist for Randomized Controlled Trials", "the AI data is not mutated");
 
 	let unverified = tools.normalizeRecord(Object.assign({}, verifiedRecord(), { verified: false }));
-	let src2 = { data: { appraisalNote: { html: form.noteHTML(unverified) } }, aiMarkdown: AI_MD, study: AI_DATA };
-	form.applyToSource(src2);
-	assert.equal(src2.aiMarkdown, AI_MD);
-	assert.equal(src2.study, AI_DATA);
+	assert.equal(form.overrideStudy(AI_DATA, unverified), AI_DATA);
 	assert.equal(form.overrideStudy(null, verifiedRecord()), null);
-	// A note without the section gets one at the end
-	assert.match(form.replaceAppraisalSection("## 主要結果\nx", "## 嚴格評讀\ny"), /^## 主要結果\nx\n\n## 嚴格評讀\ny$/);
 });
 
 test("collection summary: counts, traffic lights per tool, per-study tables, kappa with formula, CSV and Word version", () => {
