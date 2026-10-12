@@ -6,26 +6,26 @@
 
 **整理、追蹤、評讀交給它；找文獻和寫作留給你。** 新安裝預設是「研究生引導」模式：自動找文獻和 AI 寫草稿的功能先關著，每個功能都能單獨開關。
 
-- **下載**：[最新版 `.xpi`](https://github.com/bobyu89/zotero-bridge/releases/latest)。裝一次之後，Zotero 會自動檢查並更新。
-- **[安裝精靈](https://bobyu89.github.io/zotero-bridge/)**：依你的電腦、AI 服務商和筆記工具，先帶你準備好 Obsidian vault、Notion 和 API 金鑰，再把 `.xpi` 裝進 Zotero，之後交給外掛的首次設定精靈；進度會記住。
-- **[醫學文獻快速搜尋](https://bobyu89.github.io/zotero-bridge/search.html)**：PubMed、CINAHL、Cochrane、華藝、臺灣博碩士論文一次開，含 PICO 檢索式產生器。不用安裝，手機也能用。
-- **[文獻評讀表](https://bobyu89.github.io/zotero-bridge/appraisal.html)**：CASP、JBI 逐題評讀，複製成 Word 或 Markdown 表格。不用安裝。
+- **下載**：[最新版 `.xpi`](https://github.com/bobyu89/ZotMax/releases/latest)。裝一次之後，Zotero 會自動檢查並更新。
+- **[安裝精靈](https://bobyu89.github.io/ZotMax/)**：依你的電腦、AI 服務商和筆記工具，先帶你準備好 Obsidian vault、Notion 和 API 金鑰，再把 `.xpi` 裝進 Zotero，之後交給外掛的首次設定精靈；進度會記住。
+- **[醫學文獻快速搜尋](https://bobyu89.github.io/ZotMax/search.html)**：PubMed、CINAHL、Cochrane、華藝、臺灣博碩士論文一次開，含 PICO 檢索式產生器。不用安裝，手機也能用。
+- **[文獻評讀表](https://bobyu89.github.io/ZotMax/appraisal.html)**：CASP、JBI 逐題評讀，複製成 Word 或 Markdown 表格。不用安裝。
 
 需要 Zotero 10；Obsidian 建議 1.14 以上（彩色劃線與 Bases 看板）。
 
-[5 分鐘開始](#5-分鐘開始) · [兩種模式與功能開關](#兩種模式與功能開關) · [功能導覽](#依研究流程的功能導覽) · [常見問題](#常見問題與疑難排解) · [隱私與費用](#隱私與費用) · [給開發者](#給開發者) · [版本紀錄](https://github.com/bobyu89/zotero-bridge/releases)
+[5 分鐘開始](#5-分鐘開始) · [兩種模式與功能開關](#兩種模式與功能開關) · [功能導覽](#依研究流程的功能導覽) · [常見問題](#常見問題與疑難排解) · [隱私與費用](#隱私與費用) · [給開發者](#給開發者) · [版本紀錄](https://github.com/bobyu89/ZotMax/releases)
 
 ## 5 分鐘開始
 
 1. **安裝**：下載 `zotero-bridge-x.y.z.xpi`（用 Firefox 下載請在連結上按右鍵 →「另存連結」，不然 Firefox 會把它當成自己的擴充功能），然後 Zotero → 工具 → 附加元件（英文介面：Tools → Plugins）→ 右上角齒輪 → **Install Plugin From File…**。
 2. **接上筆記工具**（至少一個）：第一次安裝後自動打開的[設定精靈](#首次設定精靈)會一步一步帶你做；要自己來，就到 Zotero → 設定 → **ZotMax** →「同步」分頁。
    - **Obsidian**：「Vault 資料夾路徑」選 vault 的根目錄。筆記預設放在 `Zotero/` 子資料夾。
-   - **Notion**：建立一個 integration，把資料庫分享給它，貼上 token 和「預設資料庫連結」，按 **測試連線並補齊資料庫欄位**，欄位會自動建好。
+   - **Notion**：建立一個 integration，把資料庫分享給它，貼上 token 和「預設資料庫連結」，按 **測試連線並補齊資料庫欄位**，欄位會自動建好。還沒有資料庫的話，先把一個 Notion 頁面分享給 integration，再按「預設資料庫連結」旁的 **建立新的資料庫…**，ZotMax 會在那個頁面底下建好有全部欄位的資料庫並填好連結。
 3. **AI（選用）**：在「AI 服務」選 Anthropic（Claude）或 OpenAI，貼上 API key。API 另外計費，ChatGPT／Claude 的訂閱方案不能用在這裡。先不想用 AI，就到「功能」關掉「AI 文獻筆記」，或同步時選「同步但不呼叫 AI」。
 4. **第一次同步**：在文獻清單選幾篇文獻，按文獻清單上方工具列（「新增筆記」右邊）的 **ZotMax** 按鈕 → **同步所選文獻（Notion + Obsidian）**。
 5. **看結果**：Obsidian 的 `Zotero/` 裡每篇一份文獻筆記，最上面是「重點」；Notion 資料庫每篇一頁，欄位可以排序、篩選。
 
-Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bobyu89.github.io/zotero-bridge/)有逐步說明。以下是設定頁的細節，需要時再展開。
+Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bobyu89.github.io/ZotMax/)有逐步說明。以下是設定頁的細節，需要時再展開。
 
 ### 首次設定精靈
 
@@ -33,7 +33,7 @@ Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bob
 
 1. **歡迎**：ZotMax 做什麼、不做什麼（找文獻和寫作留給你；AI 只在你打開後出現；每個功能都能關）。
 2. **選模式**：研究生引導（建議新手）或進階，之後可在 設定 → 功能 改。
-3. **筆記放哪裡**：Obsidian（選 vault 資料夾，精靈會檢查它是不是資料夾、有沒有 `.obsidian`）、Notion（貼 token 和資料庫連結，按「測試連線」）、兩個都要，或先不用。
+3. **筆記放哪裡**：Obsidian（選 vault 資料夾，精靈會檢查它是不是資料夾、有沒有 `.obsidian`）、Notion（貼 token 和資料庫連結，按「測試連線」；還沒有資料庫，可以按「找可以放資料庫的頁面」→ 選一個已分享給 integration 的頁面 →「在這個頁面建立資料庫」，連結會自動填好並測試連線）、兩個都要，或先不用。
 4. **AI（選填）**：選 Claude 或 OpenAI、貼 API key。key 存在系統的登入管理員，不寫進設定檔；精靈只檢查格式，不會為了測試去呼叫 API 花你的錢。不確定就按「先不用 AI」。
 5. **試一次**：用你選取的文獻（沒選就用清單第一篇）同步一次，不呼叫 AI、不花錢，完成後顯示筆記寫到哪裡，可以直接「在 Obsidian 開啟」。
 6. **完成**：告訴你工具列按鈕、右側面板、快速指令和設定頁在哪。
@@ -47,6 +47,8 @@ Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bob
 2. 在 Notion 建立一個資料庫（空白的 Table 就可以），右上角 `•••` → **Connections** → 加入剛剛的 integration。
 3. 複製資料庫連結（`https://www.notion.so/...`），貼到「預設資料庫連結」或分流規則。
 4. 按 **測試連線並補齊資料庫欄位**。新資料庫用中文欄位（括號裡是舊版的英文名稱）：
+
+**讓 ZotMax 幫你建資料庫**（取代上面第 2、3 步）：integration 只能在分享給它的頁面裡建立東西，所以還是要先在 Notion 打開一個頁面（例如「碩論文獻」），右上角 `⋯` → **Connections** → 選你的 integration。然後在設定精靈的 Notion 欄位按 **找可以放資料庫的頁面** → 選那個頁面 → **在這個頁面建立資料庫**，或在設定頁按「預設資料庫連結」旁的 **建立新的資料庫…** 選頁面。ZotMax 會在那個頁面底下建立「ZotMax 文獻」資料庫（下表的欄位全部建好）、填好連結並測試連線；只有你按下去才會建，一次一個。integration 一個頁面都看不到時，會告訴你怎麼分享。設定好的資料庫被刪除、移到垃圾桶或取消分享時，測試連線和同步會說找不到，並提醒你可以用同一個按鈕重新建立（不會自己建）。
 
 | 類別 | 欄位 |
 |---|---|
@@ -519,7 +521,7 @@ Zotero 的「工具」選單只留「ZotMax 設定…」、「ZotMax 快速指�
 - **醫學文獻快速搜尋**：內建 PubMed、Cochrane、CINAHL、Embase、Google Scholar、華藝、臺灣博碩士論文等 21 個資料庫（可自訂、可設學校的 EZproxy）。出現在四個地方：條目右鍵 **ZotMax ▸ 在醫學資料庫搜尋**（找這篇、PubMed 相似文獻）、右側面板的搜尋連結與 PICO 檢索連結、筆記的「🔎 延伸搜尋」（找這篇、MeSH、PICO 檢索式），以及 ZotMax 按鈕或快速指令 → **醫學文獻快速搜尋…**（輸入關鍵字，英文會建議 MeSH 主題詞）。檢索式還是你自己決定。→ 設定 → 醫學文獻快速搜尋
 - **PubMed 新文獻追蹤**（研究生引導預設關閉）：存好 PubMed 檢索式（可用 MeSH），手動或定期把新文獻用 Zotero 內建匯入器匯入指定分類，不會重複匯入，並在 Obsidian 產生每日清單。→ ZotMax 按鈕或快速指令 → **檢查新文獻（PubMed 追蹤）**、設定 → PubMed 新文獻追蹤
 - **引文追蹤**（研究生引導預設關閉）：從納入研究用 [OpenAlex](https://openalex.org)（免費、不需 API key）往回查參考文獻、往前查引用它的文獻，去重後列成 Obsidian 勾選清單與 CSV；**只列候選，不自動匯入**，勾選的再一鍵匯入。→ 工具列「找文獻」、分類右鍵 → **ZotMax：引文追蹤**
-- **網頁版搜尋**：[bobyu89.github.io/zotero-bridge/search.html](https://bobyu89.github.io/zotero-bridge/search.html)，不用 Zotero、手機也能用，含 PICO 檢索式產生器。
+- **網頁版搜尋**：[bobyu89.github.io/ZotMax/search.html](https://bobyu89.github.io/ZotMax/search.html)，不用 Zotero、手機也能用，含 PICO 檢索式產生器。
 
 <details>
 <summary>醫學文獻快速搜尋：四個入口的細節與範例</summary>
@@ -659,7 +661,7 @@ PRISMA 2020 要求報告「其他方法」找到的文獻，最常見的就是�
 <details>
 <summary>網頁版醫學文獻快速搜尋</summary>
 
-[bobyu89.github.io/zotero-bridge/search.html](https://bobyu89.github.io/zotero-bridge/search.html)：輸入一次檢索詞，按資料庫就在新分頁開；「全部開啟」一次開一組（護理實證常用、免費資源、中文文獻、臨床指引、臨床試驗登錄）。
+[bobyu89.github.io/ZotMax/search.html](https://bobyu89.github.io/ZotMax/search.html)：輸入一次檢索詞，按資料庫就在新分頁開；「全部開啟」一次開一組（護理實證常用、免費資源、中文文獻、臨床指引、臨床試驗登錄）。
 
 - **PICO 檢索式產生器**：P、I、C（選填）、O 各填同義詞與 MeSH，產生 PubMed 版（`[tiab]`／`[Mesh]`，可加出版年、語言、RCT／系統性回顧／指引、排除只有動物的研究）、CINAHL 版（`TI`／`AB`／`MH "…+"`）和一般版，一鍵複製或「在 PubMed 執行」。
 - **中文檢索詞**：中文資料庫排最前面，並提示常見護理詞的英文關鍵字（只是對照，不是翻譯）。
@@ -685,7 +687,7 @@ PRISMA 2020 要求報告「其他方法」找到的文獻，最常見的就是�
 | 臨床試驗登錄 | ClinicalTrials.gov | 確定 | OK | 免費 |
 | | WHO ICTRP | 首頁 | OK | 免費 |
 
-**確定**＝實測帶得進檢索詞；**推測**＝要先登入、無法實測到結果頁，開啟時也會複製檢索詞；**首頁**＝沒有可靠的搜尋網址，開首頁並複製檢索詞。完整網址在頁面最下方「網址格式與狀態」。打不開或沒帶入檢索詞，請到 [Issues](https://github.com/bobyu89/zotero-bridge/issues) 回報。
+**確定**＝實測帶得進檢索詞；**推測**＝要先登入、無法實測到結果頁，開啟時也會複製檢索詞；**首頁**＝沒有可靠的搜尋網址，開首頁並複製檢索詞。完整網址在頁面最下方「網址格式與狀態」。打不開或沒帶入檢索詞，請到 [Issues](https://github.com/bobyu89/ZotMax/issues) 回報。
 
 </details>
 
@@ -796,7 +798,7 @@ PRISMA 2020 要求報告「其他方法」找到的文獻，最常見的就是�
 
 #### 評讀表網頁
 
-[bobyu89.github.io/zotero-bridge/appraisal.html](https://bobyu89.github.io/zotero-bridge/appraisal.html)：不用 Zotero、不用安裝，手機也能填 CASP、JBI 評讀表，適合課堂作業、讀書會和 EBHC 報告。題目和外掛共用同一份清單；評讀內容只存在你的瀏覽器，不會送到任何伺服器。
+[bobyu89.github.io/ZotMax/appraisal.html](https://bobyu89.github.io/ZotMax/appraisal.html)：不用 Zotero、不用安裝，手機也能填 CASP、JBI 評讀表，適合課堂作業、讀書會和 EBHC 報告。題目和外掛共用同一份清單；評讀內容只存在你的瀏覽器，不會送到任何伺服器。
 
 <details>
 <summary>網頁評讀表的功能</summary>
@@ -984,8 +986,8 @@ pandoc 論文.md --citeproc --bibliography Zotero/references.json --csl apa.csl 
 
 遇到問題或想給意見，用 ZotMax 裡的這兩個指令最方便（都需要 GitHub 帳號；GitHub 上的內容是**公開的**）：
 
-- **回報問題…**：先跳出對話框，列出會附上的環境資訊，可以按「複製」，或「在瀏覽器開啟 GitHub」打開[回報問題表單](https://github.com/bobyu89/zotero-bridge/issues/new?template=bug.yml)並自動填進「環境」欄。你做了什麼、發生了什麼事，再自己寫。
-- **試用回饋…**：打開[試用問卷](https://github.com/bobyu89/zotero-bridge/issues/new?template=feedback.yml)（約 5 分鐘，只有「整體來說有沒有用」必填），版本和模式會先填好。
+- **回報問題…**：先跳出對話框，列出會附上的環境資訊，可以按「複製」，或「在瀏覽器開啟 GitHub」打開[回報問題表單](https://github.com/bobyu89/ZotMax/issues/new?template=bug.yml)並自動填進「環境」欄。你做了什麼、發生了什麼事，再自己寫。
+- **試用回饋…**：打開[試用問卷](https://github.com/bobyu89/ZotMax/issues/new?template=feedback.yml)（約 5 分鐘，只有「整體來說有沒有用」必填），版本和模式會先填好。
 
 **在哪裡**：工具列 ZotMax 按鈕選單的最下面（設定精靈…上方）、快速指令搜「回報」或「回饋」，以及 設定 → ZotMax →「功能」分頁最下面。
 
@@ -1013,7 +1015,7 @@ pandoc 論文.md --citeproc --bibliography Zotero/references.json --csl apa.csl 
 
 **Zotero 刪掉的文獻，筆記會怎樣？** Notion 頁面移到 Notion 垃圾桶；Obsidian 筆記不會刪，只把 `status` 改成「已刪除」。
 
-**出錯了去哪裡看？** 進度視窗會列出每一篇的結果；詳細記錄在 Zotero 的 說明 → 除錯輸出記錄。仍然有問題，請用「回報問題…」（見[回報問題與試用回饋](#回報問題與試用回饋)）或到 [GitHub Issues](https://github.com/bobyu89/zotero-bridge/issues) 回報。
+**出錯了去哪裡看？** 進度視窗會列出每一篇的結果；詳細記錄在 Zotero 的 說明 → 除錯輸出記錄。仍然有問題，請用「回報問題…」（見[回報問題與試用回饋](#回報問題與試用回饋)）或到 [GitHub Issues](https://github.com/bobyu89/ZotMax/issues) 回報。
 
 **Zotero 出新的大版本後外掛被停用？** 外掛宣告支援到 Zotero 10.x，依 Zotero 規定不能預先宣告未來版本。Zotero 11 推出時會先停用外掛，確認相容後會自動恢復，不用重新安裝。
 
@@ -1076,7 +1078,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi，並更新 updates.j
 - **名稱**：ZotMax 舊名 Zotero Bridge（0.10 以前）。改的只是顯示名稱：外掛 ID `zotero-bridge@bobyu89.github.io`、偏好設定 `extensions.zotero-bridge.*`、儲存 API key 的登入資料、`chrome://zotero-bridge/`、Fluent 檔名與訊息 ID、repo 與網址、`.xpi` 檔名都沒變，所以舊版會自動更新並保留設定；舊版寫的筆記標記（例如 Notion 頁面上「Zotero Bridge｜…」的區塊）仍會被認得並就地更新。
 - **產品與設計**：[PRODUCT.md](PRODUCT.md)（使用者、定位、原則）、[DESIGN.md](DESIGN.md)（設定頁與網站的視覺規範）。功能開關的目錄在 `content/features.js`，字串在 `locale/*/zotero-bridge.ftl`，預設值在 `prefs.js`。
 - **發布新版本**：改 `manifest.json` 的 `version` → `npm run build`（`.xpi` 與 `updates.json` 都要提交；`test/release.test.cjs` 會檢查兩者一致）→ 推送到 `main`，GitHub Actions（`release.yml`）建立 Release，Zotero 自動更新。已發布版本在 `updates.json` 的項目不可更動。
-- **Zotero 出新的大版本**：在新版 beta 上安裝外掛，照[安裝精靈](https://bobyu89.github.io/zotero-bridge/)第 7 步試跑一篇文獻、一次文獻比較表；沒問題就執行 `npm run compat -- 11.*`，把 `manifest.json` 與 `updates.json` 推到 `main`，已安裝的使用者會自動恢復啟用，不用發新版。有問題就修正後發新版。依 Zotero 規定，相容版本只能宣告到目前已測試的大版本。
+- **Zotero 出新的大版本**：在新版 beta 上安裝外掛，照[安裝精靈](https://bobyu89.github.io/ZotMax/)第 7 步試跑一篇文獻、一次文獻比較表；沒問題就執行 `npm run compat -- 11.*`，把 `manifest.json` 與 `updates.json` 推到 `main`，已安裝的使用者會自動恢復啟用，不用發新版。有問題就修正後發新版。依 Zotero 規定，相容版本只能宣告到目前已測試的大版本。
 
 <details>
 <summary>檔案地圖</summary>

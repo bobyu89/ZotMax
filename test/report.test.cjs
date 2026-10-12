@@ -243,7 +243,7 @@ test("fileLine and pickErrors: only the plugin's (or Gecko's) file names; ZotMax
 
 test("reportURL: issues/new?template=bug.yml&env=<the env text>; the env shown is exactly what is in the URL", () => {
 	let r = R.reportURL(envInfo());
-	assert.ok(r.url.startsWith("https://github.com/bobyu89/zotero-bridge/issues/new?template=bug.yml&env="), r.url);
+	assert.ok(r.url.startsWith("https://github.com/bobyu89/ZotMax/issues/new?template=bug.yml&env="), r.url);
 	let u = new URL(r.url);
 	assert.equal(u.searchParams.get("template"), "bug.yml");
 	assert.equal(u.searchParams.get(R.FIELDS.env), r.env);
@@ -270,7 +270,7 @@ test("reportURL: at most 6000 characters; older errors are dropped first and sai
 test("feedbackURL: template=feedback.yml with the version line and the mode", () => {
 	let r = R.feedbackURL({ version: "0.14.0", zotero: "10.0.3", preset: "advanced" });
 	let u = new URL(r.url);
-	assert.equal(u.origin + u.pathname, "https://github.com/bobyu89/zotero-bridge/issues/new");
+	assert.equal(u.origin + u.pathname, "https://github.com/bobyu89/ZotMax/issues/new");
 	assert.equal(u.searchParams.get("template"), "feedback.yml");
 	assert.equal(u.searchParams.get("version"), "ZotMax 0.14.0 · Zotero 10.0.3");
 	assert.equal(u.searchParams.get("preset"), "進階");
@@ -509,7 +509,7 @@ test("issue forms: config.yml allows blank issues and links the site's install w
 	assert.equal(config.contact_links.length, 1);
 	let link = config.contact_links[0];
 	for (let k of ["name", "url", "about"]) assert.ok(link[k], k);
-	assert.equal(link.url, "https://bobyu89.github.io/zotero-bridge/#install");
+	assert.equal(link.url, "https://bobyu89.github.io/ZotMax/#install");
 	// The parser itself refuses what GitHub would
 	assert.throws(() => parseYAML("name: a: b\n"));
 	assert.throws(() => parseYAML("a: 1\na: 2\n"));
@@ -518,6 +518,6 @@ test("issue forms: config.yml allows blank issues and links the site's install w
 
 test("the site links both forms (without environment details)", () => {
 	let html = fs.readFileSync(path.join(ROOT, "site", "index.html"), "utf8");
-	assert.ok(html.includes("https://github.com/bobyu89/zotero-bridge/issues/new?template=bug.yml\""));
-	assert.ok(html.includes("https://github.com/bobyu89/zotero-bridge/issues/new?template=feedback.yml\""));
+	assert.ok(html.includes("https://github.com/bobyu89/ZotMax/issues/new?template=bug.yml\""));
+	assert.ok(html.includes("https://github.com/bobyu89/ZotMax/issues/new?template=feedback.yml\""));
 });

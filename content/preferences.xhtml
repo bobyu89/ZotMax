@@ -81,12 +81,16 @@
 		</groupbox>
 
 		<groupbox data-zb-section="notion" data-zb-feature="sync screening progressReport synthesis">
-			<label data-search-strings-raw="Notion, token, integration, database, columns, sync, 資料庫, 欄位, 父頁面, 同步"><html:h2>Notion</html:h2></label>
+			<label data-search-strings-raw="Notion, token, integration, database, create database, columns, sync, 資料庫, 建立資料庫, 欄位, 父頁面, 同步"><html:h2>Notion</html:h2></label>
 			<label value="Integration token（notion.so/profile/integrations 建立，並把資料庫分享給這個 integration）："/>
 			<html:input id="zb-notion-token" type="password" placeholder="ntn_..." autocomplete="off"/>
 			<vbox data-zb-feature="sync">
 				<label value="預設資料庫連結（沒有符合任何分流規則時使用）："/>
-				<html:input type="text" preference="extensions.zotero-bridge.notion.database" placeholder="https://www.notion.so/..."/>
+				<hbox align="center">
+					<html:input id="zb-notion-database" type="text" preference="extensions.zotero-bridge.notion.database" placeholder="https://www.notion.so/..." style="flex: 1"/>
+					<button id="zb-notion-create" data-l10n-id="zotero-bridge-notion-create" label="建立新的資料庫…" oncommand="ZoteroBridgePrefs.createNotionDatabase()"/>
+				</hbox>
+				<html:p class="zb-hint" data-l10n-id="zotero-bridge-notion-create-hint">還沒有資料庫？先在 Notion 把一個頁面分享給 integration（頁面右上角 ⋯ → Connections → 選你的 integration），再按「建立新的資料庫…」選那個頁面：ZotMax 會在底下建好有全部欄位的資料庫，並填好連結。</html:p>
 			</vbox>
 			<vbox data-zb-feature="synthesis">
 				<label value="文獻比較表的 Notion 父頁面（選填；比較表會建立成這個頁面底下的子頁面，頁面也要分享給 integration）："/>

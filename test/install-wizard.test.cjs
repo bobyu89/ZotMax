@@ -14,7 +14,7 @@ function load({ storage = true, seed = {} } = {}) {
 	const vc = new VirtualConsole();
 	vc.on("jsdomError", e => errors.push(e.message));
 	const dom = new JSDOM(HTML, {
-		url: "https://bobyu89.github.io/zotero-bridge/",
+		url: "https://bobyu89.github.io/ZotMax/",
 		runScripts: "dangerously",
 		virtualConsole: vc,
 		beforeParse(win) {
@@ -62,9 +62,9 @@ test("install step hands off to the in-Zotero 首次設定精靈; the manual set
 test("every URL the user needs has a copy button; the .xpi comes from the latest release", () => {
 	const { doc } = load();
 	const copies = [...doc.querySelectorAll("[data-copy]")].map(b => b.dataset.copy);
-	for (const url of ["https://github.com/bobyu89/zotero-bridge/releases/latest", "https://obsidian.md/download", "https://www.notion.so/profile/integrations", "https://console.anthropic.com", "https://platform.openai.com/api-keys"]) assert.ok(copies.includes(url), url);
+	for (const url of ["https://github.com/bobyu89/ZotMax/releases/latest", "https://obsidian.md/download", "https://www.notion.so/profile/integrations", "https://console.anthropic.com", "https://platform.openai.com/api-keys"]) assert.ok(copies.includes(url), url);
 	for (const b of doc.querySelectorAll("[data-copy]")) assert.match(b.getAttribute("aria-label"), /^複製/);
-	assert.equal(doc.querySelector('.step[data-id="download"] a.btn.act').getAttribute("href"), "https://github.com/bobyu89/zotero-bridge/releases/latest");
+	assert.equal(doc.querySelector('.step[data-id="download"] a.btn.act').getAttribute("href"), "https://github.com/bobyu89/ZotMax/releases/latest");
 });
 
 test("checks are native checkboxes inside a fieldset with a legend", () => {

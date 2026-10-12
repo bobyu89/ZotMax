@@ -29,7 +29,7 @@ function load({ catalog = FIXTURE, storage = true, confirm = true, seed = null }
 	const vc = new VirtualConsole();
 	vc.on("jsdomError", e => errors.push(e.message));
 	const dom = new JSDOM(withCatalog(catalog), {
-		url: "https://bobyu89.github.io/zotero-bridge/appraisal.html",
+		url: "https://bobyu89.github.io/ZotMax/appraisal.html",
 		runScripts: "dangerously",
 		virtualConsole: vc,
 		beforeParse(win) {
@@ -255,7 +255,7 @@ test("Markdown, CSV (UTF-8 BOM), Word HTML and print output", async () => {
 
 test("copy for Word: ClipboardItem with text/html, falls back to plain text", async () => {
 	// the page's own copyRich (load() replaces it with a recorder)
-	const dom = new JSDOM(withCatalog(FIXTURE), { url: "https://bobyu89.github.io/zotero-bridge/appraisal.html", runScripts: "dangerously" });
+	const dom = new JSDOM(withCatalog(FIXTURE), { url: "https://bobyu89.github.io/ZotMax/appraisal.html", runScripts: "dangerously" });
 	const win = dom.window;
 	const writes = [];
 	let fail = false;

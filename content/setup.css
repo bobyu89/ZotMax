@@ -311,6 +311,40 @@
 	font-weight: 600;
 }
 
+/* 「還沒有資料庫？讓 ZotMax 幫你建立」 under the Notion database link */
+.zb-su-create {
+	margin: var(--zb-space-3) 0;
+	padding: var(--zb-space-2) var(--zb-space-3);
+	border: 1px solid var(--zb-line);
+	border-radius: var(--zb-radius);
+	background: var(--zb-tint);
+}
+
+.zb-su-create[hidden],
+.zb-su-pages[hidden],
+.zb-su-noshare[hidden],
+.zb-setup html|button[hidden] {
+	display: none;
+}
+
+.zb-su-create-title {
+	margin: 0 0 var(--zb-space-1);
+	font-weight: 600;
+}
+
+.zb-su-pages {
+	display: flex;
+	flex-direction: column;
+	gap: var(--zb-space-1);
+	max-height: 12em;
+	overflow-y: auto;
+	margin: var(--zb-space-2) 0;
+}
+
+.zb-su-page {
+	overflow-wrap: anywhere;
+}
+
 .zb-su-item {
 	margin: var(--zb-space-2) 0;
 	overflow-wrap: anywhere;

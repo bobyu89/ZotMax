@@ -339,7 +339,7 @@ const TESTS = [
 				appraisalTools: ["getTool", "toolsForDesign", "findToolByName", "summarize", "toMarkdownTable", "toCSV", "toJSON", "fromJSON"],
 				core: ["buildObsidianNote", "resolveRoute", "buildBaseFile", "buildNoteSections", "colorMeanings"],
 				markdown: ["htmlToMd", "mdToHtml"],
-				notion: ["NotionClient", "resolveSchema", "renamePlan", "pageProperty"],
+				notion: ["NotionClient", "resolveSchema", "renamePlan", "pageProperty", "newDatabaseProperties", "friendlyError"],
 				llm: ["generateNote", "extractStudyData"],
 				synthesis: [],
 				verify: ["verifyQuotes"],
@@ -373,7 +373,7 @@ const TESTS = [
 				toolbar: ["init", "add", "remove", "shutdown", "update"],
 				sidepanel: ["init", "register", "render", "refreshAll", "addStylesheet", "removeStylesheet", "shutdown", "targetItem"],
 				statsExplainer: ["init", "register", "shutdown", "explain", "explainCurrentSelection", "simplify", "saveToNote", "paneView", "renderPane", "onSelectionPopup", "methodsExcerpt", "checkExplanation", "appendStatsNote"],
-				main: ["init", "shutdown", "run", "readSettings", "renderPane", "noteLinks", "saveQuietly", "renameNotionColumns", "notionClient", "prepareFullText", "batchStatus"],
+				main: ["init", "shutdown", "run", "readSettings", "renderPane", "noteLinks", "saveQuietly", "renameNotionColumns", "notionClient", "prepareFullText", "batchStatus", "listNotionPages", "createNotionDatabase", "createNotionDatabaseFromSettings"],
 			};
 			let missing = [];
 			for (let [mod, fns] of Object.entries(MODULES)) {
@@ -1803,6 +1803,128 @@ const TESTS = [
 		},
 	},
 	{
+		name: "設定精靈 creates the Notion database: lists the shared pages, creates one under the picked page, fills and saves the link, tests (fetch stubbed to a fake Notion, no network)",
+		needs: ["設定精靈 opens from its command, points Obsidian at a vault, syncs one item (試一次, no AI), 完成 sets setup.done and closes it"],
+		timeout: 120000,
+		async fn(d) {
+			let ZBm = zb();
+			let S = ZBm.setup;
+			let N = ZBm.notion;
+			let pluginGlobal = Components.utils.getGlobalForObject(ZBm.main.run);
+			let realFetch = pluginGlobal.fetch;
+			const TOKEN = "ntn_e2e_fake_token_0123456789";
+			const PAGE = "aaaaaaaa-0000-4000-8000-000000000001";
+			const DB = "fedcba98-7654-4321-8edc-ba9876543210";
+			const DB_URL = "https://www.notion.so/ZotMax-fedcba98765443218edcba9876543210";
+			let before = {
+				database: Zotero.Prefs.get(ZB_PREF + "notion.database", true),
+				token: await ZBm.secrets.get("notionToken"),
+				// 測試連線 records the new columns' IDs (main.js propertyIdStore)
+				propertyIds: Zotero.Prefs.get(ZB_PREF + "notion.propertyIds", true),
+			};
+			let calls = [];
+			let created = null;
+			let json = (status, body) => new pluginGlobal.Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+			let stub = async (url, init) => {
+				url = String(url);
+				if (!url.startsWith("https://api.notion.com/v1/")) throw new Error(`unexpected network call to ${url}`);
+				let path = url.slice("https://api.notion.com/v1/".length);
+				let body = init && init.body ? JSON.parse(init.body) : null;
+				calls.push({ method: init.method, path, auth: init.headers.Authorization, version: init.headers["Notion-Version"], body });
+				if (path === "search") {
+					return json(200, { object: "list", has_more: false, next_cursor: null, results: [
+						{ object: "page", id: PAGE, url: "https://www.notion.so/aaaaaaaa000040008000000000000001", parent: { type: "workspace", workspace: true },
+							properties: { title: { type: "title", title: [{ plain_text: "E2E 碩論" }] } } },
+						// A row of a database: never offered as a parent
+						{ object: "page", id: "aaaaaaaa-0000-4000-8000-000000000002", url: "https://www.notion.so/row", parent: { type: "data_source_id", data_source_id: "ds-x" },
+							properties: { Name: { type: "title", title: [{ plain_text: "E2E row" }] } } },
+					] });
+				}
+				if (path === "databases" && init.method === "POST") {
+					let i = 0;
+					created = {};
+					for (let [name, def] of Object.entries(body.initial_data_source.properties)) created[name] = { id: `e2e${i++}`, type: Object.keys(def)[0] };
+					return json(200, { object: "database", id: DB, url: DB_URL, data_sources: [{ id: "ds-e2e" }] });
+				}
+				if (path === `databases/${DB}`) return json(200, { object: "database", id: DB, url: DB_URL, data_sources: [{ id: "ds-e2e" }] });
+				if (path === "data_sources/ds-e2e" && init.method === "GET" && created) return json(200, { object: "data_source", properties: created });
+				if (path === "data_sources/ds-e2e" && init.method === "PATCH") return json(200, {});
+				return json(404, { object: "error", code: "object_not_found", message: `Could not find ${path}` });
+			};
+			let dialog = null;
+			try {
+				await ZBm.secrets.clear("notionToken");
+				Zotero.Prefs.clear(ZB_PREF + "notion.database", true);
+				Object.defineProperty(pluginGlobal, "fetch", { value: stub, writable: true, configurable: true });
+				check(pluginGlobal.fetch === stub, "could not replace fetch in the plugin scope");
+				let view = null;
+				dialog = await S.open(mainWindow(), { onOpen: (w, v) => { view = v; } });
+				check(dialog && view, "the setup wizard did not open");
+				await view.ready();
+				await view.go("notes");
+				let doc = dialog.document;
+				let $ = id => doc.getElementById(id);
+				$("zb-su-notes-notion").click();
+				await waitFor(() => !doc.querySelector('[data-zb-box="notion"]').hidden, "the Notion fields", 10000);
+				d.offerWithoutToken = !$("zb-su-notion-create").hidden;
+				eq(d.offerWithoutToken, false, "「讓 ZotMax 幫你建立」 shown without a token");
+				let token = $("zb-su-notion-token");
+				token.value = TOKEN;
+				token.dispatchEvent(new dialog.Event("input", { bubbles: true }));
+				check(!$("zb-su-notion-create").hidden, "「讓 ZotMax 幫你建立」 did not appear after typing a token");
+				d.offerDisplay = dialog.getComputedStyle($("zb-su-notion-create")).display;
+				check(d.offerDisplay !== "none", "the create panel is not displayed (setup.css)");
+				eq(calls.length, 0, "Notion requests before a click");
+				$("zb-su-notion-find").click();
+				await waitFor(() => doc.querySelectorAll('input[name="zb-su-notion-page"]').length, `the page list (${$("zb-su-notion-create-status").textContent})`, 30000);
+				d.pages = [...doc.querySelectorAll(".zb-su-page")].map(l => l.textContent);
+				eq(JSON.stringify(d.pages), JSON.stringify(["E2E 碩論"]), "pages offered");
+				eq(await ZBm.secrets.get("notionToken"), TOKEN, "token in the login manager after 找可以放資料庫的頁面");
+				check(!Services.prefs.getBranch(ZB_PREF).getChildList("").some(k => String(Zotero.Prefs.get(ZB_PREF + k, true)).includes(TOKEN)), "the token is in a pref");
+				eq(created, null, "a database created before 在這個頁面建立資料庫");
+				$("zb-su-notion-page-0").click();
+				$("zb-su-notion-create-run").click();
+				d.result = await waitFor(() => /連線成功|❌|連線失敗/.test($("zb-su-notion-result").textContent) && $("zb-su-notion-result").textContent,
+					`the automatic 測試連線 (create status: ${$("zb-su-notion-create-status").textContent})`, 60000);
+				check(/連線成功/.test(d.result), `測試連線 after creating: ${d.result}`);
+				let creates = calls.filter(c => c.method === "POST" && c.path === "databases");
+				eq(creates.length, 1, "POST /v1/databases requests");
+				let body = creates[0].body;
+				d.request = { parent: body.parent, title: body.title.map(r => r.text.content).join(""), columns: Object.keys(body.initial_data_source.properties), version: creates[0].version };
+				eq(JSON.stringify(body.parent), JSON.stringify({ type: "page_id", page_id: PAGE }), "parent of the new database");
+				eq(d.request.title, "ZotMax 文獻", "database title");
+				eq(creates[0].auth, `Bearer ${TOKEN}`, "Authorization");
+				eq(creates[0].version, N.NOTION_VERSION, "Notion-Version");
+				let expected = [N.TITLE_NAME_ZH, ...Object.keys(N.PROPERTY_SCHEMA).map(k => N.PROPERTY_NAMES_ZH[k])].sort();
+				eq(JSON.stringify([...d.request.columns].sort()), JSON.stringify(expected), "columns of the new database");
+				eq(JSON.stringify(body.initial_data_source.properties["閱讀狀態"]), JSON.stringify(N.PROPERTY_SCHEMA.Status), "the 閱讀狀態 definition");
+				d.pref = Zotero.Prefs.get(ZB_PREF + "notion.database", true);
+				eq(d.pref, DB_URL, "extensions.zotero-bridge.notion.database");
+				eq($("zb-su-notion-database").value, DB_URL, "the database field");
+				check($("zb-su-notion-create").hidden, "the create panel is still shown after success");
+				d.created = $("zb-su-notion-created").textContent;
+				check(d.created.includes("E2E 碩論"), `the created line: ${d.created}`);
+				d.requests = calls.map(c => `${c.method} ${c.path}`);
+				check(!calls.some(c => c.method === "PATCH"), `the new database lacked columns: ${d.requests.join(", ")}`);
+			}
+			finally {
+				Object.defineProperty(pluginGlobal, "fetch", { value: realFetch, writable: true, configurable: true });
+				if (dialog && !dialog.closed) dialog.close();
+				if (before.database) setPref("notion.database", before.database);
+				else Zotero.Prefs.clear(ZB_PREF + "notion.database", true);
+				if (before.token) await ZBm.secrets.set("notionToken", before.token);
+				else await ZBm.secrets.clear("notionToken");
+				if (before.propertyIds !== undefined) setPref("notion.propertyIds", before.propertyIds);
+				else Zotero.Prefs.clear(ZB_PREF + "notion.propertyIds", true);
+				setPref("setup.done", true);
+			}
+		},
+		// Without an OS key store, secrets.js logs the encryption failure before falling back (documented)
+		get allow() {
+			return ctx.keyStoreUsable ? null : /os-keystore|OSKeyStore|key store|鑰匙圈/i;
+		},
+	},
+	{
 		name: "回報問題 opens the bug form with the real profile's environment: versions in it, no profile or vault path (launchURL and the dialog stubbed)",
 		needs: ["Zotero.ZoteroBridge is set and has every module"],
 		async fn(d) {
@@ -1845,7 +1967,7 @@ const TESTS = [
 			let url = launched[0];
 			d.urlLength = url.length;
 			d.urlStart = url.slice(0, 80);
-			check(url.startsWith("https://github.com/bobyu89/zotero-bridge/issues/new?template=bug.yml&env="), `URL ${d.urlStart}`);
+			check(url.startsWith("https://github.com/bobyu89/ZotMax/issues/new?template=bug.yml&env="), `URL ${d.urlStart}`);
 			check(url.length <= 6000, `URL is ${url.length} characters`);
 			let env = new URL(url).searchParams.get("env") || "";
 			d.env = env;

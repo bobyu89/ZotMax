@@ -14,7 +14,7 @@ function load({ storage = true, confirm = true } = {}) {
 	const vc = new VirtualConsole();
 	vc.on("jsdomError", e => errors.push(e.message));
 	const dom = new JSDOM(HTML, {
-		url: "https://bobyu89.github.io/zotero-bridge/search.html",
+		url: "https://bobyu89.github.io/ZotMax/search.html",
 		runScripts: "dangerously",
 		virtualConsole: vc,
 		beforeParse(win) {
@@ -252,7 +252,7 @@ test("saved searches: save, reload from storage, load, delete, import merge", ()
 	assert.equal(stored[0].pico.o.mesh, "Accidental Falls");
 
 	// a new page in the same origin sees it, and loading restores query + PICO
-	const dom2 = new JSDOM(HTML, { url: "https://bobyu89.github.io/zotero-bridge/search.html", runScripts: "dangerously", beforeParse(w) { w.localStorage.setItem("zb-search-saved-v1", JSON.stringify(stored)); w.confirm = () => true; } });
+	const dom2 = new JSDOM(HTML, { url: "https://bobyu89.github.io/ZotMax/search.html", runScripts: "dangerously", beforeParse(w) { w.localStorage.setItem("zb-search-saved-v1", JSON.stringify(stored)); w.confirm = () => true; } });
 	win = dom2.window; doc = win.document;
 	const items = doc.querySelectorAll("#savedList li");
 	assert.equal(items.length, 1);
