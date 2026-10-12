@@ -1542,6 +1542,60 @@
 		return lines;
 	}
 
+	// ---------- 「幫我建立 Notion 資料庫」 (設定精靈 and the settings pane) ----------
+
+	async function notionTokenOrThrow() {
+		let token = String((await ZB.secrets.get("notionToken")) || "").trim();
+		if (!token) throw new Error("請先填入 Notion integration token");
+		return token;
+	}
+
+	/** The pages the integration can see, last edited first: [{ id, title, url, icon }] (notion.js listSharedPages). */
+	async function listNotionPages() {
+		return notionClient(await notionTokenOrThrow()).listSharedPages();
+	}
+
+	/**
+	 * Create the literature database under a page shared with the integration. Only creates: storing
+	 * the link (notion.database) is the caller's, after the user's click. Resolves to { databaseId, dataSourceId, url }.
+	 */
+	async function createNotionDatabase({ parentPageId, title } = {}) {
+		return notionClient(await notionTokenOrThrow()).createLiteratureDatabase({ parentPageId, title });
+	}
+
+	/**
+	 * Settings pane 「建立新的資料庫…」: the pages the integration sees in a list to pick from
+	 * (Services.prompt.select); 確定 creates one database under the picked page, stores its link as the
+	 * default database and runs testNotion. Cancel, or no page to pick, creates nothing. Returns report lines.
+	 */
+	async function createNotionDatabaseFromSettings(win) {
+		let pages = await listNotionPages();
+		if (!pages.length) {
+			return ["❌ 這個 integration 還看不到任何 Notion 頁面，所以沒有地方放資料庫。", `先分享一個頁面給它：${ZB.notion.SHARE_PAGE_HOWTO}`];
+		}
+		let labels = pages.map(p => `${p.icon ? `${p.icon} ` : ""}${p.title || "（沒有標題的頁面）"}`);
+		let current = String(pref("notion.database") || "").trim();
+		let text = `ZotMax 會在你選的頁面底下建立「${ZB.notion.DEFAULT_DATABASE_TITLE}」資料庫，同步需要的欄位都會設好，並設成預設資料庫。`
+			+ (current ? "\n\n目前的資料庫連結會被換掉（舊資料庫不會被刪除）。" : "")
+			+ "\n\n要放在哪個頁面底下？（清單是這個 integration 看得到的頁面，最近編輯的在前面）";
+		let out = {};
+		if (!Services.prompt.select(win || Zotero.getMainWindow(), "建立新的 Notion 資料庫", text, labels, out)) {
+			return ["已取消，沒有建立資料庫。"];
+		}
+		let page = pages[out.value];
+		if (!page) return ["已取消，沒有建立資料庫。"];
+		let db = await createNotionDatabase({ parentPageId: page.id });
+		Zotero.Prefs.set(PREF + "notion.database", db.url, true);
+		let lines = [`✅ 已在「${labels[out.value]}」底下建立資料庫，連結已填入預設資料庫：${db.url}`];
+		try {
+			lines.push(...await testNotion());
+		}
+		catch (e) {
+			lines.push(`❌ ${e.message || e}`);
+		}
+		return lines;
+	}
+
 	// ---------- menus ----------
 
 	/**
@@ -1709,6 +1763,8 @@
 	ZB.main = { init, shutdown, run, runSynthesis, archiveItems, cancelBatch, resumeBatch, discardBatch, readPendingBatch, batchStatus, renderPane, testNotion, readSettings, readAINote, usageReport, resetUsage, runtime,
 		// Notion columns: clients that remember column IDs, and 「把 Notion 欄位改成中文」
 		notionClient, renameNotionColumns,
+		// 「幫我建立 Notion 資料庫」 (setup.js, preferences.js)
+		listNotionPages, createNotionDatabase, createNotionDatabaseFromSettings,
 		// for ai-batch.js: the full text as Markdown for the AI (fulltext.js)
 		prepareFullText,
 		// for status.js

@@ -7,7 +7,9 @@
  *   1 歡迎        what ZotMax does and its stance, in plain words
  *   2 選模式      研究生引導 or 進階 (features.js applyPreset)
  *   3 筆記放哪裡  Obsidian (folder picker, a check that it is a folder and looks like a vault),
- *                 Notion (token into the login manager, database link, 「測試連線」 = main.testNotion)
+ *                 Notion (token into the login manager, database link, 「測試連線」 = main.testNotion;
+ *                 no database yet: 「找可以放資料庫的頁面」 lists the pages shared with the integration and
+ *                 「在這個頁面建立資料庫」 creates one there (main.createNotionDatabase), fills the link, tests)
  *   4 AI（選填）  provider and key (secrets.js); the key is only checked for its format: no call that
  *                 costs money just to test it, and the key is never shown back or logged
  *   5 試一次      sync one item with the catalog's sync-no-ai command (costs nothing), show the note
@@ -107,8 +109,8 @@
 		vaultFolder: ["zotero-bridge-setup-vault-folder", "是資料夾，但裡面沒有 .obsidian。還沒在 Obsidian 打開過的話，之後打開一次就好，筆記照樣會寫進去。"],
 		notionLead: ["zotero-bridge-setup-notion-lead", "Notion 要準備三樣：一個 integration 的 token、一個資料庫，並讓這個 integration 可以用那個資料庫。"],
 		notionStep1: ["zotero-bridge-setup-notion-step1", "到 notion.so/profile/integrations 建立一個 Internal integration，複製 token（ntn_ 開頭）。"],
-		notionStep2: ["zotero-bridge-setup-notion-step2", "在 Notion 建立一個資料庫（空白的 Table 就可以），右上角 ••• → Connections → 加入剛剛的 integration。"],
-		notionStep3: ["zotero-bridge-setup-notion-step3", "複製資料庫的連結，貼到下面。"],
+		notionStep2: ["zotero-bridge-setup-notion-step2", "在 Notion 建立一個資料庫（空白的 Table 就可以），右上角 ••• → Connections → 加入剛剛的 integration。也可以只分享一個頁面，讓 ZotMax 在下面幫你建資料庫。"],
+		notionStep3: ["zotero-bridge-setup-notion-step3", "複製資料庫的連結，貼到下面（讓 ZotMax 建立的話會自動填好）。"],
 		notionHowto: ["zotero-bridge-setup-notion-howto", "看網站上有圖的步驟"],
 		notionToken: ["zotero-bridge-setup-notion-token", "Integration token"],
 		notionTokenSaved: ["zotero-bridge-setup-notion-token-saved", "已經存了一組 token；留空就沿用。"],
@@ -119,6 +121,23 @@
 		notionNeedToken: ["zotero-bridge-setup-notion-need-token", "請貼上 Notion integration token。"],
 		notionBadDatabase: ["zotero-bridge-setup-notion-bad-database", "這不像 Notion 資料庫連結：裡面要有一段 32 碼的 ID。在 Notion 打開資料庫，複製網址貼上就可以。"],
 		notionFailed: ["zotero-bridge-setup-notion-failed", "連線失敗：{ $error }"],
+		notionCreateTitle: ["zotero-bridge-setup-notion-create-title", "還沒有資料庫？讓 ZotMax 幫你建立"],
+		notionCreateLead: ["zotero-bridge-setup-notion-create-lead", "ZotMax 會在你選的 Notion 頁面底下建立「ZotMax 文獻」資料庫，同步需要的欄位都設好。integration 只能在分享給它的頁面裡建立，所以要先分享一個頁面。"],
+		notionFind: ["zotero-bridge-setup-notion-find", "找可以放資料庫的頁面"],
+		notionFinding: ["zotero-bridge-setup-notion-finding", "讀取 integration 看得到的頁面…"],
+		notionFindFailed: ["zotero-bridge-setup-notion-find-failed", "讀不到頁面：{ $error }"],
+		notionPages: ["zotero-bridge-setup-notion-pages", "放資料庫的頁面（最近編輯的在前面）"],
+		notionUntitled: ["zotero-bridge-setup-notion-untitled", "（沒有標題的頁面）"],
+		notionPickPage: ["zotero-bridge-setup-notion-pick-page", "先選一個頁面。"],
+		notionCreateRun: ["zotero-bridge-setup-notion-create-run", "在這個頁面建立資料庫"],
+		notionCreating: ["zotero-bridge-setup-notion-creating", "建立資料庫中…"],
+		notionCreated: ["zotero-bridge-setup-notion-created", "已在「{ $name }」底下建立資料庫，連結已填好。"],
+		notionCreateFailed: ["zotero-bridge-setup-notion-create-failed", "沒有建立成功：{ $error }"],
+		notionNoPages: ["zotero-bridge-setup-notion-no-pages", "這個 integration 還看不到任何頁面。先分享一個頁面給它："],
+		notionShare1: ["zotero-bridge-setup-notion-share1", "在 Notion 打開要放資料庫的頁面（沒有的話先新增一個，例如「碩論文獻」）。"],
+		notionShare2: ["zotero-bridge-setup-notion-share2", "右上角 ⋯ → Connections → 選你的 integration，按確認。"],
+		notionShare3: ["zotero-bridge-setup-notion-share3", "回到這裡按「重新整理」。"],
+		notionRefresh: ["zotero-bridge-setup-notion-refresh", "重新整理"],
 
 		aiTitle: ["zotero-bridge-setup-ai-title", "AI 文獻筆記（選填）"],
 		aiLead: ["zotero-bridge-setup-ai-lead", "同步時可以請 AI 先替每篇寫一份研讀筆記：研究設計、樣本、PICO、評讀初稿，你再自己核對。"],
@@ -361,6 +380,9 @@
 			checkVault,
 			secrets: ZB().secrets,
 			testNotion: () => ZB().main.testNotion(),
+			// 「幫我建立 Notion 資料庫」: the pages the stored token sees, and one database under a page
+			listPages: () => ZB().main.listNotionPages(),
+			createDatabase: parentPageId => ZB().main.createNotionDatabase({ parentPageId }),
 			launch: url => Zotero.launchURL(url),
 			findItem,
 			runSync: item => C().execute(C().get("sync-no-ai"), C().fromContext("item", { items: [item], collectionTreeRows: [] })),
@@ -649,6 +671,40 @@
 				let testResult = h("pre", { id: "zb-su-notion-result", class: "zb-su-result", role: "status", "aria-live": "polite" });
 				let howto = h("button", { type: "button", class: "zb-su-link", id: "zb-su-notion-howto" }, t("notionHowto"));
 				listen(howto, "click", () => deps.launch(SITE_URL));
+
+				// 「還沒有資料庫？讓 ZotMax 幫你建立」: shown once there is a token and while the link is empty.
+				// 找… lists the pages the integration sees; only 「在這個頁面建立資料庫」 creates, one per click.
+				let find = h("button", { type: "button", id: "zb-su-notion-find" }, t("notionFind"));
+				let pagesList = h("div", { class: "zb-su-pages", id: "zb-su-notion-pages", role: "radiogroup", "aria-label": t("notionPages") });
+				pagesList.hidden = true;
+				let createRun = h("button", { type: "button", id: "zb-su-notion-create-run", class: "zb-su-primary" }, t("notionCreateRun"));
+				createRun.hidden = true;
+				let refresh = h("button", { type: "button", id: "zb-su-notion-refresh" }, t("notionRefresh"));
+				let noPages = h("div", { class: "zb-su-noshare", id: "zb-su-notion-no-pages" },
+					h("p", { class: "zb-su-hint" }, t("notionNoPages")),
+					h("ol", { class: "zb-su-howto" }, h("li", {}, t("notionShare1")), h("li", {}, t("notionShare2")), h("li", {}, t("notionShare3"))),
+					h("div", { class: "zb-su-row" }, refresh));
+				noPages.hidden = true;
+				let createStatus = h("p", { id: "zb-su-notion-create-status", class: "zb-su-check", role: "status", "aria-live": "polite" });
+				let createBox = h("div", { class: "zb-su-create", id: "zb-su-notion-create" },
+					h("p", { class: "zb-su-create-title" }, t("notionCreateTitle")),
+					h("p", { class: "zb-su-hint" }, t("notionCreateLead")),
+					h("div", { class: "zb-su-row" }, find),
+					pagesList, noPages,
+					h("div", { class: "zb-su-row" }, createRun),
+					createStatus);
+				let createdNote = h("p", { id: "zb-su-notion-created", class: "zb-su-check", role: "status", "aria-live": "polite" });
+				let created = false;
+				let foundPages = [];
+				let showCreate = () => {
+					createBox.hidden = created || !(hasToken || tokenInput.value.trim()) || !!dbInput.value.trim();
+				};
+				listen(tokenInput, "input", showCreate);
+				listen(dbInput, "input", showCreate);
+				tokenReady.then(() => {
+					if (alive()) showCreate();
+				});
+
 				let notionBox = h("fieldset", { class: "zb-su-box", "data-zb-box": "notion" },
 					h("legend", {}, t("notesNotion")),
 					h("p", { class: "zb-su-hint" }, t("notionLead")),
@@ -658,8 +714,11 @@
 					tokenInput, tokenSaved,
 					h("label", { class: "zb-su-label", for: "zb-su-notion-database" }, t("notionDatabase")),
 					dbInput,
+					createdNote,
+					createBox,
 					h("div", { class: "zb-su-row" }, test, h("span", { class: "zb-su-hint" }, t("notionTestHint"))),
 					testResult);
+				showCreate();
 
 				let show = () => {
 					let c = checked("notes");
@@ -667,6 +726,14 @@
 					notionBox.hidden = !(c === "notion" || c === "both");
 				};
 				for (let o of opts4) onPick(o.radio, show);
+
+				/** A token typed into the field goes to the login manager (secrets.js), never to prefs. */
+				async function saveToken(value) {
+					await deps.secrets.set("notionToken", value);
+					tokenInput.value = "";
+					hasToken = true;
+					tokenSaved.textContent = t("notionTokenSaved");
+				}
 
 				async function saveNotion() {
 					let check = checkNotion({ token: tokenInput.value, hasToken, database: dbInput.value });
@@ -677,20 +744,13 @@
 						(check.field === "token" ? tokenInput : dbInput).focus();
 						return false;
 					}
-					// The token goes to the login manager (secrets.js), never to prefs
-					if (check.token) {
-						await deps.secrets.set("notionToken", check.token);
-						tokenInput.value = "";
-						hasToken = true;
-						tokenSaved.textContent = t("notionTokenSaved");
-					}
+					if (check.token) await saveToken(check.token);
 					setPref("notion.database", check.database);
 					return true;
 				}
 
-				listen(test, "click", async () => {
-					if (state.busy) return;
-					setBusy(true);
+				/** 測試連線: save the token and link, then main.testNotion's lines. The caller holds busy. */
+				async function testConnection() {
 					test.disabled = true;
 					test.setAttribute("aria-busy", "true");
 					testResult.textContent = t("notionTesting");
@@ -712,6 +772,119 @@
 						if (alive()) {
 							test.disabled = false;
 							test.removeAttribute("aria-busy");
+						}
+					}
+				}
+
+				listen(test, "click", async () => {
+					if (state.busy) return;
+					setBusy(true);
+					try {
+						await testConnection();
+					}
+					finally {
+						if (alive()) setBusy(false);
+					}
+				});
+
+				function renderPages(pages) {
+					foundPages = pages || [];
+					pagesList.replaceChildren();
+					for (let [i, page] of foundPages.entries()) {
+						let id = `zb-su-notion-page-${i}`;
+						let radio = h("input", { type: "radio", name: "zb-su-notion-page", value: page.id, id });
+						if (foundPages.length === 1) radio.checked = true;
+						onPick(radio, () => {
+							createStatus.textContent = "";
+							createStatus.classList.remove("is-error");
+						});
+						pagesList.append(h("label", { class: "zb-su-radio zb-su-page", for: id }, radio,
+							h("span", {}, `${page.icon ? `${page.icon} ` : ""}${page.title || t("notionUntitled")}`)));
+					}
+					pagesList.hidden = !foundPages.length;
+					createRun.hidden = !foundPages.length;
+					noPages.hidden = !!foundPages.length;
+				}
+
+				async function findPages() {
+					if (state.busy) return;
+					let typed = tokenInput.value.trim();
+					if (!typed && !hasToken) {
+						invalid(tokenInput, true);
+						say(t("notionNeedToken"), "error");
+						tokenInput.focus();
+						return;
+					}
+					invalid(tokenInput, false);
+					setBusy(true);
+					for (let b of [find, refresh]) {
+						b.disabled = true;
+						b.setAttribute("aria-busy", "true");
+					}
+					createStatus.classList.remove("is-error");
+					createStatus.textContent = t("notionFinding");
+					try {
+						if (typed) await saveToken(typed);
+						let pages = await deps.listPages();
+						if (!alive()) return;
+						createStatus.textContent = "";
+						renderPages(pages);
+					}
+					catch (e) {
+						if (!alive()) return;
+						renderPages([]);
+						noPages.hidden = true;
+						createStatus.classList.add("is-error");
+						createStatus.textContent = t("notionFindFailed", { error: e.message || e });
+					}
+					finally {
+						if (alive()) {
+							for (let b of [find, refresh]) {
+								b.disabled = false;
+								b.removeAttribute("aria-busy");
+							}
+							setBusy(false);
+						}
+					}
+				}
+				listen(find, "click", findPages);
+				listen(refresh, "click", findPages);
+
+				listen(createRun, "click", async () => {
+					if (state.busy || created) return;
+					let pageId = checked("notion-page");
+					let page = foundPages.find(p => p.id === pageId);
+					if (!page) {
+						createStatus.classList.add("is-error");
+						createStatus.textContent = t("notionPickPage");
+						return;
+					}
+					setBusy(true);
+					createRun.disabled = true;
+					createRun.setAttribute("aria-busy", "true");
+					createStatus.classList.remove("is-error");
+					createStatus.textContent = t("notionCreating");
+					try {
+						let db = await deps.createDatabase(page.id);
+						if (!alive()) return;
+						created = true;
+						// The link in the field and in prefs, as if pasted; then the usual 測試連線
+						dbInput.value = db.url;
+						invalid(dbInput, false);
+						setPref("notion.database", db.url);
+						showCreate();
+						createdNote.textContent = t("notionCreated", { name: page.title || t("notionUntitled") });
+						await testConnection();
+					}
+					catch (e) {
+						if (!alive()) return;
+						createStatus.classList.add("is-error");
+						createStatus.textContent = t("notionCreateFailed", { error: e.message || e });
+					}
+					finally {
+						if (alive()) {
+							createRun.disabled = false;
+							createRun.removeAttribute("aria-busy");
 							setBusy(false);
 						}
 					}

@@ -533,6 +533,266 @@ test("Notion: the token goes to the login manager, never to prefs; the link is c
 	assert.deepEqual(env.errors, []);
 });
 
+/**
+ * A fake Notion API for the plugin's own fetch (main.notionClient → notion.js): search lists `pages`,
+ * POST /v1/databases creates a database from the request's columns, GET reads it back, PATCH adds columns.
+ * opts.fail: { [method path]: [status, code] }.
+ */
+function fakeNotion(pages, opts = {}) {
+	let calls = [];
+	let databases = new Map();
+	let json = (status, body) => ({ status, ok: status < 300, headers: { get: () => null }, text: async () => JSON.stringify(body) });
+	let fetch = async (url, init) => {
+		let p = String(url).replace("https://api.notion.com/v1/", "");
+		assert.ok(String(url).startsWith("https://api.notion.com/v1/"), `unexpected request ${url}`);
+		let body = init.body ? JSON.parse(init.body) : undefined;
+		calls.push({ method: init.method, path: p, body, auth: init.headers.Authorization });
+		let fail = opts.fail && opts.fail[`${init.method} ${p}`];
+		if (fail) return json(fail[0], { object: "error", code: fail[1], message: "Could not find page." });
+		if (p === "search") return json(200, { object: "list", has_more: false, next_cursor: null, results: pages() });
+		if (p === "databases" && init.method === "POST") {
+			let id = "fedcba98-7654-3210-fedc-ba98765432" + String(10 + databases.size);
+			let props = {};
+			let i = 0;
+			for (let [name, def] of Object.entries(body.initial_data_source.properties)) props[name] = { id: `p${i++}`, type: Object.keys(def)[0] };
+			databases.set(id, props);
+			return json(200, { object: "database", id, url: `https://www.notion.so/${id.replace(/-/g, "")}`, data_sources: [{ id: `ds-${id}` }] });
+		}
+		let m = /^databases\/(.+)$/.exec(p);
+		if (m && databases.has(m[1])) return json(200, { object: "database", id: m[1], data_sources: [{ id: `ds-${m[1]}` }] });
+		m = /^data_sources\/ds-(.+)$/.exec(p);
+		if (m && databases.has(m[1]) && init.method === "GET") return json(200, { object: "data_source", properties: databases.get(m[1]) });
+		if (m && databases.has(m[1]) && init.method === "PATCH") return json(200, {});
+		return json(404, { object: "error", code: "object_not_found", message: `Could not find ${p}` });
+	};
+	return { fetch, calls, databases };
+}
+
+const SHARED_PAGE = {
+	object: "page", id: "aaaaaaaa-0000-0000-0000-000000000001", url: "https://www.notion.so/aaaaaaaa000000000000000000000001",
+	parent: { type: "workspace", workspace: true }, icon: { type: "emoji", emoji: "🎓" },
+	properties: { title: { type: "title", title: [{ plain_text: "碩論" }] } },
+};
+const OTHER_PAGE = {
+	object: "page", id: "aaaaaaaa-0000-0000-0000-000000000002", url: "https://www.notion.so/aaaaaaaa000000000000000000000002",
+	parent: { type: "page_id", page_id: "x" }, properties: { title: { type: "title", title: [{ plain_text: "Class notes" }] } },
+};
+
+test("Notion 「幫我建立」: shown with a token and an empty link; lists the shared pages; the click creates one database, fills the link, saves it and tests", async () => {
+	let env = await setup();
+	let notionApi = fakeNotion(() => [SHARED_PAGE, OTHER_PAGE]);
+	env.context.fetch = notionApi.fetch;
+	let { view, doc } = await openWizard(env);
+	await view.go("notes");
+	choose(doc, "zb-su-notes-notion");
+	let $ = id => doc.getElementById(id);
+	// No token yet: nothing to offer
+	assert.equal($("zb-su-notion-create").hidden, true);
+	type(doc, "zb-su-notion-token", NOTION_TOKEN);
+	assert.equal($("zb-su-notion-create").hidden, false);
+	assert.match($("zb-su-notion-create").textContent, /還沒有資料庫？讓 ZotMax 幫你建立/);
+	// A link typed in: the offer goes away; emptied again: back
+	type(doc, "zb-su-notion-database", NOTION_DB);
+	assert.equal($("zb-su-notion-create").hidden, true);
+	type(doc, "zb-su-notion-database", "");
+	assert.equal($("zb-su-notion-create").hidden, false);
+	assert.equal(notionApi.calls.length, 0, "nothing is sent before a click");
+	// 找可以放資料庫的頁面: stores the token, lists the pages (radios), nothing created
+	$("zb-su-notion-find").click();
+	await waitFor(() => doc.querySelectorAll('input[name="zb-su-notion-page"]').length === 2, "the page list");
+	assert.deepEqual(stored(env, "notionToken"), [NOTION_TOKEN]);
+	assert.deepEqual(prefsHolding(env, NOTION_TOKEN), []);
+	assert.deepEqual(notionApi.calls.map(c => `${c.method} ${c.path}`), ["POST search"]);
+	assert.equal(notionApi.calls[0].auth, `Bearer ${NOTION_TOKEN}`);
+	let labels = [...doc.querySelectorAll(".zb-su-page")].map(l => l.textContent);
+	assert.deepEqual(labels, ["🎓 碩論", "Class notes"]);
+	assert.ok(![...doc.querySelectorAll('input[name="zb-su-notion-page"]')].some(r => r.checked), "two pages: none picked for the user");
+	assert.equal($("zb-su-notion-create-run").hidden, false);
+	assert.equal($("zb-su-notion-no-pages").hidden, true);
+	// The button without a page picked asks for one
+	$("zb-su-notion-create-run").click();
+	await tick();
+	assert.equal($("zb-su-notion-create-status").textContent, "先選一個頁面。");
+	assert.equal(notionApi.databases.size, 0);
+	// Pick 碩論 and create
+	choose(doc, "zb-su-notion-page-0");
+	$("zb-su-notion-create-run").click();
+	await waitFor(() => /連線成功/.test($("zb-su-notion-result").textContent), "the automatic 測試連線");
+	assert.equal(notionApi.databases.size, 1, "one database per click");
+	let create = notionApi.calls.find(c => c.method === "POST" && c.path === "databases");
+	assert.deepEqual(create.body.parent, { type: "page_id", page_id: SHARED_PAGE.id });
+	assert.equal(create.body.title[0].text.content, "ZotMax 文獻");
+	let N = env.ZB.notion;
+	assert.deepEqual(Object.keys(create.body.initial_data_source.properties).sort(), [N.TITLE_NAME_ZH, ...Object.keys(N.PROPERTY_SCHEMA).map(k => N.PROPERTY_NAMES_ZH[k])].sort());
+	let [dbId] = [...notionApi.databases.keys()];
+	let url = `https://www.notion.so/${dbId.replace(/-/g, "")}`;
+	assert.equal($("zb-su-notion-database").value, url, "the link is in the field");
+	assert.equal(env.prefStore[P + "notion.database"], url, "and in notion.database, as a pasted link");
+	assert.equal(env.ZB.notion.parseNotionId(env.prefStore[P + "notion.database"]), dbId);
+	assert.equal($("zb-su-notion-result").textContent, "✅ 預設：連線成功，欄位齊全");
+	assert.equal($("zb-su-notion-created").textContent, "已在「碩論」底下建立資料庫，連結已填好。");
+	assert.equal($("zb-su-notion-create").hidden, true, "the offer is gone after it worked");
+	// Emptying the field again doesn't bring it back for a second database
+	type(doc, "zb-su-notion-database", "");
+	assert.equal($("zb-su-notion-create").hidden, true);
+	type(doc, "zb-su-notion-database", url);
+	assert.equal(notionApi.calls.filter(c => c.method === "POST" && c.path === "databases").length, 1);
+	// 下一步 keeps it
+	assert.equal(await view.next(), true);
+	assert.equal(env.prefStore[P + "notion.database"], url);
+	env.ZB.setup.close();
+	assert.deepEqual(env.errors, []);
+});
+
+test("Notion 「幫我建立」: no page shared shows how to share and 重新整理; a stored token is enough; errors say what to do and create nothing", async () => {
+	let env = await setup({ logins: [{ origin: "chrome://zotero-bridge", httpRealm: "Zotero Bridge", username: "notionToken", password: NOTION_TOKEN }] });
+	let shared = [];
+	let notionApi = fakeNotion(() => shared, { fail: {} });
+	env.context.fetch = notionApi.fetch;
+	let { view, doc } = await openWizard(env);
+	await view.go("notes");
+	choose(doc, "zb-su-notes-notion");
+	let $ = id => doc.getElementById(id);
+	await waitFor(() => !$("zb-su-notion-create").hidden, "the offer with the stored token");
+	$("zb-su-notion-find").click();
+	await waitFor(() => !$("zb-su-notion-no-pages").hidden, "the how-to-share steps");
+	let steps = $("zb-su-notion-no-pages").textContent;
+	assert.match(steps, /還看不到任何頁面/);
+	assert.match(steps, /⋯ → Connections → 選你的 integration/);
+	assert.equal($("zb-su-notion-create-run").hidden, true);
+	assert.equal($("zb-su-notion-pages").hidden, true);
+	// Shared now: 重新整理 lists it; one page is picked already, still nothing created
+	shared = [SHARED_PAGE];
+	$("zb-su-notion-refresh").click();
+	await waitFor(() => doc.querySelectorAll('input[name="zb-su-notion-page"]').length === 1, "the page after 重新整理");
+	assert.equal($("zb-su-notion-no-pages").hidden, true);
+	assert.equal(doc.getElementById("zb-su-notion-page-0").checked, true);
+	assert.equal(notionApi.databases.size, 0);
+	// The page was unshared meanwhile: the words say so, nothing is written
+	notionApi.calls.length = 0;
+	let failing = fakeNotion(() => shared, { fail: { "POST databases": [404, "object_not_found"] } });
+	env.context.fetch = failing.fetch;
+	$("zb-su-notion-create-run").click();
+	await waitFor(() => /^沒有建立成功/.test($("zb-su-notion-create-status").textContent), "the failure");
+	assert.match($("zb-su-notion-create-status").textContent, /這個頁面還沒分享給 integration/);
+	assert.equal(env.prefStore[P + "notion.database"], undefined);
+	assert.equal($("zb-su-notion-database").value, "");
+	assert.equal($("zb-su-notion-create").hidden, false, "it can be tried again");
+	assert.equal($("zb-su-notion-result").textContent, "", "no test after a failed create");
+	// A refused token while listing
+	env.context.fetch = fakeNotion(() => shared, { fail: { "POST search": [401, "unauthorized"] } }).fetch;
+	$("zb-su-notion-find").click();
+	await waitFor(() => /^讀不到頁面/.test($("zb-su-notion-create-status").textContent), "the token error");
+	assert.match($("zb-su-notion-create-status").textContent, /Notion 不接受這個 token/);
+	assert.equal($("zb-su-notion-no-pages").hidden, true, "not the how-to-share steps");
+	env.ZB.setup.close();
+	assert.deepEqual(env.errors, []);
+});
+
+test("Notion 「幫我建立」 without any token asks for one first; after shutdown a late answer touches nothing", async () => {
+	let env = await setup();
+	let { view, doc } = await openWizard(env);
+	await view.go("notes");
+	choose(doc, "zb-su-notes-notion");
+	let $ = id => doc.getElementById(id);
+	// The offer is hidden without a token; its button still refuses if reached
+	$("zb-su-notion-find").click();
+	await tick();
+	assert.equal(view.status(), "請貼上 Notion integration token。");
+	// A slow listing, then shutdown before it answers
+	let answer;
+	env.ZB.main.listNotionPages = () => new Promise((resolve) => {
+		answer = resolve;
+	});
+	type(doc, "zb-su-notion-token", NOTION_TOKEN);
+	$("zb-su-notion-find").click();
+	await waitFor(() => answer, "the listing to start");
+	await vm.runInContext("shutdown()", env.context);
+	answer([{ id: SHARED_PAGE.id, title: "碩論", url: SHARED_PAGE.url, icon: "" }]);
+	await tick(30);
+	assert.equal(doc.querySelectorAll('input[name="zb-su-notion-page"]').length, 0);
+	assert.deepEqual(env.errors, []);
+});
+
+test("settings pane 「建立新的資料庫…」: next to the database link; cancel or no shared page creates nothing; a pick creates one, stores the link and tests", async () => {
+	let env = await setup({ logins: [{ origin: "chrome://zotero-bridge", httpRealm: "Zotero Bridge", username: "notionToken", password: NOTION_TOKEN }] });
+	let shared = [];
+	let notionApi = fakeNotion(() => shared);
+	env.context.fetch = notionApi.fetch;
+	let asked = [];
+	let pick = null;
+	env.context.Services.prompt.select = (win, title, text, labels, out) => {
+		asked.push({ title, text, labels: [...labels] });
+		if (pick === null) return false;
+		out.value = pick;
+		return true;
+	};
+	let xhtml = fs.readFileSync(path.join(ROOT, "content", "preferences.xhtml"), "utf8");
+	let pane = new JSDOM(`<box xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul" xmlns:html="http://www.w3.org/1999/xhtml">${xhtml}</box>`, { contentType: "application/xml" }).window;
+	let button = pane.document.getElementById("zb-notion-create");
+	assert.ok(button, "the button in preferences.xhtml");
+	assert.equal(button.closest("[data-zb-section]").getAttribute("data-zb-section"), "notion");
+	assert.equal(button.getAttribute("data-l10n-id"), "zotero-bridge-notion-create");
+	assert.equal(button.getAttribute("label"), ftlText(ftl("zh-TW"), "zotero-bridge-notion-create"));
+	assert.ok(ftlText(ftl("en-US"), "zotero-bridge-notion-create"));
+	let field = pane.document.getElementById("zb-notion-database");
+	assert.equal(field.getAttribute("preference"), "extensions.zotero-bridge.notion.database");
+	assert.equal(button.parentNode, field.parentNode, "next to the database field");
+	let hint = pane.document.querySelector('[data-l10n-id="zotero-bridge-notion-create-hint"]');
+	assert.equal(hint.textContent, ftlText(ftl("zh-TW"), "zotero-bridge-notion-create-hint"));
+	assert.ok(ftlText(ftl("en-US"), "zotero-bridge-notion-create-hint"));
+	env.Zotero.ZoteroBridge = env.ZB;
+	let paneScope = vm.createContext({ Zotero: env.Zotero, window: pane, document: pane.document, Event: pane.Event, setTimeout, clearTimeout });
+	vm.runInContext(fs.readFileSync(path.join(ROOT, "content", "preferences.js"), "utf8"), paneScope);
+	let status = () => pane.document.getElementById("zb-notion-status").textContent;
+	// Nothing shared: how to share, no prompt
+	await pane.ZoteroBridgePrefs.createNotionDatabase();
+	assert.match(status(), /還看不到任何 Notion 頁面/);
+	assert.match(status(), /⋯ → Connections（連結）→ 選你的 integration/);
+	assert.equal(asked.length, 0);
+	// Cancel: nothing created
+	shared = [SHARED_PAGE, OTHER_PAGE];
+	await pane.ZoteroBridgePrefs.createNotionDatabase();
+	assert.equal(status(), "已取消，沒有建立資料庫。");
+	assert.deepEqual(asked[0].labels, ["🎓 碩論", "Class notes"]);
+	assert.equal(asked[0].title, "建立新的 Notion 資料庫");
+	assert.match(asked[0].text, /「ZotMax 文獻」資料庫/);
+	assert.equal(notionApi.databases.size, 0);
+	assert.equal(env.prefStore[P + "notion.database"], undefined);
+	// Pick Class notes
+	pick = 1;
+	await pane.ZoteroBridgePrefs.createNotionDatabase();
+	assert.equal(notionApi.databases.size, 1);
+	let create = notionApi.calls.find(c => c.method === "POST" && c.path === "databases");
+	assert.deepEqual(create.body.parent, { type: "page_id", page_id: OTHER_PAGE.id });
+	let [dbId] = [...notionApi.databases.keys()];
+	let url = `https://www.notion.so/${dbId.replace(/-/g, "")}`;
+	assert.equal(env.prefStore[P + "notion.database"], url);
+	assert.equal(field.value, url);
+	assert.deepEqual(status().split("\n"), [`✅ 已在「Class notes」底下建立資料庫，連結已填入預設資料庫：${url}`, "✅ 預設：連線成功，欄位齊全"]);
+	// A database configured already: the prompt says it will be replaced (the old one is kept)
+	pick = null;
+	await pane.ZoteroBridgePrefs.createNotionDatabase();
+	assert.match(asked.at(-1).text, /目前的資料庫連結會被換掉（舊資料庫不會被刪除）/);
+	assert.equal(notionApi.databases.size, 1);
+	assert.deepEqual(env.errors, []);
+});
+
+test("測試連線 and sync on a database that is gone or not shared: the words suggest 重新建立, nothing is created", async () => {
+	let env = await setup({
+		prefs: { [P + "notion.database"]: NOTION_DB },
+		logins: [{ origin: "chrome://zotero-bridge", httpRealm: "Zotero Bridge", username: "notionToken", password: NOTION_TOKEN }],
+	});
+	let notionApi = fakeNotion(() => []);
+	env.context.fetch = notionApi.fetch;
+	let lines = await env.ZB.main.testNotion();
+	assert.equal(lines.length, 1);
+	assert.match(lines[0], /^❌ 預設：找不到這個 Notion 資料庫：可能被刪除、移到垃圾桶，或沒有分享給 integration/);
+	assert.match(lines[0], /按「建立新的資料庫…」，或打開設定精靈讓 ZotMax 重新建立/);
+	assert.ok(notionApi.calls.every(c => c.method === "GET"), "only reads");
+	assert.deepEqual(env.errors, []);
+});
+
 test("略過 everywhere writes nothing but setup.done at the end; a reopened wizard starts fresh in a new window", async () => {
 	let env = await setup();
 	let before = JSON.stringify(env.prefStore);
