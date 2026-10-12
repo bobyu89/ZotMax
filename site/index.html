@@ -293,7 +293,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
       <a href="#install">安裝精靈</a>
       <a href="search.html">🔎 醫學文獻快速搜尋</a>
       <a href="appraisal.html">📋 文獻評讀表</a>
-      <a href="https://github.com/bobyu89/zotero-bridge#readme" target="_blank" rel="noopener">說明（GitHub）</a>
+      <a href="https://github.com/bobyu89/ZotMax#readme" target="_blank" rel="noopener">說明（GitHub）</a>
     </nav>
   </div>
 </header>
@@ -331,7 +331,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
     </div>
     <div class="sheet-foot">
       <a class="btn" href="#install" id="heroCta">開始安裝（約 15 分鐘）<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-      <a class="btn ghost" href="https://github.com/bobyu89/zotero-bridge/releases/latest" target="_blank" rel="noopener">下載最新版 .xpi</a>
+      <a class="btn ghost" href="https://github.com/bobyu89/ZotMax/releases/latest" target="_blank" rel="noopener">下載最新版 .xpi</a>
       <p class="spec">Zotero 10（Windows／macOS）· Obsidian 1.14 以上或 Notion 免費版 · AI 功能要自備 API 金鑰，依用量付費</p>
     </div>
   </article>
@@ -377,8 +377,8 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
   <section class="sec" aria-labelledby="h-proof">
     <h2 id="h-proof">怎麼確認它真的能用</h2>
     <div class="proof">
-      <p><b>每次改程式，</b>GitHub Actions 都會把外掛裝進真正的 Zotero 10，檢查選單、設定頁、同步到 Obsidian、閱讀狀態、PRISMA 篩選等（不連 Notion、不呼叫真的 AI）：<a href="https://github.com/bobyu89/zotero-bridge/actions/workflows/e2e.yml" target="_blank" rel="noopener">e2e 紀錄</a>。</p>
-      <p><b>搜尋頁的資料庫網址</b>每週一自動實際連線一次：<a href="https://github.com/bobyu89/zotero-bridge/actions/workflows/link-check.yml" target="_blank" rel="noopener">link-check 紀錄</a>。遇到問題請到 <a href="https://github.com/bobyu89/zotero-bridge/issues" target="_blank" rel="noopener">GitHub Issues</a> 回報。</p>
+      <p><b>每次改程式，</b>GitHub Actions 都會把外掛裝進真正的 Zotero 10，檢查選單、設定頁、同步到 Obsidian、閱讀狀態、PRISMA 篩選等（不連 Notion、不呼叫真的 AI）：<a href="https://github.com/bobyu89/ZotMax/actions/workflows/e2e.yml" target="_blank" rel="noopener">e2e 紀錄</a>。</p>
+      <p><b>搜尋頁的資料庫網址</b>每週一自動實際連線一次：<a href="https://github.com/bobyu89/ZotMax/actions/workflows/link-check.yml" target="_blank" rel="noopener">link-check 紀錄</a>。遇到問題請到 <a href="https://github.com/bobyu89/ZotMax/issues" target="_blank" rel="noopener">GitHub Issues</a> 回報。</p>
     </div>
   </section>
 </div>
@@ -446,8 +446,8 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
         <h2>下載 ZotMax 的 .xpi 檔</h2>
         <ol class="how">
           <li><span>打開最新版的下載頁。
-            <a class="btn act" href="https://github.com/bobyu89/zotero-bridge/releases/latest" target="_blank" rel="noopener">打開最新版下載頁<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
-            <span class="copyline"><a href="https://github.com/bobyu89/zotero-bridge/releases/latest" target="_blank" rel="noopener">https://github.com/bobyu89/zotero-bridge/releases/latest</a><button type="button" class="btn small ghost" data-copy="https://github.com/bobyu89/zotero-bridge/releases/latest" data-what="下載頁網址">複製</button></span></span></li>
+            <a class="btn act" href="https://github.com/bobyu89/ZotMax/releases/latest" target="_blank" rel="noopener">打開最新版下載頁<svg class="ico" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+            <span class="copyline"><a href="https://github.com/bobyu89/ZotMax/releases/latest" target="_blank" rel="noopener">https://github.com/bobyu89/ZotMax/releases/latest</a><button type="button" class="btn small ghost" data-copy="https://github.com/bobyu89/ZotMax/releases/latest" data-what="下載頁網址">複製</button></span></span></li>
           <li><span>在 <b>Assets</b> 底下點 <code>zotero-bridge-x.y.z.xpi</code>（x.y.z 是版本號）下載。
             <span class="zh sub">用 <b>Firefox</b> 的話，請在連結上按右鍵 →「另存連結為…」。直接點的話，Firefox 會把它當成自己的擴充功能來裝。</span></span></li>
           <li><span>檔案通常在「下載」資料夾。不用解壓縮，也不要改副檔名，等一下直接裝進 Zotero。</span></li>
@@ -623,7 +623,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
               <dt class="only-ai">AI：401、402 或 insufficient credit</dt>
               <dd class="only-ai">金鑰錯誤或 API 帳戶餘額不足，請到 API 平台確認。</dd>
               <dt>想看詳細錯誤</dt>
-              <dd><span class="menu"><kbd>Help</kbd><span class="gt">›</span><kbd class="long">Debug Output Logging</kbd><span class="gt">›</span><kbd>View Output</kbd></span>，把內容貼給協助你的人，或到 <a href="https://github.com/bobyu89/zotero-bridge/issues" target="_blank" rel="noopener">GitHub Issues</a> 回報。</dd>
+              <dd><span class="menu"><kbd>Help</kbd><span class="gt">›</span><kbd class="long">Debug Output Logging</kbd><span class="gt">›</span><kbd>View Output</kbd></span>，把內容貼給協助你的人，或到 <a href="https://github.com/bobyu89/ZotMax/issues" target="_blank" rel="noopener">GitHub Issues</a> 回報。</dd>
             </dl>
           </div>
         </details>
@@ -675,21 +675,21 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
           <li><b>自動同步：</b>設定 ›「同步」分頁 › 自動同步，條目、劃線或筆記一變更就同步（不會自動呼叫 AI）。</li>
           <li class="only-obsidian"><b>閱讀進度看板：</b>打開 <code>Zotero/Zotero 文獻庫.base</code>，在「閱讀進度」拖曳卡片，就能更新待讀／閱讀中／已讀／已引用。</li>
           <li><b>分流規則：</b>不同文獻庫或分類放到不同地方，見上一步的「手動設定」。</li>
-          <li><b>研究大腦（選用）：</b>用 Claude Code 或 Codex 讀你的文獻筆記，比對文獻、找研究缺口：<a href="https://github.com/bobyu89/zotero-bridge/tree/main/research-brain" target="_blank" rel="noopener">研究大腦說明</a>。</li>
+          <li><b>研究大腦（選用）：</b>用 Claude Code 或 Codex 讀你的文獻筆記，比對文獻、找研究缺口：<a href="https://github.com/bobyu89/ZotMax/tree/main/research-brain" target="_blank" rel="noopener">研究大腦說明</a>。</li>
         </ul>
 
         <div class="note info"><p><b>安全提醒：</b>API 金鑰與 Notion token 存在 Zotero 的密碼管理（登入管理員），不寫進一般設定檔；還是請不要把 Zotero 的 profile 資料夾分享給別人。</p></div>
 
         <h3>延伸閱讀</h3>
         <p class="zh">
-          <a href="https://github.com/bobyu89/zotero-bridge#readme" target="_blank" rel="noopener">ZotMax 完整說明</a> ·
-          <a href="https://github.com/bobyu89/zotero-bridge/releases" target="_blank" rel="noopener">版本紀錄與下載</a>
+          <a href="https://github.com/bobyu89/ZotMax#readme" target="_blank" rel="noopener">ZotMax 完整說明</a> ·
+          <a href="https://github.com/bobyu89/ZotMax/releases" target="_blank" rel="noopener">版本紀錄與下載</a>
         </p>
 
         <h3>回報問題／試用回饋</h3>
         <p class="zh">在 Zotero 裡用 ZotMax 按鈕選單的「回報問題…」最方便，會自動附上版本等環境資訊（不含文獻內容與路徑）。也可以直接開表單：
-          <a href="https://github.com/bobyu89/zotero-bridge/issues/new?template=bug.yml" target="_blank" rel="noopener">回報問題</a> ·
-          <a href="https://github.com/bobyu89/zotero-bridge/issues/new?template=feedback.yml" target="_blank" rel="noopener">試用回饋問卷</a>（需要 GitHub 帳號；內容是公開的，請不要寫進未發表的研究資料或病人資訊）
+          <a href="https://github.com/bobyu89/ZotMax/issues/new?template=bug.yml" target="_blank" rel="noopener">回報問題</a> ·
+          <a href="https://github.com/bobyu89/ZotMax/issues/new?template=feedback.yml" target="_blank" rel="noopener">試用回饋問卷</a>（需要 GitHub 帳號；內容是公開的，請不要寫進未發表的研究資料或病人資訊）
         </p>
       </section>
 

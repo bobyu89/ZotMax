@@ -307,7 +307,7 @@ test("快速指令: both right after 設定精靈… in the 設定 group, runnab
 	assert.equal(palette.document.querySelector('[data-zb-entry="trial-feedback"] .zb-pal-group-tag').textContent, "設定");
 	assert.equal(view.choose(), "run");
 	await waitFor(() => env.launched.length === 1, "the questionnaire to open");
-	assert.match(env.launched[0], /^https:\/\/github\.com\/bobyu89\/zotero-bridge\/issues\/new\?template=feedback\.yml&/);
+	assert.match(env.launched[0], /^https:\/\/github\.com\/bobyu89\/ZotMax\/issues\/new\?template=feedback\.yml&/);
 	assert.deepEqual(env.errors, []);
 });
 
@@ -362,7 +362,7 @@ test("回報問題: the dialog shows the exact environment text; 複製 copies i
 	assert.ok(second.text.startsWith("已複製環境資訊"), second.text.slice(0, 30));
 	assert.deepEqual(env.launched, [result.url]);
 	let u = new URL(result.url);
-	assert.equal(u.origin + u.pathname, "https://github.com/bobyu89/zotero-bridge/issues/new");
+	assert.equal(u.origin + u.pathname, "https://github.com/bobyu89/ZotMax/issues/new");
 	assert.equal(u.searchParams.get("template"), "bug.yml");
 	assert.equal(u.searchParams.get("env"), result.env);
 	assert.ok(result.url.length <= 6000);

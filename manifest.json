@@ -3,7 +3,7 @@
   "name": "ZotMax",
   "version": "0.15.0",
   "description": "A literature plugin for Zotero: structured notes with Claude or OpenAI, and items, annotations and notes synced to Notion and Obsidian, routed per library/collection.",
-  "homepage_url": "https://github.com/bobyu89/zotero-bridge",
+  "homepage_url": "https://github.com/bobyu89/ZotMax",
   "author": "BOB",
   "icons": {
     "48": "content/icons/bridge.svg",
@@ -12,7 +12,7 @@
   "applications": {
     "zotero": {
       "id": "zotero-bridge@bobyu89.github.io",
-      "update_url": "https://raw.githubusercontent.com/bobyu89/zotero-bridge/main/updates.json",
+      "update_url": "https://raw.githubusercontent.com/bobyu89/ZotMax/main/updates.json",
       "strict_min_version": "10.0",
       "strict_max_version": "10.*"
     }

@@ -1845,7 +1845,7 @@ const TESTS = [
 			let url = launched[0];
 			d.urlLength = url.length;
 			d.urlStart = url.slice(0, 80);
-			check(url.startsWith("https://github.com/bobyu89/zotero-bridge/issues/new?template=bug.yml&env="), `URL ${d.urlStart}`);
+			check(url.startsWith("https://github.com/bobyu89/ZotMax/issues/new?template=bug.yml&env="), `URL ${d.urlStart}`);
 			check(url.length <= 6000, `URL is ${url.length} characters`);
 			let env = new URL(url).searchParams.get("env") || "";
 			d.env = env;

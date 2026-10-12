@@ -28,7 +28,7 @@
 		(root.ZB = root.ZB || {}).report = api;
 	}
 })(this, function (scope) {
-	const REPO_URL = "https://github.com/bobyu89/zotero-bridge";
+	const REPO_URL = "https://github.com/bobyu89/ZotMax";
 	const ISSUE_URL = REPO_URL + "/issues/new";
 	const TEMPLATES = { bug: "bug.yml", feedback: "feedback.yml" };
 	// The issue form fields the plugin fills (their `id` in the YAML)
@@ -56,7 +56,7 @@
 		feedbackLead: ["zotero-bridge-feedback-lead", "會在瀏覽器打開 ZotMax 在 GitHub 的試用問卷，大約 5 分鐘，只有「整體來說有沒有用」必填。"],
 		feedbackPrivacy: ["zotero-bridge-feedback-privacy", "需要 GitHub 帳號（免費）。問卷回覆是公開的：請不要寫進未發表的研究資料或病人資訊。"],
 		feedbackFill: ["zotero-bridge-feedback-fill", "會幫你填入："],
-		failed: ["zotero-bridge-report-failed", "沒有打開 GitHub（{ $error }）。也可以直接到 github.com/bobyu89/zotero-bridge/issues 回報。"],
+		failed: ["zotero-bridge-report-failed", "沒有打開 GitHub（{ $error }）。也可以直接到 github.com/bobyu89/ZotMax/issues 回報。"],
 	};
 
 	// Hosts whose name says nothing about the user: kept (without path or query) in error messages

@@ -500,7 +500,7 @@ test("Notion: the token goes to the login manager, never to prefs; the link is c
 	assert.equal(doc.getElementById("zb-su-notion-token").getAttribute("type"), "password");
 	// The how-to link opens the site wizard's steps
 	doc.getElementById("zb-su-notion-howto").click();
-	assert.deepEqual(env.launched, ["https://bobyu89.github.io/zotero-bridge/#install"]);
+	assert.deepEqual(env.launched, ["https://bobyu89.github.io/ZotMax/#install"]);
 	// No token
 	type(doc, "zb-su-notion-database", NOTION_DB);
 	assert.equal(await view.next(), false);

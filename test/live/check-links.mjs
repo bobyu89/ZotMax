@@ -483,7 +483,7 @@ async function siteEntries() {
 	const { JSDOM, VirtualConsole } = await import("jsdom");
 	let html = fs.readFileSync(path.join(ROOT, "site", "search.html"), "utf8");
 	let vc = new VirtualConsole();
-	let dom = new JSDOM(html, { url: "https://bobyu89.github.io/zotero-bridge/search.html", runScripts: "dangerously", virtualConsole: vc });
+	let dom = new JSDOM(html, { url: "https://bobyu89.github.io/ZotMax/search.html", runScripts: "dangerously", virtualConsole: vc });
 	let Z = dom.window.ZBSearch;
 	let out = Z.SOURCES.map((s) => {
 		let query = s.group === "zh" ? QUERY_ZH : QUERY_EN;

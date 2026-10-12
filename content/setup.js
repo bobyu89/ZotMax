@@ -37,7 +37,7 @@
 	const ADDON_INSTALL = 5;
 	// After the main window is ready: let Zotero finish drawing before a window of ours appears
 	const AUTO_OPEN_DELAY_MS = 1500;
-	const SITE_URL = "https://bobyu89.github.io/zotero-bridge/#install";
+	const SITE_URL = "https://bobyu89.github.io/ZotMax/#install";
 	const HTML_NS = "http://www.w3.org/1999/xhtml";
 	const STEPS = ["welcome", "mode", "notes", "ai", "try", "done"];
 	// Secrets whose presence means the profile is already set up (secrets.js names)
