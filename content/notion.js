@@ -130,6 +130,12 @@
 		"Last Synced": "最後同步",
 	};
 	const TITLE_NAME_ZH = "標題";
+	// 「幫我建立 Notion 資料庫」: the database ZotMax creates under a page the user picks
+	const DEFAULT_DATABASE_TITLE = "ZotMax 文獻";
+	// How a page is shared with the integration, for the places that don't use Fluent (settings pane)
+	const SHARE_PAGE_HOWTO = "在 Notion 打開要放資料庫的頁面（沒有的話先新增一個），右上角 ⋯ → Connections（連結）→ 選你的 integration，再回來按一次。";
+	// What to do when the configured database is gone (wording only: nothing is created by itself)
+	const RECREATE_HINT = "如果資料庫已經不在了，可以到 設定 → ZotMax → Notion 按「建立新的資料庫…」，或打開設定精靈讓 ZotMax 重新建立。";
 	// Default title-column names Notion gives a new database; only these are offered for renaming
 	const DEFAULT_TITLE_NAMES = ["Name", "Title", "名稱", "Aa Name"];
 
@@ -253,11 +259,72 @@
 	}
 
 	class NotionError extends Error {
-		constructor(status, code, message) {
-			super(`Notion API ${status}${code ? ` (${code})` : ""}: ${message}`);
+		/** opts.plain: `message` is already a sentence for the user (no "Notion API 404 (…):" prefix). */
+		constructor(status, code, message, opts) {
+			super(opts && opts.plain ? message : `Notion API ${status}${code ? ` (${code})` : ""}: ${message}`);
 			this.status = status;
 			this.code = code;
 		}
+	}
+
+	/**
+	 * The same error in words for the user (Chinese), for what was being done: "page" (creating a
+	 * database under a page), "search" (listing the pages the integration sees) or "database" (the
+	 * configured database). Errors that are not about the token, access or a missing object pass through.
+	 */
+	function friendlyError(e, what) {
+		if (!(e instanceof NotionError)) return e;
+		let say = text => new NotionError(e.status, e.code, text, { plain: true });
+		if (e.status === 401 || e.code === "unauthorized") {
+			return say("Notion 不接受這個 token：到 notion.so/profile/integrations 打開你的 integration，重新複製 token（ntn_ 開頭）貼上。");
+		}
+		if (what === "page" && (e.status === 403 || e.status === 404 || e.code === "restricted_resource" || e.code === "object_not_found")) {
+			return say("這個頁面還沒分享給 integration，或 integration 沒有「Insert content」權限：在 Notion 打開頁面，右上角 ⋯ → Connections → 選你的 integration；"
+				+ "integration 的 Capabilities 要勾 Insert content。");
+		}
+		if (what === "database" && (e.status === 404 || e.code === "object_not_found")) {
+			return say(`找不到這個 Notion 資料庫：可能被刪除、移到垃圾桶，或沒有分享給 integration（資料庫右上角 ⋯ → Connections → 選你的 integration）。${RECREATE_HINT}`);
+		}
+		if (e.status === 403 || e.code === "restricted_resource") {
+			return say("integration 沒有權限做這件事：到 notion.so/profile/integrations 打開你的 integration，確認 Capabilities 有勾 Read content 和 Insert content。");
+		}
+		return e;
+	}
+
+	/**
+	 * The columns of a database ZotMax creates: 標題 plus every column the sync writes, under its Chinese
+	 * name, with the type and options from PROPERTY_SCHEMA (the same definitions ensureSchema adds).
+	 */
+	function newDatabaseProperties() {
+		let properties = { [TITLE_NAME_ZH]: { title: {} } };
+		for (let [key, def] of Object.entries(PROPERTY_SCHEMA)) {
+			properties[PROPERTY_NAMES_ZH[key] || key] = JSON.parse(JSON.stringify(def));
+		}
+		return properties;
+	}
+
+	/** A page from POST /v1/search as { id, title, url, icon } (icon: an emoji or ""). */
+	function pageSummary(page) {
+		let title = "";
+		for (let prop of Object.values((page && page.properties) || {})) {
+			if (prop && prop.type === "title") {
+				title = (prop.title || []).map(r => r.plain_text || (r.text && r.text.content) || "").join("").trim();
+				break;
+			}
+		}
+		let icon = page && page.icon && page.icon.type === "emoji" ? page.icon.emoji : "";
+		return { id: page.id, title, url: page.url || "", icon };
+	}
+
+	/**
+	 * Whether a search result can hold the new database: a page that is not in the trash and not a row
+	 * of a database (a literature page synced earlier is a page the integration sees, too).
+	 */
+	function isParentPage(page) {
+		if (!page || page.object !== "page" || !page.id) return false;
+		if (page.in_trash || page.archived) return false;
+		let parent = (page.parent && page.parent.type) || "";
+		return parent !== "database_id" && parent !== "data_source_id";
 	}
 
 	class NotionClient {
@@ -314,6 +381,9 @@
 			let dsId;
 			try {
 				let db = await this.request("GET", `databases/${id}`);
+				if (db.in_trash || db.archived) {
+					throw new NotionError(400, "in_trash", `這個 Notion 資料庫在垃圾桶裡：到 Notion 的垃圾桶還原它。${RECREATE_HINT}`, { plain: true });
+				}
 				if (!db.data_sources || !db.data_sources.length) {
 					throw new Error("這個 Notion database 沒有 data source");
 				}
@@ -321,8 +391,13 @@
 			}
 			catch (e) {
 				if (!(e instanceof NotionError) || e.status !== 404) throw e;
-				// Maybe it is already a data source ID
-				await this.request("GET", `data_sources/${id}`);
+				// Maybe it is already a data source ID; neither: deleted, trashed or not shared
+				try {
+					await this.request("GET", `data_sources/${id}`);
+				}
+				catch (e2) {
+					throw friendlyError(e2, "database");
+				}
 				dsId = id;
 			}
 			this.dataSourceCache.set(id, dsId);
@@ -442,6 +517,71 @@
 				results.push(...res.results);
 			}
 			return results;
+		}
+
+		/**
+		 * 「幫我建立 Notion 資料庫」: a database under a page shared with the integration, with every
+		 * column the sync writes (newDatabaseProperties). One request, one database.
+		 * Resolves to { databaseId, dataSourceId, url }.
+		 */
+		async createLiteratureDatabase({ parentPageId, title } = {}) {
+			let parentId = parseNotionId(parentPageId);
+			if (!parentId) throw new Error(`無法從「${parentPageId}」解析出 Notion 頁面 ID`);
+			let name = String(title || "").trim() || DEFAULT_DATABASE_TITLE;
+			let db;
+			try {
+				db = await this.request("POST", "databases", {
+					parent: { type: "page_id", page_id: parentId },
+					title: [{ type: "text", text: { content: name.slice(0, 2000) } }],
+					icon: { type: "emoji", emoji: "📚" },
+					initial_data_source: { properties: newDatabaseProperties() },
+				});
+			}
+			catch (e) {
+				throw friendlyError(e, "page");
+			}
+			let dataSources = db && db.data_sources;
+			if (!dataSources || !dataSources.length || !db.url) {
+				// A partial response: read the database for its data source and link
+				db = Object.assign({}, db, await this.request("GET", `databases/${db.id}`));
+				dataSources = db.data_sources || [];
+			}
+			if (!dataSources.length) throw new Error("新的 Notion 資料庫沒有 data source");
+			let databaseId = db.id;
+			let dataSourceId = dataSources[0].id;
+			this.dataSourceCache.set(parseNotionId(databaseId) || databaseId, dataSourceId);
+			let url = db.url || `https://www.notion.so/${String(databaseId).replace(/-/g, "")}`;
+			return { databaseId, dataSourceId, url };
+		}
+
+		/**
+		 * The pages the integration can see (POST /v1/search, pages only, last edited first), as
+		 * { id, title, url, icon }: where 「幫我建立 Notion 資料庫」 can put the database. Rows of databases
+		 * and trashed pages are left out. At most `limit` pages, from at most `maxRequests` search pages.
+		 */
+		async listSharedPages({ limit = 50, maxRequests = 5 } = {}) {
+			let pages = [];
+			let cursor = null;
+			let requests = 0;
+			try {
+				do {
+					let res = await this.request("POST", "search", Object.assign({
+						filter: { property: "object", value: "page" },
+						sort: { timestamp: "last_edited_time", direction: "descending" },
+						page_size: 100,
+					}, cursor ? { start_cursor: cursor } : {}));
+					requests++;
+					for (let page of (res && res.results) || []) {
+						if (isParentPage(page) && !pages.some(p => p.id === page.id)) pages.push(pageSummary(page));
+						if (pages.length >= limit) break;
+					}
+					cursor = res && res.has_more ? res.next_cursor : null;
+				} while (cursor && pages.length < limit && requests < maxRequests);
+			}
+			catch (e) {
+				throw friendlyError(e, "search");
+			}
+			return pages;
 		}
 
 		/** Create a page under another page (used for literature syntheses). Returns the new page. */
@@ -639,7 +779,8 @@
 	}
 
 	return {
-		NOTION_VERSION, PROPERTY_SCHEMA, PROPERTY_NAMES_ZH, TITLE_NAME_ZH, CONTAINER_MARKER, LEGACY_CONTAINER_MARKERS, isContainerText, parseNotionId, NotionClient, NotionError, buildProperties,
+		NOTION_VERSION, PROPERTY_SCHEMA, PROPERTY_NAMES_ZH, TITLE_NAME_ZH, DEFAULT_DATABASE_TITLE, SHARE_PAGE_HOWTO, RECREATE_HINT,
+		newDatabaseProperties, friendlyError, pageSummary, isParentPage, CONTAINER_MARKER, LEGACY_CONTAINER_MARKERS, isContainerText, parseNotionId, NotionClient, NotionError, buildProperties,
 		resolveSchema, propertyName, pageProperty, renamePlan,
 	};
 });

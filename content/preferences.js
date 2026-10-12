@@ -1289,6 +1289,33 @@
 			}
 		},
 
+		/**
+		 * 「建立新的資料庫…」: main.js lists the pages the integration sees and creates the database only
+		 * under the page the user picks, then stores its link and tests the connection.
+		 */
+		async createNotionDatabase() {
+			let status = document.getElementById("zb-notion-status");
+			let button = document.getElementById("zb-notion-create");
+			if (button && button.disabled) return;
+			if (button) button.disabled = true;
+			status.textContent = "讀取 integration 看得到的頁面…";
+			try {
+				await flushSecrets();
+				let lines = await Zotero.ZoteroBridge.main.createNotionDatabaseFromSettings(window);
+				status.textContent = lines.join("\n");
+				// The field shows the stored link (the pref binding may not refresh a field on its own)
+				let input = document.getElementById("zb-notion-database");
+				let stored = Zotero.Prefs.get("extensions.zotero-bridge.notion.database", true);
+				if (input && stored && input.value !== stored) input.value = stored;
+			}
+			catch (e) {
+				status.textContent = `❌ ${e.message || e}`;
+			}
+			finally {
+				if (button) button.disabled = false;
+			}
+		},
+
 		async testNotion() {
 			let status = document.getElementById("zb-notion-status");
 			status.textContent = "測試中…";
