@@ -583,6 +583,21 @@ zotero-bridge-cmd-zh-meta-undo =
 zotero-bridge-pane-zh-meta = Chinese data: { $count } things to check
 zotero-bridge-pane-zh-meta-review = Review and fix…
 
+## PICO 問題卡與 PICO 表 (content/pico.js): the switch, the commands, the settings section
+
+zotero-bridge-feature-pico = PICO question card and PICO table
+zotero-bridge-feature-pico-desc = Keeps one PICO question card per research project (collection): coaching questions help you focus it, the search string goes to the databases, and the question is yours to write. Then turns the selected papers into a PICO table (P, I, C, O, key findings, evidence level, appraisal; Markdown, CSV, pasteable into Word), with the AI's prefilled values marked so you can check them. No network, no AI.
+zotero-bridge-cmd-pico-card =
+    .label = PICO question card (current collection)…
+zotero-bridge-cmd-pico-table =
+    .label = Export PICO table (selected items or collection)…
+zotero-bridge-section-pico = PICO
+zotero-bridge-pico-heading = PICO question card and PICO table
+zotero-bridge-pico-intro = “PICO question card…” keeps one card for the current collection (or the whole library): the question type, P, I, C, O, time frame, your setting and the full question; the focus check only reads what you wrote and calls no AI. “Export PICO table…” turns the selected papers into one table (a Markdown note, a CSV and an HTML file Word opens); with an Obsidian vault it goes into the Reviews folder next to the PRISMA note, which also carries the card.
+zotero-bridge-pico-folder = Without an Obsidian vault, put the PICO table in (empty = Downloads):
+zotero-bridge-pico-folder-pick =
+    .label = Choose folder…
+
 ## 匯出給 Gemini Notebook (content/gemini-export.js): the switch, the commands, the settings section
 zotero-bridge-feature-gemini-export = Export for Gemini Notebook
 zotero-bridge-feature-gemini-export-desc = Exports the selected items or a collection as a folder (full text as Markdown, APA references, a how-to) to use as Gemini Notebook sources; it only writes files on your computer, and you upload them yourself.

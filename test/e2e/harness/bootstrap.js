@@ -18,7 +18,7 @@ const PANE_TABS = {
 	sync: ["obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography"],
 	organize: ["fulltext", "colors", "concepts", "classify"],
 	search: ["searchLinks", "ncbi", "pubmedWatch", "citationChase"],
-	appraise: ["screening"],
+	appraise: ["screening", "pico"],
 	ai: ["ai", "usage", "geminiNotebook"],
 };
 const E2E_PREF = "extensions.zb-e2e.";
@@ -361,6 +361,8 @@ const TESTS = [
 				zhMeta: ["analyze", "itemData", "findingsFor", "paneCount", "buildPlan", "defaultPicks", "review", "renderReview", "apply", "undoLast", "readLastRun", "run"],
 				geminiExport: ["folderName", "baseName", "capCheck", "itemMarkdown", "referencesMarkdown", "readmeText", "renderDialog", "exportTo", "dialog", "noticeInfo", "run",
 					"findGoogleDrive", "chooseDestination", "destination"],
+				pico: ["normalizeCard", "composeQuestion", "checkCard", "matchCard", "cardMarkdown", "tableRow", "tableMarkdown", "tableCSV", "tableHTML", "noteSection", "renderCard", "renderTable",
+					"cardFor", "saveCard", "deleteCard", "prismaSection", "openCard", "exportTable", "cardDialog", "tableDialog"],
 				citationChase: ["chaseCollection", "chaseItems", "importChecked"],
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "menuTargets", "relatedFor", "showMore", "openTarget"],
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "batchParams", "parseResults"],
@@ -1777,6 +1779,121 @@ const TESTS = [
 				if (win && !win.closed) win.close();
 				Zotero.Prefs.clear(ZB_PREF + "feature.geminiExport", true);
 				for (let key of ["geminiExport.folder", "geminiExport.copyPDF", "geminiExport.highlights", "geminiExport.preferDrive"]) Zotero.Prefs.clear(ZB_PREF + key, true);
+			}
+		},
+	},
+	{
+		name: "PICO 問題卡 is saved for the collection and heads the PRISMA note; PICO 表 writes the note, CSV and HTML into the vault's Reviews folder; both windows open from chrome://zotero-bridge/ (ZB.pico)",
+		needs: ["AI note through the plugin's fetch with a stubbed Claude API (no network)", "screening decisions on real items and the PRISMA note (ZB.screening)"],
+		timeout: 90000,
+		async fn(d) {
+			let ZB = zb();
+			let PI = ZB.pico;
+			let C = ZB.commands;
+			let win = null;
+			let cardsBefore = Zotero.Prefs.get(ZB_PREF + "pico.cards", true);
+			try {
+				eq(C.isVisible(C.get("pico-card")), true, "PICO 問題卡 shows in 研究生引導");
+				eq(C.isVisible(C.get("pico-table")), true, "PICO 表 shows in 研究生引導");
+				// The card, saved through the command with a stubbed window
+				let card = { type: "treatment", p: "65 歲以上住院病人 older inpatients", i: "運動 exercise", c: "常規照護 usual care", o: "跌倒 falls", t: "12 週",
+					setting: "內科病房", question: "在 65 歲以上住院病人中，運動相較於常規照護，對跌倒的效果如何？", notes: "" };
+				let dialogInfo = null;
+				let saved = await PI.openCard(ctx.collection, { dialog: async (info) => {
+					dialogInfo = { scopeName: info.scopeName, isNew: info.isNew, search: info.search };
+					return card;
+				} });
+				d.cardDialog = dialogInfo;
+				eq(dialogInfo.scopeName, "E2E Review", "the card belongs to the collection");
+				eq(dialogInfo.isNew, true, "no card before");
+				check(saved && saved.saved && saved.saved.p === card.p, `openCard returned ${JSON.stringify(saved)}`);
+				let stored = PI.cardFor(ctx.collection);
+				check(stored && stored.question === card.question, "cardFor() reads the saved card back");
+				check(/^library\/collections\/[A-Z0-9]+$/.test(Object.keys(JSON.parse(Zotero.Prefs.get(ZB_PREF + "pico.cards", true)))[0]), "keyed by the collection");
+				eq(PI.cardFor(null), null, "the library has no card");
+				let section = PI.prismaSection(ctx.collection);
+				check(/\*\*研究問題\*\*：在 65 歲以上住院病人中/.test(section), "prismaSection() carries the question");
+				check(/檢索式（英文詞）：`"older inpatients" AND exercise AND falls`/.test(section), `the search string through search-links.js: ${section}`);
+				// The PRISMA note carries it
+				let out = await ZB.screening.generateReport(ctx.collection);
+				check(out && !out.errors.length, `generateReport errors: ${out && out.errors.join("; ")}`);
+				let prisma = await IOUtils.readUTF8(PathUtils.join(ctx.noteDir, "Reviews", "E2E Review.md"));
+				check(prisma.includes("## 本題 PICO") && prisma.indexOf("## 本題 PICO") < prisma.indexOf("## PRISMA 2020 計數"), "the PRISMA note heads with 本題 PICO");
+				// The table: the collection's full-text-included studies (english and chinese), english has an AI note
+				let noticed = [];
+				let info = null;
+				let result = await PI.exportTable(ZB.adapter.itemsInCollection(ctx.collection, true), { name: "E2E Review", collection: ctx.collection }, {
+					dialog: async (i) => {
+						info = { scopeName: i.scopeName, titles: i.titles.length, screened: i.screened, noData: i.noData, hasCard: !!i.card, folderSource: i.folderSource, notion: i.notion };
+						return { folder: i.folder, csv: true, html: true, notion: false };
+					},
+					notice: (n) => {
+						noticed.push({ text: n.text, buttons: n.buttons.slice() });
+						return "close";
+					},
+				});
+				d.tableDialog = info;
+				eq(info.scopeName, "E2E Review", "scope");
+				eq(JSON.stringify(info.screened), JSON.stringify({ included: 2, total: 5 }), "screening has started: only the two full-text-included studies");
+				eq(info.titles, 2, "two rows");
+				eq(info.hasCard, true, "the card is offered");
+				eq(info.folderSource, "vault", "into the vault's Reviews folder");
+				check(result && result.dir === PathUtils.join(ctx.noteDir, "Reviews"), `the export went to ${result && result.dir}`);
+				eq(JSON.stringify(result.files), JSON.stringify(["E2E Review PICO 表.md", "E2E Review PICO 表.csv", "E2E Review PICO 表.html"]), "files");
+				eq(result.noData, 1, "the Chinese paper has no AI note");
+				let note = await IOUtils.readUTF8(PathUtils.join(result.dir, "E2E Review PICO 表.md"));
+				d.noteHead = note.slice(0, 400);
+				check(/^---\ntitle: "E2E Review：PICO 表"\ntype: "pico-table"\n/.test(note), "frontmatter");
+				check(note.includes("## 本題 PICO") && note.includes("## PICO 表（2 篇）"), "the card and the table");
+				check(/\| \[\[Zotero\/[^\]|]+\\\|Lee & 陳, 2021\]\] \| /.test(note) || /\| Lee & 陳, 2021 \| /.test(note), `the English item's row: ${note.split("## PICO 表")[1]}`);
+				check(/P[✓？] I[✓？] C[✓？—] O[✓？]/.test(note), "the 對照本題 column");
+				check(note.includes("## 沒有結構化資料的文獻"), "the Chinese paper is listed without data");
+				check(note.trimEnd().endsWith("## ✍️ 我的筆記"), "the user's section at the end");
+				let csv = await IOUtils.readUTF8(PathUtils.join(result.dir, "E2E Review PICO 表.csv"));
+				check(csv.startsWith("\ufeff文獻,作者,年份"), "CSV with a BOM");
+				let html = await IOUtils.readUTF8(PathUtils.join(result.dir, "E2E Review PICO 表.html"));
+				check(html.startsWith("<!DOCTYPE html>") && html.includes("<table"), "the HTML for Word");
+				eq(JSON.stringify(noticed[0].buttons), JSON.stringify(["open", "copy", "close"]), "the dialog after it: 打開資料夾, 複製成表格, 關閉");
+				d.notice = noticed[0].text;
+				// Both windows from the registered chrome package, with the stylesheet; 取消 writes nothing
+				let opened = null;
+				let pending = PI.cardDialog({ scopeName: "E2E Review", card: PI.cardFor(ctx.collection), isNew: false, search: true }, { onOpen: (w) => {
+					opened = w;
+				} });
+				win = await waitFor(() => opened, "the card window (chrome://zotero-bridge/content/pico-card.xhtml)", 30000);
+				let root = win.document.getElementById(PI.CARD_ROOT);
+				eq(win.document.documentURI, PI.CARD_URL, "card window URL");
+				d.fieldDisplay = win.getComputedStyle(root.querySelector(".zb-pc-field")).display;
+				eq(d.fieldDisplay, "grid", "display of .zb-pc-field (is pico.css loaded?)");
+				eq(root.querySelector("#zb-pc-p").value, card.p, "the saved card fills the window");
+				d.checks = [...root.querySelectorAll(".zb-pc-checks li")].map(li => li.textContent);
+				d.links = [...root.querySelectorAll(".zb-pc-link")].map(b => b.textContent);
+				check(d.links.includes("PubMed"), `database links: ${JSON.stringify(d.links)}`);
+				root.querySelector(".zb-cl-cancel").click();
+				eq(await pending, null, "cardDialog() after 取消");
+				await waitFor(() => win.closed, "the card window to close after 取消", 10000);
+				opened = null;
+				pending = PI.tableDialog({ scopeName: "E2E Review", titles: ["a"], screened: null, noData: 0, card: PI.cardFor(ctx.collection), folder: result.dir, folderSource: "vault",
+					files: { note: "x.md", csv: "x.csv", html: "x.html" }, notion: false }, { onOpen: (w) => {
+					opened = w;
+				} });
+				win = await waitFor(() => opened, "the table window (chrome://zotero-bridge/content/pico-table.xhtml)", 30000);
+				root = win.document.getElementById(PI.TABLE_ROOT);
+				eq(win.document.documentURI, PI.TABLE_URL, "table window URL");
+				d.cardDisplay = win.getComputedStyle(root.querySelector(".zb-pt-card")).display;
+				eq(d.cardDisplay, "grid", "display of .zb-pt-card (is pico.css loaded?)");
+				root.querySelector(".zb-cl-cancel").click();
+				eq(await pending, null, "tableDialog() after 取消");
+				await waitFor(() => win.closed, "the table window to close after 取消", 10000);
+				// 刪除 through the command
+				let deleted = await PI.openCard(ctx.collection, { dialog: async () => "delete" });
+				check(deleted && deleted.deleted, "openCard with 刪除這張卡");
+				eq(PI.cardFor(ctx.collection), null, "the card is gone");
+			}
+			finally {
+				if (win && !win.closed) win.close();
+				if (cardsBefore === undefined) Zotero.Prefs.clear(ZB_PREF + "pico.cards", true);
+				else setPref("pico.cards", cardsBefore);
 			}
 		},
 	},

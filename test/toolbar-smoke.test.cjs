@@ -225,7 +225,7 @@ const GUIDED = {
 	sync: ["sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status"],
 	organize: ["classify", "dashboard", "concepts", "bibliography", "export-collection", "zh-meta"],
 	search: ["quick-search", "search-item"],
-	appraise: ["screen", "dedup", "prisma", "appraisal-summary"],
+	appraise: ["screen", "dedup", "prisma", "appraisal-summary", "pico-card", "pico-table"],
 	ai: ["regenerate"],
 };
 
@@ -348,6 +348,7 @@ test("menu: 快速指令… first, groups in workflow order with labels, setting
 	// A group whose entries are all off hides with its label and separator
 	F.setEnabled("screening", false);
 	F.setEnabled("appraisalForm", false);
+	F.setEnabled("pico", false);
 	F.setEnabled("sync", false);
 	F.setEnabled("status", false);
 	({ groups, entries, separators } = openMenu(env));

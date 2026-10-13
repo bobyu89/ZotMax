@@ -477,6 +477,22 @@
 			keywords: [...KW.ai, "評讀陪練", "陪練", "對照", "評讀", "評讀表", "appraisal", "critical appraisal", "coach", "casp", "jbi", "compare", "second opinion", "練習"],
 			blocked: sel => ZB().appraisalCoach.blockedReason(firstItem(sel)),
 			run: sel => ZB().appraisalCoach.runFromCommand(sel.items) },
+		// PICO 問題卡 (pico.js): the card of the right-clicked collection, else the selected one, else the library
+		{ id: "pico-card", group: "appraise", l10n: "zotero-bridge-cmd-pico-card", label: "PICO 問題卡（目前分類）…",
+			features: ["pico"], needs: null, menus: ["collection"],
+			keywords: ["pico", "picot", "pico 問題卡", "問題卡", "臨床問題", "研究問題", "clinical question", "research question", "ask",
+				"族群", "介入", "對照", "結果", "population", "intervention", "comparison", "outcome", "ebp", "實證", "檢索式", "search string"],
+			run: sel => ZB().pico.openCard(sel.surface === "collection" ? sel.collections[0] : sel.collection) },
+		// PICO 表 (pico.js): the selected items, else the selected collection; the collection's card and screening apply
+		{ id: "pico-table", group: "appraise", l10n: "zotero-bridge-cmd-pico-table", label: "匯出 PICO 表（選取項目或分類）…",
+			features: ["pico"], needs: "itemsOrCollection", menus: ["item", "collection"],
+			keywords: ["pico", "pico 表", "pico table", "證據表", "evidence table", "匯出", "export", "word", "csv", "表格", "table",
+				"族群", "介入", "對照", "結果", "主要結果", "證據等級", "evidence level", "實證", "ebp", "實證報告"],
+			run: (sel) => {
+				let t = writingTarget(sel);
+				let name = sel.surface === "collection" ? t.scope.label : t.scope.collection ? (t.scope.collection.name || "") : "";
+				return ZB().pico.exportTable(t.items, { name, collection: t.scope.collection || sel.collection || null });
+			} },
 
 		// ---------- AI 輔助與寫作 ----------
 		{ id: "regenerate", group: "ai", l10n: "zotero-bridge-menu-regenerate", label: "重新產生 AI 筆記並同步",
@@ -587,6 +603,7 @@
 		{ id: "pubmedWatch", label: "PubMed 新文獻追蹤", features: ["pubmedWatch"], keywords: ["pubmed", "追蹤", "watch", "新文獻", "檢索式"] },
 		{ id: "citationChase", label: "引文追蹤", features: ["citationChase"], keywords: ["引文追蹤", "citation", "openalex"] },
 		{ id: "screening", label: "篩選", features: ["screening"], keywords: ["篩選", "screening", "prisma", "排除原因", "exclusion reasons"] },
+		{ id: "pico", label: "PICO", features: ["pico"], keywords: ["pico", "picot", "問題卡", "pico 表", "證據表", "evidence table", "臨床問題", "clinical question", "word", "csv"] },
 		{ id: "ai", label: "AI 服務", features: ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "progressReport", "conceptsAI"],
 			keywords: ["ai", "api key", "claude", "openai", "anthropic", "模型", "model", "提示詞", "prompt"] },
 		{ id: "usage", label: "本月 AI 用量", features: ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "progressReport", "conceptsAI"],
@@ -872,8 +889,9 @@
 	 * Rank entries for a query. texts(entry) gives what to match: { label, keywords, group } (already
 	 * localized where Fluent is available). Every word of the query has to match somewhere (label
 	 * counts most, then keywords, then the group); a label the query covers more of ranks higher, a
-	 * settings destination a little lower than a command; ties keep the catalog order, runnable before
-	 * switched off. An empty query keeps everything in catalog order.
+	 * settings destination a little lower than a command, a switched-off command a little lower than one
+	 * that can run (so 「問題」 finds 回報問題… before a switched-off PICO 問題卡); ties keep the catalog
+	 * order. An empty query keeps everything in catalog order.
 	 */
 	function search(entries, query, texts = e => ({ label: e.label, keywords: e.keywords, group: "" })) {
 		let terms = normalize(query).split(" ").filter(Boolean);
@@ -899,6 +917,7 @@
 			total += label ? Math.round(20 * covered / label.length) : 0;
 			if (entry.kind === "settings") total *= 0.9;
 			let off = entry.availability && entry.availability.reason === "off" ? 1 : 0;
+			if (off) total *= 0.95;
 			scored.push({ entry, total, off, index });
 		});
 		scored.sort((a, b) => b.total - a.total || a.off - b.off || a.index - b.index);

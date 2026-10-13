@@ -33,7 +33,7 @@
 	const PREF = "extensions.zotero-bridge.";
 	// Bumped when a later version needs another one-time migration (see MIGRATIONS)
 	const MIGRATION_PREF = "features.version";
-	const MIGRATION_VERSION = 5;
+	const MIGRATION_VERSION = 6;
 
 	const GROUPS = [
 		{ id: "organize", label: "整理與同步", l10n: "zotero-bridge-feature-group-organize" },
@@ -119,6 +119,9 @@
 		{ id: "appraisalForm", group: "appraise", pref: "feature.appraisalForm", presets: { guided: true, advanced: true },
 			label: "文獻評讀表",
 			desc: "在條目旁用 CASP、JBI 逐題評讀，存回 Zotero 並同步到筆記。關掉只是隱藏表單，已填的評讀照樣同步。" },
+		{ id: "pico", group: "appraise", pref: "feature.pico", presets: { guided: true, advanced: true }, since: 6,
+			label: "PICO 問題卡與 PICO 表",
+			desc: "替每個研究專案（分類）寫一張 PICO 問題卡：引導問題幫你收斂，檢索式帶到資料庫，問題由你寫。再把選取的文獻整理成 PICO 表（P、I、C、O、主要結果、證據等級、評讀；Markdown、CSV、可貼進 Word），AI 初填的值會標明，核對由你做。不連網，也不呼叫 AI。" },
 		// AI 輔助與寫作
 		{ id: "aiNotes", group: "ai", pref: "llm.enabled", reused: true, presets: { guided: true, advanced: true },
 			usesAI: true, usesNetwork: true, requires: ["sync"],
@@ -335,6 +338,8 @@
 		{ version: 4, run: s => ({ added: FEATURES.filter(f => f.since === 4).map(f => f.id), newSwitches: migrateNewSwitches(s, 4) }) },
 		// v0.17.0: 匯出給 Gemini Notebook (every switch marked since: 5), the same way as step 2
 		{ version: 5, run: s => ({ added: FEATURES.filter(f => f.since === 5).map(f => f.id), newSwitches: migrateNewSwitches(s, 5) }) },
+		// v0.19.0: PICO 問題卡與 PICO 表 (every switch marked since: 6), the same way as step 2
+		{ version: 6, run: s => ({ added: FEATURES.filter(f => f.since === 6).map(f => f.id), newSwitches: migrateNewSwitches(s, 6) }) },
 	];
 
 	/**
