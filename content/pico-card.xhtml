@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	PICO 問題卡: the card window (content/pico.js cardDialog() opens it and renderCard() fills it). Layout and tokens:
+	DESIGN.md (PICO windows). It borrows the 文獻自動分類 window's stylesheet (classify-review.css: tokens, head, list,
+	foot) and the export window's rows (gemini-export.css), and adds the fields, checks and links (pico.css).
+-->
+<?xml-stylesheet href="chrome://global/skin/global.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero/skin/zotero.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-bridge/content/classify-review.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-bridge/content/gemini-export.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-bridge/content/pico.css" type="text/css"?>
+<window id="zotero-bridge-pico-card-window"
+	xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+	xmlns:html="http://www.w3.org/1999/xhtml"
+	title="PICO 問題卡"
+	width="640"
+	height="720"
+	persist="width height screenX screenY">
+	<html:div id="zb-pico-card" class="zb-classify zb-gemini zb-pico"/>
+</window>

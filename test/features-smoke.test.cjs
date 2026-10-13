@@ -267,7 +267,7 @@ test("a fresh profile starts in 研究生引導: the gated commands hide everywh
 
 	// Everything the item submenu offers switched off: the submenu itself hides
 	F.applyPreset("guided");
-	for (let id of ["sync", "autoClassify", "zhMeta", "searchLinks", "screening"]) F.setEnabled(id, false);
+	for (let id of ["sync", "autoClassify", "zhMeta", "searchLinks", "screening", "pico"]) F.setEnabled(id, false);
 	assert.equal(visible(itemMenu, ctx), false);
 	assert.ok(noneShown(env, "regenerate", ctx), "AI notes need the sync");
 	F.setEnabled("synthesis", true);
@@ -601,13 +601,13 @@ test("settings pane: 劃線顏色與意義 rows edit, reorder and reset the colo
 const HTML_NS = "http://www.w3.org/1999/xhtml";
 // The section IDs other code links to (the toolbar's command palette); "sync" is the 同步 tab itself
 const SECTION_IDS = ["features", "sync", "obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography", "concepts",
-	"fulltext", "colors", "classify", "searchLinks", "ncbi", "pubmedWatch", "citationChase", "screening", "ai", "usage", "geminiNotebook"];
+	"fulltext", "colors", "classify", "searchLinks", "ncbi", "pubmedWatch", "citationChase", "screening", "pico", "ai", "usage", "geminiNotebook"];
 const TAB_SECTIONS = {
 	features: ["features"],
 	sync: ["obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography"],
 	organize: ["fulltext", "colors", "concepts", "classify"],
 	search: ["searchLinks", "ncbi", "pubmedWatch", "citationChase"],
-	appraise: ["screening"],
+	appraise: ["screening", "pico"],
 	ai: ["ai", "usage", "geminiNotebook"],
 };
 const tick = () => new Promise(r => setTimeout(r, 0));
@@ -657,7 +657,7 @@ test("settings pane: every section has a known ID in exactly one workflow tab; A
 
 	// Every groupbox is a section with a known, unique ID, in exactly one tab panel
 	let groupboxes = [...doc.getElementsByTagNameNS(XUL_NS, "groupbox")];
-	assert.equal(groupboxes.length, 20);
+	assert.equal(groupboxes.length, 21);
 	let ids = groupboxes.map(g => g.getAttribute("data-zb-section"));
 	assert.deepEqual([...new Set(ids)].length, ids.length, "section IDs are unique");
 	for (let g of groupboxes) {

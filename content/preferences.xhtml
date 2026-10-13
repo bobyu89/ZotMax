@@ -365,6 +365,17 @@
 				<html:input type="text" preference="extensions.zotero-bridge.screening.otherSources" placeholder="引文追蹤, 網站, 機構"/>
 			</html:details>
 		</groupbox>
+		<groupbox data-zb-section="pico" data-zb-feature="pico">
+			<label data-search-strings-raw="PICO, PICOT, clinical question, research question, evidence table, Word, CSV, 問題卡, 臨床問題, 研究問題, 證據表, 對照本題"><html:h2 data-l10n-id="zotero-bridge-pico-heading">PICO 問題卡與 PICO 表</html:h2></label>
+			<html:p class="zb-lead" data-l10n-id="zotero-bridge-pico-intro">「PICO 問題卡…」替目前的分類（或整個文獻庫）存一張問題卡：問題類型、P、I、C、O、時間、你的情境和完整問題句；聚焦檢查只看你寫了什麼，不呼叫 AI。「匯出 PICO 表…」把選取的文獻整理成一張表（Markdown 筆記、CSV、Word 可開的 HTML），有 Obsidian vault 時放在 Reviews 資料夾，和 PRISMA 筆記放一起；PRISMA 筆記也會帶上這張卡。</html:p>
+			<html:div class="zb-field">
+				<html:label for="zb-pico-folder" data-l10n-id="zotero-bridge-pico-folder">沒有 Obsidian vault 時，PICO 表放在（留空 = 下載資料夾）：</html:label>
+				<hbox align="center">
+					<html:input id="zb-pico-folder" type="text" preference="extensions.zotero-bridge.pico.folder" style="flex: 1"/>
+					<button data-l10n-id="zotero-bridge-pico-folder-pick" label="選擇資料夾…" oncommand="ZoteroBridgePrefs.pickPicoFolder()"/>
+				</hbox>
+			</html:div>
+		</groupbox>
 	</vbox>
 
 	<vbox id="zb-panel-ai" class="zb-panel" role="tabpanel" data-zb-tab="ai" aria-labelledby="zb-tab-ai">

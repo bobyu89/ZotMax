@@ -718,6 +718,7 @@
 		].filter(Boolean).join("\n");
 		return [
 			info,
+			meta.pico ? "## 本題 PICO\n\n" + meta.pico : "",
 			"## PRISMA 2020 計數",
 			countsTable(result),
 			"## PRISMA 2020 流程圖",
@@ -726,7 +727,7 @@
 			issuesMarkdown(result.issues),
 			`## 證據表（納入研究 ${rows.length} 篇）`,
 			evidenceTable(rows, { links: meta.links }),
-		].join("\n\n");
+		].filter(Boolean).join("\n\n");
 	}
 
 	function otherFrontmatter(other) {
@@ -771,12 +772,12 @@
 	/**
 	 * The whole review note. With `existing`, only the plugin's frontmatter keys and the
 	 * %% zotero-bridge:start/end %% block change; empty values keep what the note has (e.g. the
-	 * Notion link when this run had no Notion).
+	 * Notion link when this run had no Notion). `tags`: a new note's tags (the PICO 表 passes its own).
 	 */
-	function buildReviewNote(existing, fm, title, section) {
+	function buildReviewNote(existing, fm, title, section, tags = ["系統性回顧"]) {
 		let block = `${core.MARK_START}\n\n${section}\n\n${core.MARK_END}`;
 		if (!existing) {
-			return core.buildFrontmatter(Object.assign({}, fm, { tags: ["系統性回顧"] }), null)
+			return core.buildFrontmatter(Object.assign({}, fm, { tags }), null)
 				+ `\n# ${title}\n\n${block}\n\n## ${USER_HEADING}\n\n`;
 		}
 		let { frontmatter, body } = core.splitFrontmatter(existing);
@@ -1049,6 +1050,11 @@
 		return page.url;
 	}
 
+	/** Write (or rewrite) a managed page under the PRISMA parent: the PICO 表 (pico.js) uses it with its own key. */
+	function syncNotionPage(settings, key, title, markdown) {
+		return syncNotion(settings, key, title, markdown);
+	}
+
 	async function syncNotion(settings, key, title, markdown) {
 		let ZB = scope.ZB;
 		let client = new ZB.notion.NotionClient({ token: settings.notionToken, fetch: (u, i) => fetch(u, i) });
@@ -1160,6 +1166,15 @@
 				generatedAt,
 				title: `${collection.name}：篩選與 PRISMA 2020`,
 			};
+			// The collection's PICO 問題卡 (pico.js) heads the note, so the table is read against the question
+			if (ZB.pico) {
+				try {
+					meta.pico = ZB.pico.prismaSection(collection) || "";
+				}
+				catch (e) {
+					Zotero.logError(e);
+				}
+			}
 			let target = settings.vaultPath ? await reviewNotePath(settings, collection) : null;
 			if (target) meta.csvPath = [...target.dirParts, `${target.name} 證據表.csv`].join("/");
 
@@ -1226,6 +1241,6 @@
 		normalizeDOI, normalizeTitle, yearOf, findDuplicates,
 		computePrisma, checkCounts, buildMermaid, countsTable, issuesMarkdown, evidenceRow, sortRows, evidenceTable,
 		csvCell, buildCSV, buildReviewSection, frontmatterFor, buildReviewNote, notionBlocks,
-		config, itemRecord, setDecision, renderPaneRow, paneSummary, dedupCollection, generateReport,
+		config, itemRecord, setDecision, renderPaneRow, paneSummary, dedupCollection, generateReport, notionParent, syncNotionPage,
 	};
 });

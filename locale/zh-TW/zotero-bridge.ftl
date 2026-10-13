@@ -576,6 +576,21 @@ zotero-bridge-cmd-zh-meta-undo =
 zotero-bridge-pane-zh-meta = 中文資料：{ $count } 個地方要檢查
 zotero-bridge-pane-zh-meta-review = 檢查並修正…
 
+## PICO 問題卡與 PICO 表 (content/pico.js): the switch, the commands, the settings section
+
+zotero-bridge-feature-pico = PICO 問題卡與 PICO 表
+zotero-bridge-feature-pico-desc = 替每個研究專案（分類）寫一張 PICO 問題卡：引導問題幫你收斂，檢索式帶到資料庫，問題由你寫。再把選取的文獻整理成 PICO 表（P、I、C、O、主要結果、證據等級、評讀；Markdown、CSV、可貼進 Word），AI 初填的值會標明，核對由你做。不連網，也不呼叫 AI。
+zotero-bridge-cmd-pico-card =
+    .label = PICO 問題卡（目前分類）…
+zotero-bridge-cmd-pico-table =
+    .label = 匯出 PICO 表（選取項目或分類）…
+zotero-bridge-section-pico = PICO
+zotero-bridge-pico-heading = PICO 問題卡與 PICO 表
+zotero-bridge-pico-intro = 「PICO 問題卡…」替目前的分類（或整個文獻庫）存一張問題卡：問題類型、P、I、C、O、時間、你的情境和完整問題句；聚焦檢查只看你寫了什麼，不呼叫 AI。「匯出 PICO 表…」把選取的文獻整理成一張表（Markdown 筆記、CSV、Word 可開的 HTML），有 Obsidian vault 時放在 Reviews 資料夾，和 PRISMA 筆記放一起；PRISMA 筆記也會帶上這張卡。
+zotero-bridge-pico-folder = 沒有 Obsidian vault 時，PICO 表放在（留空 = 下載資料夾）：
+zotero-bridge-pico-folder-pick =
+    .label = 選擇資料夾…
+
 ## 匯出給 Gemini Notebook (content/gemini-export.js): the switch, the commands, the settings section
 zotero-bridge-feature-gemini-export = 匯出給 Gemini Notebook
 zotero-bridge-feature-gemini-export-desc = 把選取的文獻或分類匯出成一個資料夾（全文 Markdown、APA 參考文獻、使用說明）給 Gemini Notebook 當來源；只寫入你電腦上的檔案，上傳由你自己來。

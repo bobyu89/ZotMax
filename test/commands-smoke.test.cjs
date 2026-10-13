@@ -385,7 +385,7 @@ test("catalog: unique IDs, every command and variant runnable, real switches, ke
 	same(C.GROUPS.map(g => g.label), ["同步", "整理", "找文獻", "篩選與評讀", "AI 輔助與寫作"]);
 	for (let g of C.GROUPS) assert.equal(ftlText(zh, g.l10n), g.label);
 	same(C.SECTIONS.map(s => s.id), ["features", "sync", "obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography",
-		"concepts", "fulltext", "colors", "classify", "searchLinks", "ncbi", "pubmedWatch", "citationChase", "screening", "ai", "usage", "geminiNotebook"]);
+		"concepts", "fulltext", "colors", "classify", "searchLinks", "ncbi", "pubmedWatch", "citationChase", "screening", "pico", "ai", "usage", "geminiNotebook"]);
 	for (let s of C.SECTIONS) {
 		assert.equal(ftlText(zh, s.l10n), s.label, `section ${s.id}`);
 		assert.ok(ftlText(en, s.l10n), `en-US section ${s.id}`);
@@ -455,7 +455,7 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"—", "# zotero-bridge-toolbar-group-search",
 		"zotero-bridge-search-menu ▸",
 		"—", "# zotero-bridge-toolbar-group-appraise",
-		"zotero-bridge-toolbar-screen ▸",
+		"zotero-bridge-toolbar-screen ▸", "zotero-bridge-cmd-pico-table",
 		"—", "# zotero-bridge-toolbar-group-ai",
 		"zotero-bridge-menu-regenerate",
 	]);
@@ -472,7 +472,7 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"—", "# zotero-bridge-toolbar-group-organize",
 		"zotero-bridge-classify-tools", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
 		"—", "# zotero-bridge-toolbar-group-appraise",
-		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary",
+		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary", "zotero-bridge-cmd-pico-card", "zotero-bridge-cmd-pico-table",
 		"—", "# zotero-bridge-toolbar-group-ai",
 		"zotero-bridge-menu-regenerate",
 	]);
@@ -481,14 +481,14 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 	same(shown(itemMenu, ctx).filter(x => !x.startsWith("#") && x !== "—"), [
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"zotero-bridge-classify-tools", "zotero-bridge-cmd-zh-meta", "zotero-bridge-search-menu ▸", "zotero-bridge-toolbar-chase-items", "zotero-bridge-toolbar-screen ▸",
-		"zotero-bridge-cmd-appraisal-coach",
+		"zotero-bridge-cmd-appraisal-coach", "zotero-bridge-cmd-pico-table",
 		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-cmd-gemini-export",
 	]);
 	same(shown(collMenu, cctx).filter(x => !x.startsWith("#") && x !== "—"), [
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"zotero-bridge-classify-tools", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
 		"zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
-		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary",
+		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary", "zotero-bridge-cmd-pico-card", "zotero-bridge-cmd-pico-table",
 		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-cmd-gemini-export",
 	]);
 	// Tools: 設定… and 快速指令… always; the batch entries only while they apply
@@ -522,6 +522,8 @@ test("gating is live: switched-off commands, empty groups and empty submenus hid
 	assert.ok(shown(itemMenu, ctx).includes("zotero-bridge-menu-synthesis"));
 	F.setEnabled("screening", false);
 	assert.ok(!shown(itemMenu, ctx).includes("zotero-bridge-toolbar-screen ▸"));
+	assert.ok(shown(itemMenu, ctx).includes("zotero-bridge-cmd-pico-table"), "PICO 表 keeps the group while it is on");
+	F.setEnabled("pico", false);
 	assert.ok(!shown(itemMenu, ctx).includes("# zotero-bridge-toolbar-group-appraise"), "the group hides with its caption");
 	// AI notes need the sync: off with it
 	F.setEnabled("sync", false);

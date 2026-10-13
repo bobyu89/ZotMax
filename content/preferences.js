@@ -1275,6 +1275,17 @@
 			input.dispatchEvent(new Event("input"));
 		},
 
+		/** PICO 表: where it goes without an Obsidian vault. */
+		async pickPicoFolder() {
+			const { FilePicker } = ChromeUtils.importESModule("chrome://zotero/content/modules/filePicker.mjs");
+			let fp = new FilePicker();
+			fp.init(window, "PICO 表放在哪個資料夾", fp.modeGetFolder);
+			if (await fp.show() !== fp.returnOK) return;
+			let input = document.getElementById("zb-pico-folder");
+			input.value = fp.file;
+			input.dispatchEvent(new Event("input"));
+		},
+
 		/** Gemini Notebook: the default export folder. */
 		async pickGeminiFolder() {
 			const { FilePicker } = ChromeUtils.importESModule("chrome://zotero/content/modules/filePicker.mjs");

@@ -137,6 +137,7 @@ pref("extensions.zotero-bridge.feature.appraisalCoach", false);
 pref("extensions.zotero-bridge.feature.statsExplainer", false);
 pref("extensions.zotero-bridge.feature.zhMeta", true);
 pref("extensions.zotero-bridge.feature.geminiExport", false);
+pref("extensions.zotero-bridge.feature.pico", true);
 // Settings pane (content/preferences.js): the tab chosen last, and a section (data-zb-section ID, e.g.
 // "notion") to open the next time the pane is on screen; the pane clears it once it has opened it
 pref("extensions.zotero-bridge.prefs.lastTab", "features");
@@ -175,3 +176,7 @@ pref("extensions.zotero-bridge.geminiExport.preferDrive", true);
 pref("extensions.zotero-bridge.geminiExport.cap", "50");
 pref("extensions.zotero-bridge.geminiExport.copyPDF", false);
 pref("extensions.zotero-bridge.geminiExport.highlights", false);
+// PICO 問題卡 and PICO 表 (content/pico.js): the cards, one per research project (a collection, or the library), as
+// JSON keyed by "library/collections/KEY"; where the PICO 表 goes when there is no Obsidian vault (empty = Downloads)
+pref("extensions.zotero-bridge.pico.cards", "{}");
+pref("extensions.zotero-bridge.pico.folder", "");

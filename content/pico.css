@@ -1,0 +1,128 @@
+@namespace html url("http://www.w3.org/1999/xhtml");
+
+/*
+ * PICO 問題卡 and PICO 表: the two windows' own rows. Tokens, head, list, foot and focus come from classify-review.css,
+ * the folder row and the options from gemini-export.css; the root carries all three classes
+ * (.zb-classify .zb-gemini .zb-pico). DESIGN.md (PICO windows).
+ */
+#zotero-bridge-pico-card-window,
+#zotero-bridge-pico-table-window {
+	background: var(--material-background, Canvas);
+	color: var(--fill-primary, CanvasText);
+}
+
+/* the question type: label · native select */
+.zb-pc-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--zb-space-2) var(--zb-space-3);
+	margin-top: var(--zb-space-2);
+}
+
+/* one element: the label (600), the field, the coaching question under it in Pencil */
+.zb-pc-field {
+	display: grid;
+	gap: var(--zb-space-1);
+	margin-top: var(--zb-space-3);
+	max-width: var(--zb-measure);
+}
+.zb-pc-field:first-of-type {
+	margin-top: var(--zb-space-2);
+}
+.zb-pc-label {
+	font-weight: 600;
+}
+.zb-pc-field > html|input,
+.zb-pc-field > html|textarea {
+	width: 100%;
+	box-sizing: border-box;
+	margin: 0;
+	padding: var(--zb-space-1) var(--zb-space-2);
+	border: 1px solid var(--zb-line);
+	border-radius: var(--zb-radius-sm);
+	background: var(--material-background, Canvas);
+	color: inherit;
+	font: inherit;
+	resize: vertical;
+}
+.zb-pc-field > html|input:focus-visible,
+.zb-pc-field > html|textarea:focus-visible {
+	outline: 2px solid var(--zb-accent);
+	outline-offset: 1px;
+}
+.zb-pc-hint,
+.zb-pc-suggestion {
+	margin: 0;
+}
+.zb-pc-compose {
+	justify-self: start;
+}
+
+/* 聚焦檢查: a plain list; warnings in Ink at 600, hints in Pencil, the all-clear line in Ink */
+.zb-pc-checks {
+	margin: var(--zb-space-2) 0 0;
+	padding-left: 1.2em;
+	max-width: var(--zb-measure);
+}
+.zb-pc-checks > html|li {
+	margin: var(--zb-space-1) 0;
+}
+.zb-pc-checks > html|li.zb-pc-warn {
+	color: var(--zb-text);
+	font-weight: 600;
+}
+.zb-pc-checks > html|li.zb-pc-info {
+	color: var(--zb-text-muted);
+}
+.zb-pc-checks > html|li.zb-pc-ok {
+	list-style: none;
+	margin-left: -1.2em;
+}
+
+/* the search strings in a Hairline box (they wrap, never cut), then the database buttons */
+.zb-pc-query {
+	margin: var(--zb-space-2) 0 0;
+	padding: var(--zb-space-1) var(--zb-space-2);
+	border: 1px solid var(--zb-line);
+	border-radius: var(--zb-radius-sm);
+	font-family: ui-monospace, Menlo, Consolas, monospace;
+	font-size: 0.92em;
+	overflow-wrap: anywhere;
+	max-width: var(--zb-measure);
+}
+.zb-pc-query[hidden] {
+	display: none;
+}
+.zb-pc-links {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--zb-space-2);
+	margin-top: var(--zb-space-2);
+}
+
+/* 刪除這張卡 sits with the other buttons but reads as the quiet choice */
+.zb-pc-delete {
+	margin-right: auto;
+}
+
+/* the table window's card summary: the question in 600, then the elements as a definition list */
+.zb-pt-question {
+	margin: var(--zb-space-2) 0 0;
+	font-weight: 600;
+	max-width: var(--zb-measure);
+}
+.zb-pt-card {
+	display: grid;
+	grid-template-columns: max-content minmax(0, 1fr);
+	gap: var(--zb-space-1) var(--zb-space-3);
+	margin: var(--zb-space-2) 0 0;
+	max-width: var(--zb-measure);
+}
+.zb-pt-card > html|dt {
+	color: var(--zb-text-muted);
+}
+.zb-pt-card > html|dd {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
