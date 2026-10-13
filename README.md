@@ -934,9 +934,11 @@ ZotMax 按鈕或快速指令 → **產生進度報告（給指導教授）** →
 
 Gemini Notebook（2026 年 7 月以前叫 NotebookLM）可以只根據你上傳的來源回答問題、做摘要。個人帳號沒有官方的 Gemini Notebook API，所以 ZotMax 只把檔案整理好，**上傳由你自己來**；這個功能不連網、不呼叫 AI，也不會送出任何東西。
 
-- **怎麼用**：在「功能」打開 **匯出給 Gemini Notebook**（研究生引導預設關閉）。選取文獻，或選一個分類 → ZotMax 按鈕、右鍵 **ZotMax ▸** 或快速指令 → **匯出給 Gemini Notebook（選取項目或分類）…**。視窗裡確認篇數、選要放在哪個資料夾（預設是上次的位置，沒有就是「下載」），再決定兩個選項：
+- **怎麼用**：在「功能」打開 **匯出給 Gemini Notebook**（研究生引導預設關閉）。選取文獻，或選一個分類 → ZotMax 按鈕、右鍵 **ZotMax ▸** 或快速指令 → **匯出給 Gemini Notebook（選取項目或分類）…**。視窗裡確認篇數、選要放在哪個資料夾（預設見下方「放在哪裡」），再決定兩個選項：
   - **也複製 PDF**（預設不勾）：Gemini Notebook 把每個檔案算成一個來源，PDF 和 Markdown 都放會讓來源數加倍、內容重複。掃描檔沒有文字時才特別需要 PDF。
   - **加入「我的劃線與評讀」**（預設不勾）：你的劃線（依顏色意義分組）和你自己填的評讀表，明確標成你的筆記，不是原文也不是 AI 寫的。
+- **放在哪裡**：你用「選擇資料夾…」（或設定 → AI → Gemini Notebook 的「匯出到」）指定過的資料夾優先；沒有指定時，偵測到 **Google 雲端硬碟電腦版**（Drive for desktop）就放進 `我的雲端硬碟/ZotMax/Gemini Notebook/`（第一次匯出時建立），否則放「下載」。視窗裡在雲端硬碟時會標出「這個資料夾會同步到 Google 雲端硬碟」，可以按 **改存到下載** 只改這一次；有好幾個 Google 帳號時，用第一個並讓你選。不想預設用雲端硬碟，就在設定取消勾選「偵測到 Google 雲端硬碟時，預設匯出到雲端硬碟」。
+  - 偵測的位置：macOS 的 `~/Library/CloudStorage/GoogleDrive-<帳號>/My Drive`（較舊版本是 `/Volumes/GoogleDrive/My Drive`）；Windows 串流模式的磁碟機（預設 `G:\My Drive`），或鏡像模式的 `%USERPROFILE%\My Drive`；舊版「備份與同步」的 `Google Drive` 資料夾。中文介面的「我的雲端硬碟」等各語言名稱也認得。ZotMax 只確認這些資料夾在不在，不會讀雲端硬碟裡的任何檔案。
 - **會產生**：`Gemini Notebook - <分類名稱或「選取的文獻」> - <日期>/` 資料夾，裡面有
   - 每篇一個 `作者 年份 - 短標題.md`：標題、作者、年份、出處、DOI、APA 7，接著是全文（和「全文筆記」同一套轉換：去掉頁首頁尾、頁碼、斷字）；沒有全文的（掃描檔、沒有 PDF）放摘要並說明原因
   - `00 參考文獻（APA 7）.md`：這些文獻的參考文獻清單（中文文獻用中文 APA 7，排在前面）
@@ -944,6 +946,8 @@ Gemini Notebook（2026 年 7 月以前叫 NotebookLM）可以只根據你上傳�
   - `README - 如何加入 Gemini Notebook.txt`：步驟、限制和提醒
 - **來源上限**：Gemini Notebook 每本筆記本約 50 個來源（依方案而異）。視窗會算出這次會產生幾個來源，超過上限（設定 → AI → Gemini Notebook，預設 50）時直接告訴你，請分成幾本筆記本或不要勾 PDF。
 - **匯出之後**：對話框列出寫了什麼、哪些篇只有摘要，按 **打開資料夾**。到 [notebook.google.com](https://notebook.google.com)（舊網址 notebooklm.google.com 也會轉過去）建立或打開筆記本 → **新增來源** → **上傳檔案**，把 `.md`（和要用的 PDF）拖進去；README 不用上傳。
+- **匯出到雲端硬碟時**：不用上傳。先等雲端硬碟同步完成（要一點時間，同步好之前 Gemini Notebook 看不到檔案），再到筆記本 → **新增來源** → **Google 雲端硬碟** → 找到 `ZotMax/Gemini Notebook/<這次的資料夾>` 選檔案。清單裡看不到某些檔案（例如 `.md`）時，改用 **上傳檔案**。README 和對話框也會照這個寫。
+  - 依 Google 2026 年 5 月的[公告](https://workspaceupdates.googleblog.com/2026/05/keep-your-sources-up-to-date-with-automatic-Drive-syncing-in-NotebookLM.html)，從雲端硬碟加入的來源只有 **Google 文件、試算表、簡報** 會自動跟著更新。ZotMax 匯出的 Markdown 和 PDF 加入後是當時的副本，**不會自動更新**：論文、劃線或評讀改了，請重新匯出，再把新檔案加入筆記本（舊的來源可以刪掉）。
 
 > ⚠️ 上傳到 Gemini Notebook 就是把文獻全文交給 Google：未發表的研究資料、病人資訊不要上傳，也請確認期刊或學校對全文分享的規定。Gemini Notebook 的摘要和回答可能出錯或漏掉重點，寫進報告或論文前一定要回到原文核對，引用要用原文的頁碼。
 
@@ -1166,7 +1170,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi，並更新 updates.j
 - 篩選決定寫到標籤，產生 PRISMA 筆記與證據表 CSV
 - 自動同步；AI 筆記（只把外掛內的 `fetch` 換成假的 Claude 回應）
 - 文獻自動分類（只用規則與研究設計推測）：建立子分類、不重複建立、復原後清乾淨、原本的分類不變；確認視窗按「取消」不寫入
-- 匯出給 Gemini Notebook：把測試條目匯出到工作資料夾，檢查 Markdown、參考文獻清單、README 都有寫出，PDF 只有勾選時才複製；匯出視窗從 `chrome://zotero-bridge/` 打開、樣式有載入、取消不寫入
+- 匯出給 Gemini Notebook：關掉「預設匯出到雲端硬碟」，確認預設位置不在 Google 雲端硬碟；把測試條目匯出到工作資料夾，檢查 Markdown、參考文獻清單、README 都有寫出，PDF 只有勾選時才複製；匯出視窗從 `chrome://zotero-bridge/` 打開、樣式有載入、取消不寫入
 - 中文文獻補強：一筆資料凌亂的中文條目（民國年、全形頁碼、兩位作者擠一格、DOI 在「其他」欄、語言空白）在確認視窗套用後欄位正確、存進資料庫，復原後回到原樣，測完刪除
 - 條目窗格顯示 AI 筆記；設定頁能開啟、值與已存的 token 正確，關閉後新輸入的 key 有存下
 - 工具列按鈕的位置、名稱、圖示、方向鍵；兩種模式下選單依開關顯示；關掉「工具列按鈕」即時隱藏

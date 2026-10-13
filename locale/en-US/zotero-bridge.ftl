@@ -591,8 +591,11 @@ zotero-bridge-cmd-gemini-export =
 zotero-bridge-section-gemini-notebook = Gemini Notebook
 zotero-bridge-gemini-heading = Gemini Notebook
 zotero-bridge-gemini-intro = “Export for Gemini Notebook…” creates a folder on your computer: one full-text Markdown file per paper, a reference list (APA 7) and a how-to. You upload the files yourself at notebook.google.com; ZotMax sends nothing.
-zotero-bridge-gemini-folder = Export to (empty = Downloads):
+zotero-bridge-gemini-folder = Export to (empty = Google Drive or Downloads):
 zotero-bridge-gemini-folder-pick =
     .label = Choose Folder…
+zotero-bridge-gemini-prefer-drive =
+    .label = Export to Google Drive by default when it is found
+zotero-bridge-gemini-prefer-drive-hint = With Google Drive for desktop installed, exports go to “My Drive/ZotMax/Gemini Notebook”; in Gemini Notebook you then add them with “Add source” → “Google Drive” instead of uploading. A folder chosen above comes first.
 zotero-bridge-gemini-cap = Sources per notebook before you are warned:
 zotero-bridge-gemini-cap-hint = Gemini Notebook takes about 50 sources per notebook (it depends on your plan); each uploaded file is one source.

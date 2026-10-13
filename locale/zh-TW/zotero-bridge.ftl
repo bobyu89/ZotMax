@@ -584,8 +584,11 @@ zotero-bridge-cmd-gemini-export =
 zotero-bridge-section-gemini-notebook = Gemini Notebook
 zotero-bridge-gemini-heading = Gemini Notebook
 zotero-bridge-gemini-intro = 「匯出給 Gemini Notebook…」會在你的電腦上建立一個資料夾：每篇一個全文 Markdown 檔、參考文獻清單（APA 7）和使用說明。上傳由你自己到 notebook.google.com 做，ZotMax 不會送出任何東西。
-zotero-bridge-gemini-folder = 匯出到（留空 = 下載資料夾）：
+zotero-bridge-gemini-folder = 匯出到（留空 = Google 雲端硬碟或下載資料夾）：
 zotero-bridge-gemini-folder-pick =
     .label = 選擇資料夾…
+zotero-bridge-gemini-prefer-drive =
+    .label = 偵測到 Google 雲端硬碟時，預設匯出到雲端硬碟
+zotero-bridge-gemini-prefer-drive-hint = 有安裝 Google 雲端硬碟電腦版時，匯出到「我的雲端硬碟/ZotMax/Gemini Notebook」，之後在 Gemini Notebook 用「新增來源」→「Google 雲端硬碟」加入，不必上傳檔案。上面有指定資料夾時，以指定的為準。
 zotero-bridge-gemini-cap = 一本筆記本的來源上限（超過時提醒你）：
 zotero-bridge-gemini-cap-hint = Gemini Notebook 每本筆記本約 50 個來源（依方案而異），每個上傳的檔案算一個來源。

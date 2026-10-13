@@ -359,7 +359,8 @@ const TESTS = [
 				concepts: ["update", "afterSync", "dashboardSection", "runFromMenu", "synthesizeFromMenu"],
 				classify: ["parseRules", "evaluate", "parseTopics", "suggest", "defaultPicks", "planApply", "apply", "undoLast", "readLastRun", "review", "renderReview", "run"],
 				zhMeta: ["analyze", "itemData", "findingsFor", "paneCount", "buildPlan", "defaultPicks", "review", "renderReview", "apply", "undoLast", "readLastRun", "run"],
-				geminiExport: ["folderName", "baseName", "capCheck", "itemMarkdown", "referencesMarkdown", "readmeText", "renderDialog", "exportTo", "dialog", "noticeInfo", "run"],
+				geminiExport: ["folderName", "baseName", "capCheck", "itemMarkdown", "referencesMarkdown", "readmeText", "renderDialog", "exportTo", "dialog", "noticeInfo", "run",
+					"findGoogleDrive", "chooseDestination", "destination"],
 				citationChase: ["chaseCollection", "chaseItems", "importChecked"],
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "menuTargets", "relatedFor", "showMore", "openTarget"],
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "batchParams", "parseResults"],
@@ -1700,7 +1701,13 @@ const TESTS = [
 			await IOUtils.makeDirectory(out, { createAncestors: true, ignoreExisting: true });
 			let win = null;
 			setPref("feature.geminiExport", true);
+			// The test machine may have Google Drive for desktop: keep the default out of it (the runs below also
+			// pass the work dir explicitly)
+			setPref("geminiExport.preferDrive", false);
 			try {
+				let dest = await G.destination();
+				d.destination = { source: dest.source, drive: dest.drive };
+				check(dest.source !== "drive" && !dest.drive, `the default stays out of Google Drive: ${JSON.stringify(d.destination)}`);
 				eq(C.isVisible(C.get("gemini-export")), true, "the command shows once its switch is on");
 				d.commands = C.COMMANDS.filter(c => /gemini/.test(c.id)).map(c => c.id);
 				eq(JSON.stringify(d.commands), JSON.stringify(["gemini-export"]), "the only Gemini Notebook command (no upload of any kind)");
@@ -1709,7 +1716,7 @@ const TESTS = [
 				// Markdown only (the default)
 				let first = await G.run(items, { name: "E2E Review" }, {
 					dialog: async (info) => {
-						d.dialogInfo = { scopeName: info.scopeName, titles: info.titles.length, pdfs: info.pdfs, cap: info.cap, copyPDF: info.copyPDF };
+						d.dialogInfo = { scopeName: info.scopeName, titles: info.titles.length, pdfs: info.pdfs, cap: info.cap, copyPDF: info.copyPDF, folderSource: info.folderSource };
 						return { folder: out, copyPDF: false, highlights: false };
 					},
 					notice: (info) => {
@@ -1718,6 +1725,8 @@ const TESTS = [
 					},
 				});
 				check(first && first.dir, `the export returned ${JSON.stringify(first)}`);
+				check(first.dir.startsWith(out), `the export went into the work dir: ${first.dir}`);
+				eq(first.drivePath, "", "not in Google Drive: the README keeps the upload steps");
 				d.dir = PathUtils.filename(first.dir);
 				check(/^Gemini Notebook - E2E Review - \d{4}-\d{2}-\d{2}$/.test(d.dir), `folder name ${d.dir}`);
 				let names = (await IOUtils.getChildren(first.dir)).map(p => PathUtils.filename(p)).sort();
@@ -1767,7 +1776,7 @@ const TESTS = [
 			finally {
 				if (win && !win.closed) win.close();
 				Zotero.Prefs.clear(ZB_PREF + "feature.geminiExport", true);
-				for (let key of ["geminiExport.folder", "geminiExport.copyPDF", "geminiExport.highlights"]) Zotero.Prefs.clear(ZB_PREF + key, true);
+				for (let key of ["geminiExport.folder", "geminiExport.copyPDF", "geminiExport.highlights", "geminiExport.preferDrive"]) Zotero.Prefs.clear(ZB_PREF + key, true);
 			}
 		},
 	},

@@ -3,7 +3,9 @@
 // options count the sources against the cap, 匯出 writes exactly the expected files (full text through the
 // fulltext-md pipeline, the APA list, the README; the PDF and 我的劃線與評讀 only when ticked; a missing linked
 // PDF is skipped with a note), the dialog after it offers 打開資料夾, 取消 and Esc write nothing, and the
-// switch hides the command.
+// switch hides the command. With Google Drive for desktop on the (mocked) disk: the default folder is
+// My Drive/ZotMax/Gemini Notebook with the sync badge, 改存到下載 switches, several accounts can be chosen, and
+// the settings checkbox.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -324,8 +326,8 @@ test("export window: the collection, Downloads by default, both options off, the
 	assert.match(shown.text, /1 篇的 PDF 是掃描檔/);
 	assert.match(shown.text, /沒有上傳任何東西/);
 	assert.deepEqual(env.revealed, [EXPORT_DIR]);
-	// The choices are remembered
-	assert.equal(env.prefStore[P + "geminiExport.folder"], DOWNLOADS);
+	// The options are remembered; the default folder is not (it is worked out again next time)
+	assert.equal(env.prefStore[P + "geminiExport.folder"], undefined);
 	assert.equal(env.prefStore[P + "geminiExport.copyPDF"], false);
 	assert.equal(env.prefStore[P + "geminiExport.highlights"], true);
 	assert.deepEqual(env.errors, []);
@@ -410,3 +412,187 @@ test("switched off: no command, a click from elsewhere says where to turn it on;
 function plain(v) {
 	return JSON.parse(JSON.stringify(v));
 }
+
+// ---------- Google Drive for desktop ----------
+
+const HOME = "/Users/student";
+const MY_DRIVE = `${HOME}/Library/CloudStorage/GoogleDrive-student@gmail.com/My Drive`;
+const DRIVE_DEST = `${MY_DRIVE}/ZotMax/Gemini Notebook`;
+
+/** Folders on the in-memory disk (Drive's own folders), with their parents. */
+function addDirs(env, ...dirs) {
+	for (let d of dirs) {
+		for (let p = d; p !== "/"; p = path.dirname(p)) env.mem.dirs.add(p);
+	}
+}
+
+async function driveSetup(prefs = {}, dirs = [MY_DRIVE]) {
+	let env = await setup(prefs);
+	env.ZB.geminiExport.runtime.system = () => ({ platform: "mac", home: HOME });
+	addDirs(env, ...dirs);
+	env.ZB.features.setEnabled("geminiExport", true);
+	env.selection.collection = env.collection;
+	return env;
+}
+
+test("Drive found: the window defaults to My Drive/ZotMax/Gemini Notebook with the sync badge; 匯出 creates the folders and the README says to add from Google Drive", async () => {
+	let env = await driveSetup();
+	let C = env.ZB.commands;
+	let running = C.execute("gemini-export", C.fromWindow(null, "toolbar"));
+	let root = await openedDialog(env);
+	let doc = root.ownerDocument;
+	assert.equal(root.querySelector(".zb-ge-path").textContent, DRIVE_DEST);
+	let box = root.querySelector(".zb-ge-drive");
+	assert.equal(box.hidden, false);
+	assert.equal(root.querySelector(".zb-ge-badge").textContent, "這個資料夾會同步到 Google 雲端硬碟");
+	assert.match(root.querySelector(".zb-ge-drive-hint").textContent, /雲端硬碟要一點時間才會同步完成.*「新增來源」→「Google 雲端硬碟」/);
+	assert.equal(root.querySelector(".zb-ge-account").hidden, true, "one account: no choice");
+	let toggle = doc.querySelector(".zb-ge-switch");
+	assert.equal(toggle.textContent, "改存到下載");
+	assert.equal(env.mem.dirs.has(path.join(MY_DRIVE, "ZotMax")), false, "nothing is created before 匯出");
+	root.querySelector(".zb-cl-apply").click();
+	let result = await running;
+	let dir = path.join(DRIVE_DEST, "Gemini Notebook - 跌倒預防 - 2026-10-13");
+	assert.equal(result.dir, dir);
+	assert.equal(result.drivePath, "ZotMax/Gemini Notebook/Gemini Notebook - 跌倒預防 - 2026-10-13");
+	assert.ok(filesIn(env, dir).includes("README - 如何加入 Gemini Notebook.txt"));
+	let readme = env.mem.files.get(path.join(dir, "README - 如何加入 Gemini Notebook.txt"));
+	assert.match(readme, /「新增來源」→「Google 雲端硬碟」，找到 我的雲端硬碟 › ZotMax › Gemini Notebook › Gemini Notebook - 跌倒預防 - 2026-10-13/);
+	assert.match(readme, /不會自動更新/);
+	let shown = env.confirms.pop();
+	assert.match(shown.text, /這個資料夾在 Google 雲端硬碟裡/);
+	assert.match(shown.text, /「新增來源」→「Google 雲端硬碟」→ 找到 ZotMax › Gemini Notebook › Gemini Notebook - 跌倒預防 - 2026-10-13/);
+	assert.equal(env.prefStore[P + "geminiExport.folder"], undefined, "the default is not remembered as a choice");
+	assert.deepEqual(env.errors, []);
+});
+
+test("改存到下載 switches to Downloads (the badge goes, the upload steps stay); 改存到 Google 雲端硬碟 switches back", async () => {
+	let env = await driveSetup();
+	let C = env.ZB.commands;
+	let running = C.execute("gemini-export", C.fromWindow(null, "toolbar"));
+	let root = await openedDialog(env);
+	let toggle = root.querySelector(".zb-ge-switch");
+	toggle.click();
+	assert.equal(root.querySelector(".zb-ge-path").textContent, DOWNLOADS);
+	assert.equal(root.querySelector(".zb-ge-drive").hidden, true);
+	assert.equal(toggle.textContent, "改存到 Google 雲端硬碟");
+	toggle.click();
+	assert.equal(root.querySelector(".zb-ge-path").textContent, DRIVE_DEST);
+	assert.equal(root.querySelector(".zb-ge-drive").hidden, false);
+	toggle.click();
+	root.querySelector(".zb-cl-apply").click();
+	let result = await running;
+	assert.equal(result.dir, EXPORT_DIR);
+	assert.equal(result.drivePath, "");
+	assert.match(env.mem.files.get(path.join(EXPORT_DIR, "README - 如何加入 Gemini Notebook.txt")), /「新增來源」→「上傳檔案」/);
+	assert.match(env.confirms.pop().text, /「新增來源」→「上傳檔案」/);
+	assert.equal(env.prefStore[P + "geminiExport.folder"], undefined, "a quick switch is for this export only");
+	assert.equal(env.mem.dirs.has(path.join(MY_DRIVE, "ZotMax")), false, "nothing written into Drive");
+	assert.deepEqual(env.errors, []);
+});
+
+test("several Drive accounts: the first by default, the window says which and offers the others", async () => {
+	let work = `${HOME}/Library/CloudStorage/GoogleDrive-work@hospital.org/我的雲端硬碟`;
+	let env = await driveSetup({}, [MY_DRIVE, work]);
+	let C = env.ZB.commands;
+	let running = C.execute("gemini-export", C.fromWindow(null, "toolbar"));
+	let root = await openedDialog(env);
+	let doc = root.ownerDocument;
+	assert.equal(root.querySelector(".zb-ge-path").textContent, DRIVE_DEST);
+	let row = root.querySelector(".zb-ge-account");
+	assert.equal(row.hidden, false);
+	assert.match(row.textContent, /偵測到 2 個 Google 雲端硬碟帳號/);
+	let select = doc.getElementById("zb-ge-account");
+	assert.deepEqual([...select.options].map(o => o.textContent), ["student@gmail.com", "work@hospital.org"]);
+	assert.equal(select.value, "0");
+	select.value = "1";
+	select.dispatchEvent(new doc.defaultView.Event("change"));
+	assert.equal(root.querySelector(".zb-ge-path").textContent, `${work}/ZotMax/Gemini Notebook`);
+	// To Downloads and back keeps the account
+	root.querySelector(".zb-ge-switch").click();
+	root.querySelector(".zb-ge-switch").click();
+	assert.equal(root.querySelector(".zb-ge-path").textContent, `${work}/ZotMax/Gemini Notebook`);
+	root.querySelector(".zb-cl-apply").click();
+	let result = await running;
+	assert.equal(result.dir, `${work}/ZotMax/Gemini Notebook/Gemini Notebook - 跌倒預防 - 2026-10-13`);
+	assert.equal(result.drivePath, "ZotMax/Gemini Notebook/Gemini Notebook - 跌倒預防 - 2026-10-13");
+	assert.deepEqual(env.errors, []);
+});
+
+test("precedence in Zotero: a picked folder wins and is remembered; preferDrive off means Downloads; no Drive means Downloads and no badge", async () => {
+	// A folder the user chose before (it exists): it wins, and Drive is offered as a switch
+	let env = await driveSetup({ [P + "geminiExport.folder"]: "/exports" }, [MY_DRIVE, "/exports"]);
+	let dest = await env.ZB.geminiExport.destination();
+	assert.deepEqual({ folder: dest.folder, source: dest.source }, { folder: "/exports", source: "saved" });
+	assert.equal(dest.drive.path, MY_DRIVE);
+	let C = env.ZB.commands;
+	let running = C.execute("gemini-export", C.fromWindow(null, "toolbar"));
+	let root = await openedDialog(env);
+	assert.equal(root.querySelector(".zb-ge-drive").hidden, true);
+	assert.equal(root.querySelector(".zb-ge-switch").textContent, "改存到 Google 雲端硬碟");
+	root.querySelector(".zb-cl-cancel").click();
+	await running;
+	// Downloads remembered by 0.17 is not a choice: Drive first
+	env = await driveSetup({ [P + "geminiExport.folder"]: DOWNLOADS }, [MY_DRIVE, DOWNLOADS]);
+	assert.equal((await env.ZB.geminiExport.destination()).source, "drive");
+	// Switched off in the settings
+	env = await driveSetup({ [P + "geminiExport.preferDrive"]: false });
+	dest = await env.ZB.geminiExport.destination();
+	assert.deepEqual({ folder: dest.folder, source: dest.source, drive: dest.drive }, { folder: DOWNLOADS, source: "downloads", drive: null });
+	// No Drive on this computer
+	env = await driveSetup({}, []);
+	running = env.ZB.commands.execute("gemini-export", env.ZB.commands.fromWindow(null, "toolbar"));
+	root = await openedDialog(env);
+	assert.equal(root.querySelector(".zb-ge-path").textContent, DOWNLOADS);
+	assert.equal(root.querySelector(".zb-ge-drive").hidden, true);
+	assert.equal(root.querySelector(".zb-ge-switch").closest(".zb-ge-row").hidden, true, "no switch without Drive");
+	root.querySelector(".zb-cl-cancel").click();
+	await running;
+	// A folder picked with 選擇資料夾… is remembered
+	let G = env.ZB.geminiExport;
+	let result = await G.run([env.lee], {}, { dialog: async () => ({ folder: "/picked", copyPDF: false, highlights: false, remember: true }), notice: () => "close" });
+	assert.equal(result.dir, "/picked/Gemini Notebook - 選取的文獻 - 2026-10-13");
+	assert.equal(env.prefStore[P + "geminiExport.folder"], "/picked");
+	assert.deepEqual(env.errors, []);
+});
+
+test("settings: 「偵測到 Google 雲端硬碟時，預設匯出到雲端硬碟」 in the Gemini Notebook section, on by default, in both languages", () => {
+	let xhtml = fs.readFileSync(path.join(ROOT, "content", "preferences.xhtml"), "utf8");
+	let XUL = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
+	let { window } = new JSDOM(`<box xmlns="${XUL}" xmlns:html="http://www.w3.org/1999/xhtml">${xhtml}</box>`, { contentType: "application/xml" });
+	let section = window.document.querySelector('groupbox[data-zb-section="geminiNotebook"]');
+	let box = section.querySelector("#zb-gemini-prefer-drive");
+	assert.equal(box.localName, "checkbox");
+	assert.equal(box.getAttribute("label"), "偵測到 Google 雲端硬碟時，預設匯出到雲端硬碟");
+	assert.equal(box.getAttribute("preference"), "extensions.zotero-bridge.geminiExport.preferDrive");
+	let ftl = locale => fs.readFileSync(path.join(ROOT, "locale", locale, "zotero-bridge.ftl"), "utf8");
+	assert.match(ftl("zh-TW"), new RegExp(`^${box.getAttribute("data-l10n-id")} =\\n {4}\\.label = 偵測到 Google 雲端硬碟時，預設匯出到雲端硬碟$`, "m"));
+	assert.match(ftl("en-US"), new RegExp(`^${box.getAttribute("data-l10n-id")} =\\n {4}\\.label = .*Google Drive`, "m"));
+	assert.match(section.textContent, /新增來源」→「Google 雲端硬碟」/);
+	assert.match(fs.readFileSync(path.join(ROOT, "prefs.js"), "utf8"), /pref\("extensions\.zotero-bridge\.geminiExport\.preferDrive", true\);/);
+});
+
+test("export window: a folder picked with 選擇資料夾… is remembered, a quick switch is not", async () => {
+	const G = require("../content/gemini-export.js");
+	let { window } = new JSDOM("<div id='r'></div>");
+	let doc = window.document;
+	let chosen = [];
+	let draw = () => G.renderDialog(doc, doc.getElementById("r"), {
+		scopeName: "x", titles: ["a"], folder: DRIVE_DEST, folderName: "f", pdfs: 0, cap: 50, downloads: DOWNLOADS,
+		drive: { path: MY_DRIVE, account: "student@gmail.com", candidates: [{ path: MY_DRIVE, account: "student@gmail.com" }] },
+	}, { onExport: c => chosen.push(c), onCancel: () => {}, pickFolder: async () => `${MY_DRIVE}/Thesis` });
+	let ui = draw();
+	ui.buttons.pick.click();
+	await new Promise(r => setTimeout(r, 0));
+	assert.equal(doc.querySelector(".zb-ge-path").textContent, `${MY_DRIVE}/Thesis`);
+	assert.equal(doc.querySelector(".zb-ge-drive").hidden, false, "a picked folder inside Drive gets the badge too");
+	ui.buttons.go.click();
+	assert.deepEqual(plain(chosen.pop()), { folder: `${MY_DRIVE}/Thesis`, copyPDF: false, highlights: false, remember: true });
+	ui = draw();
+	ui.buttons.pick.click();
+	await new Promise(r => setTimeout(r, 0));
+	ui.buttons.toggle.click();
+	ui.buttons.go.click();
+	assert.deepEqual(plain(chosen.pop()), { folder: DOWNLOADS, copyPDF: false, highlights: false, remember: false });
+	assert.equal(ui.buttons.toggle.disabled, true, "a decision disables the switch");
+});
