@@ -4,7 +4,11 @@
  * export only writes files on this computer.
  *
  *   folder    <destination>/Gemini Notebook - <collection or 選取的文獻> - <YYYY-MM-DD>/ ; the destination is
- *             chosen in the export window (remembered in geminiExport.folder, else Downloads)
+ *             chosen in the export window: a folder the user picked before (geminiExport.folder), else
+ *             <My Drive>/ZotMax/Gemini Notebook when Google Drive for desktop is found (findGoogleDrive;
+ *             geminiExport.preferDrive), else Downloads. In Drive the files are added in Gemini Notebook with
+ *             新增來源 → Google 雲端硬碟 instead of being uploaded (they are snapshots there: only Google
+ *             Docs/Sheets/Slides follow their Drive file)
  *   per item  `Author Year - Short title.md`: title, authors, year, journal, DOI and APA 7 on top, then the
  *             full text as Markdown from the same pipeline as 全文筆記 (fulltext.js / fulltext-md.js: running
  *             heads, page numbers and hyphenation cleaned); the abstract when there is no usable text.
@@ -43,8 +47,12 @@
 	const NOTEBOOK_URL = "https://notebook.google.com";
 	const OLD_NOTEBOOK_URL = "https://notebooklm.google.com";
 	const LIMIT_TEXT = "每本筆記本約 50 個來源（依方案而異）";
+	// Google's May 2026 announcement: Drive sources that are Google Docs, Sheets and Slides follow their file;
+	// anything else picked from Drive (the .md and PDF files here) is a copy taken when it was added.
+	const DRIVE_SNAPSHOT_TEXT = "- 從雲端硬碟加入的來源，只有 Google 文件、試算表、簡報會在 Gemini Notebook 裡自動跟著更新（Google 2026 年 5 月的公告）。"
+		+ "這裡的 .md 和 PDF 加入後是當時的副本，不會自動更新：論文、劃線或評讀有變動時，請重新匯出，再把新的檔案加入筆記本（舊的來源可以刪掉）。";
 
-	// Test hooks: dialog(info), notice(info), reveal(path), downloads(), now()
+	// Test hooks: dialog(info), notice(info), reveal(path), downloads(), now(), system() → { platform, home, env }
 	const runtime = {};
 	let busy = false;
 
@@ -221,45 +229,80 @@
 		].join("\n").trim() + "\n";
 	}
 
-	/** `README - 如何加入 Gemini Notebook.txt`. */
+	/**
+	 * `README - 如何加入 Gemini Notebook.txt`. o.drivePath ("ZotMax/Gemini Notebook/<folder>") when the folder is in
+	 * the user's synced Google Drive: then the steps add the files from Drive instead of uploading them.
+	 */
 	function readmeText(o) {
+		let inDrive = !!o.drivePath;
 		let lines = [
 			"如何把這個資料夾加入 Gemini Notebook",
 			"====================================",
 			"",
 			`ZotMax 在 ${o.date} 從 Zotero 匯出：${o.scopeName}，${o.items} 篇文獻。`,
-			"這個資料夾只在你的電腦上，ZotMax 沒有上傳任何東西。",
-			"",
+		];
+		if (inDrive) {
+			lines.push("這個資料夾在你電腦上的 Google 雲端硬碟同步資料夾裡，所以 Google 雲端硬碟電腦版會把它同步到你的 Google 帳號（我的雲端硬碟 › "
+				+ `${o.drivePath.split("/").join(" › ")}）。ZotMax 本身沒有上傳任何東西。`);
+		}
+		else lines.push("這個資料夾只在你的電腦上，ZotMax 沒有上傳任何東西。");
+		lines.push("",
 			"資料夾裡有什麼",
 			"- 每篇文獻一個 .md 檔：標題、作者、年份、DOI 和 APA 7，接著是自動轉換的全文；沒有全文的只有摘要。",
 			`- ${REFERENCES_FILE}：這些文獻的參考文獻清單。`,
-		];
+		);
 		if (o.highlights) lines.push(`- ${HIGHLIGHTS_FILE}：你自己的劃線、註記和評讀表（不是原文，也不是 AI 寫的）。`);
 		if (o.pdfs) lines.push(`- ${o.pdfs} 個 PDF 檔：原文 PDF。`);
-		lines.push("- 這份說明（不用上傳）。", "",
-			"怎麼加入",
-			`1. 用瀏覽器打開 ${NOTEBOOK_URL}（舊網址 ${OLD_NOTEBOOK_URL} 也會轉過去），登入你的 Google 帳號。`,
-			"2. 建立新的筆記本，或打開一本既有的。",
-			"3. 按「新增來源」→「上傳檔案」，把這個資料夾裡的 .md 檔（和要用的 PDF）拖進去。這份說明不用上傳。",
-			"4. 等來源處理完成，就可以在 Gemini Notebook 裡提問、做摘要。",
-			"",
+		lines.push(`- 這份說明（不用${inDrive ? "加入" : "上傳"}）。`, "");
+		if (inDrive) {
+			lines.push(
+				"怎麼加入（從 Google 雲端硬碟）",
+				"1. 先等雲端硬碟同步完成：Google 雲端硬碟電腦版要一點時間才會把檔案傳上去，傳完之後才會出現在 Gemini Notebook 裡（可以到 https://drive.google.com 看看檔案在不在）。",
+				`2. 用瀏覽器打開 ${NOTEBOOK_URL}（舊網址 ${OLD_NOTEBOOK_URL} 也會轉過去），用同一個 Google 帳號登入，建立新的筆記本或打開既有的。`,
+				`3. 按「新增來源」→「Google 雲端硬碟」，找到 我的雲端硬碟 › ${o.drivePath.split("/").join(" › ")}，選這次的 .md 檔（和要用的 PDF）。這份說明不用加入。`,
+				"   如果清單裡沒有雲端硬碟這個選項，或看不到某些檔案（例如 .md），改按「上傳檔案」，從這個資料夾把檔案拖進去。",
+				"4. 等來源處理完成，就可以在 Gemini Notebook 裡提問、做摘要。",
+			);
+		}
+		else {
+			lines.push(
+				"怎麼加入",
+				`1. 用瀏覽器打開 ${NOTEBOOK_URL}（舊網址 ${OLD_NOTEBOOK_URL} 也會轉過去），登入你的 Google 帳號。`,
+				"2. 建立新的筆記本，或打開一本既有的。",
+				"3. 按「新增來源」→「上傳檔案」，把這個資料夾裡的 .md 檔（和要用的 PDF）拖進去。這份說明不用上傳。",
+				"4. 等來源處理完成，就可以在 Gemini Notebook 裡提問、做摘要。",
+			);
+		}
+		lines.push("",
 			"注意",
-			`- 來源有數量上限：${LIMIT_TEXT}，每個檔案也有大小上限。這次共 ${o.sources} 個檔案要上傳${o.over ? `，超過 ${o.cap} 個，請分成幾本筆記本` : ""}。`,
-			"- 同一篇的 PDF 和 .md 都上傳，會占兩個來源，內容也重複，通常二選一就好。掃描版 PDF 沒有文字，.md 只有摘要，這時改上傳 PDF。",
-			"- 上傳到 Gemini Notebook 就是把文獻內容交給 Google。未發表的研究資料、病人資訊不要上傳；也請確認期刊或學校對全文分享的規定。",
+			`- 來源有數量上限：${LIMIT_TEXT}，每個檔案也有大小上限。這次共 ${o.sources} 個檔案要${inDrive ? "加入" : "上傳"}${o.over ? `，超過 ${o.cap} 個，請分成幾本筆記本` : ""}。`,
+			`- 同一篇的 PDF 和 .md 都${inDrive ? "加入" : "上傳"}，會占兩個來源，內容也重複，通常二選一就好。掃描版 PDF 沒有文字，.md 只有摘要，這時改用 PDF。`,
+		);
+		if (inDrive) lines.push(DRIVE_SNAPSHOT_TEXT);
+		lines.push(
+			`- ${inDrive ? "放在雲端硬碟、加入 Gemini Notebook" : "上傳到 Gemini Notebook"}就是把文獻內容交給 Google。未發表的研究資料、病人資訊不要${inDrive ? "放進去" : "上傳"}；也請確認期刊或學校對全文分享的規定。`,
 			"- AI 的摘要和回答可能出錯或漏掉重點：寫進報告或論文前，一定要回到原文核對，引用要用原文的頁碼。",
 		);
 		if (o.notes && o.notes.length) lines.push("", "這次匯出的備註", ...o.notes.map(n => `- ${n}`));
 		return lines.join("\n") + "\n";
 	}
 
-	/** The dialog text after an export (and the notes, said once). */
+	/** The dialog text after an export (and the notes, said once). r.drivePath when it went into Google Drive. */
 	function doneText(r) {
+		let inDrive = !!r.drivePath;
 		let lines = [`已匯出 ${r.items} 篇文獻到：`, r.dir, ""];
-		lines.push(`共 ${r.sources} 個檔案要上傳（說明在資料夾裡的 README）。`);
+		if (inDrive) lines.push(`這個資料夾在 Google 雲端硬碟裡（我的雲端硬碟 › ${r.drivePath.split("/").join(" › ")}），共 ${r.sources} 個來源檔案（說明在資料夾裡的 README）。`);
+		else lines.push(`共 ${r.sources} 個檔案要上傳（說明在資料夾裡的 README）。`);
 		for (let n of r.notes) lines.push(`⚠ ${n}`);
 		if (r.over) lines.push(`⚠ 超過 ${r.cap} 個來源的上限：Gemini Notebook ${LIMIT_TEXT}，請分成幾本筆記本。`);
-		lines.push("", `沒有上傳任何東西。接下來在 ${NOTEBOOK_URL} 的筆記本按「新增來源」→「上傳檔案」。`);
+		if (inDrive) {
+			lines.push("",
+				"等雲端硬碟同步完成後，在 " + NOTEBOOK_URL + " 的筆記本按「新增來源」→「Google 雲端硬碟」→ 找到 "
+				+ `${r.drivePath.split("/").join(" › ")} 選檔案。`,
+				"Markdown 和 PDF 加進去後是當時的副本，不會自動更新；論文或筆記有變動時，重新匯出再加入。",
+				"ZotMax 沒有上傳任何東西；同步由 Google 雲端硬碟電腦版負責。");
+		}
+		else lines.push("", `沒有上傳任何東西。接下來在 ${NOTEBOOK_URL} 的筆記本按「新增來源」→「上傳檔案」。`);
 		return lines.join("\n");
 	}
 
@@ -278,12 +321,173 @@
 		return notes;
 	}
 
+	// ---------- Google Drive for desktop (pure: the file system is passed in) ----------
+
+	// The name of the "My Drive" folder in the synced Drive follows the Drive app's language. en and zh-TW first;
+	// the others are Drive's own names for My Drive in those languages.
+	const MY_DRIVE_NAMES = ["My Drive", "我的雲端硬碟", "我的云端硬盘", "マイドライブ", "내 드라이브", "Mi unidad", "Mon Drive", "Meine Ablage", "Il mio Drive", "Meu Drive"];
+	const DRIVE_SUBFOLDER = ["ZotMax", "Gemini Notebook"];
+	// Windows drive letters Drive for desktop may stream to: G: by default, then any other (A:, B: and C: are never it)
+	const DRIVE_LETTERS = ["G", ..."DEFHIJKLMNOPQRSTUVWXYZ"];
+
+	function platformOf(p) {
+		let s = String(p || "").toLowerCase();
+		if (/^win/.test(s)) return "win";
+		if (/^(mac|darwin)/.test(s)) return "mac";
+		return "other";
+	}
+
+	function joinWith(sep, ...parts) {
+		return parts.filter(p => p !== "").reduce((a, b) => (a.endsWith(sep) || a.endsWith("/") ? a + b : `${a}${sep}${b}`));
+	}
+
+	/**
+	 * Where Google Drive for desktop keeps the user's synced My Drive. Only checks that folders exist (and lists
+	 * ~/Library/CloudStorage and /Volumes for the Drive entries); never reads anything inside Drive.
+	 * o: { platform ("win" | "mac" | Gecko's OS name), home, env: { USERPROFILE }, exists(path) → bool,
+	 * list(dir) → child names } (exists and list may be async).
+	 *   macOS    ~/Library/CloudStorage/GoogleDrive-<account>/My Drive (Drive for desktop on macOS 12.1+, one
+	 *            folder per account); /Volumes/GoogleDrive…/My Drive (older Drive for desktop and Drive File
+	 *            Stream); ~/Google Drive/My Drive, else ~/Google Drive itself (Backup and Sync)
+	 *   Windows  <letter>:\My Drive (streaming, G: by default; one letter per account); %USERPROFILE%\My Drive
+	 *            (mirroring); %USERPROFILE%\Google Drive\My Drive, else %USERPROFILE%\Google Drive (Backup and Sync)
+	 * Each layout also with the localized My Drive names. Returns null when nothing is found, else
+	 * { path, account, candidates: [{ path, account, kind }] }: path and account are the first candidate's;
+	 * with several accounts the export window offers the others.
+	 */
+	async function findGoogleDrive(o = {}) {
+		let platform = platformOf(o.platform);
+		if (platform === "other") return null;
+		let exists = async (p) => {
+			try {
+				return !!(await o.exists(p));
+			}
+			catch (e) {
+				return false;
+			}
+		};
+		let list = async (dir) => {
+			try {
+				return o.list ? (await o.list(dir)) || [] : [];
+			}
+			catch (e) {
+				return [];
+			}
+		};
+		let sep = platform === "win" ? "\\" : "/";
+		let join = (...parts) => joinWith(sep, ...parts);
+		let found = [];
+		let add = (path, account, kind) => {
+			if (!found.some(c => c.path.toLowerCase() === path.toLowerCase())) found.push({ path, account, kind });
+		};
+		/** The My Drive folder inside `base` (any language), or null. */
+		let myDrive = async (base) => {
+			for (let name of MY_DRIVE_NAMES) {
+				let p = join(base, name);
+				if (await exists(p)) return p;
+			}
+			return null;
+		};
+		let home = String(o.home || (o.env && o.env.USERPROFILE) || "").replace(/[\\/]+$/, "");
+		if (platform === "mac") {
+			if (home) {
+				let cloud = join(home, "Library", "CloudStorage");
+				let entries = (await list(cloud)).map(String).filter(n => /^GoogleDrive(-|$)/.test(n)).sort((a, b) => a.localeCompare(b));
+				for (let entry of entries) {
+					let p = await myDrive(join(cloud, entry));
+					if (p) add(p, entry.replace(/^GoogleDrive-?/, ""), "stream");
+				}
+			}
+			let volumes = (await list("/Volumes")).map(String).filter(n => /^GoogleDrive/.test(n)).sort((a, b) => a.localeCompare(b));
+			for (let v of volumes) {
+				let p = await myDrive(join("/Volumes", v));
+				if (p) add(p, "", "stream");
+			}
+		}
+		else {
+			for (let letter of DRIVE_LETTERS) {
+				let root = `${letter}:\\`;
+				if (!(await exists(root))) continue;
+				let p = await myDrive(root);
+				if (p) add(p, `${letter}:`, "stream");
+			}
+		}
+		if (home) {
+			let p = await myDrive(home);
+			if (p) add(p, "", "mirror");
+			let legacy = join(home, "Google Drive");
+			if (await exists(legacy)) add((await myDrive(legacy)) || legacy, "", "legacy");
+		}
+		if (!found.length) return null;
+		return { path: found[0].path, account: found[0].account, candidates: found };
+	}
+
+	function sepOf(p) {
+		return /\\/.test(p) && !/\//.test(p) ? "\\" : "/";
+	}
+
+	/** The export destination inside a My Drive root: <My Drive>/ZotMax/Gemini Notebook. */
+	function driveExportFolder(root) {
+		let r = String(root || "").replace(/[\\/]+$/, "");
+		if (/^[A-Za-z]:$/.test(r)) r += "\\";
+		return r ? joinWith(sepOf(root), r, ...DRIVE_SUBFOLDER) : "";
+	}
+
+	function normPath(p) {
+		return String(p || "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+	}
+
+	/** The candidate (from findGoogleDrive) whose My Drive holds `folder`, or null. */
+	function driveOf(folder, drive) {
+		let f = normPath(folder);
+		if (!f || !drive) return null;
+		for (let c of drive.candidates || [drive]) {
+			let root = normPath(c.path);
+			if (root && (f === root || f.startsWith(root + "/"))) return c;
+		}
+		return null;
+	}
+
+	/** `dir` inside the My Drive `root`, as Drive shows it: "ZotMax/Gemini Notebook/<folder>". */
+	function drivePath(dir, root) {
+		let d = String(dir || "").replace(/\\/g, "/").replace(/\/+$/, "");
+		let r = String(root || "").replace(/\\/g, "/").replace(/\/+$/, "");
+		if (!r || d.toLowerCase().indexOf(r.toLowerCase()) !== 0) return "";
+		return d.slice(r.length).replace(/^\/+/, "");
+	}
+
+	/**
+	 * Where the export goes by default: the folder the user chose before (geminiExport.folder, when it still
+	 * exists) > <My Drive>/ZotMax/Gemini Notebook when Drive is found and geminiExport.preferDrive is on (created
+	 * on export) > Downloads > home. A remembered folder equal to Downloads is what 0.17 stored by default, not a
+	 * choice, so Drive comes first then. o: { saved, savedExists, drive, preferDrive, downloads, home }.
+	 * Returns { folder, source: "saved" | "drive" | "downloads" | "home" | "" }.
+	 */
+	function chooseDestination(o) {
+		let useDrive = o.preferDrive !== false && !!(o.drive && o.drive.path);
+		let saved = String(o.saved || "").trim();
+		if (saved && o.savedExists && !(useDrive && o.downloads && normPath(saved) === normPath(o.downloads))) return { folder: saved, source: "saved" };
+		if (useDrive) return { folder: driveExportFolder(o.drive.path), source: "drive" };
+		if (o.downloads) return { folder: o.downloads, source: "downloads" };
+		if (o.home) return { folder: o.home, source: "home" };
+		return { folder: "", source: "" };
+	}
+
+	/** How a Drive account is named in the export window. */
+	function driveLabel(c) {
+		if (!c) return "";
+		if (c.account) return /^[A-Z]:$/i.test(c.account) ? `${c.account} 磁碟` : c.account;
+		return c.path;
+	}
+
 	// ---------- the export window (DOM) ----------
 
 	/**
 	 * Draw the export options into `root` (an HTML element of the dialog window) and wire them up.
-	 * info: { scopeName, titles, folder, folderName(name), pdfs, cap, copyPDF, highlights }
-	 * handlers: { onExport({ folder, copyPDF, highlights }), onCancel(), pickFolder() → Promise<path|null> }
+	 * info: { scopeName, titles, folder, folderName(name), pdfs, cap, copyPDF, highlights, drive (findGoogleDrive's
+	 * result or null), downloads (the Downloads folder) }
+	 * handlers: { onExport({ folder, copyPDF, highlights, remember }), onCancel(), pickFolder() → Promise<path|null> }
+	 * remember: the folder was picked with 選擇資料夾… (the only choice remembered for next time).
 	 */
 	function renderDialog(doc, root, info, handlers) {
 		let el = (tag, attrs, text) => {
@@ -295,6 +499,11 @@
 		root.replaceChildren();
 		let decided = false;
 		let folder = info.folder || "";
+		let remember = false;
+		let drive = info.drive && info.drive.path ? info.drive : null;
+		let accounts = drive ? (drive.candidates || [drive]) : [];
+		// the account last used in Drive, so 改存到 Google 雲端硬碟 goes back to it
+		let account = (drive && driveOf(folder, drive)) || accounts[0] || null;
 
 		let head = el("header", { class: "zb-cl-head" });
 		head.append(
@@ -319,7 +528,33 @@
 		let pick = el("button", { type: "button", class: "zb-ge-pick" }, "選擇資料夾…");
 		row.append(path, pick);
 		let target = el("p", { class: "zb-cl-item-meta" });
-		where.append(row, target);
+		// In Google Drive: the badge, the sync hint, the account when there are several; and the quick switch
+		let driveBox = el("div", { class: "zb-ge-drive", "data-zb-drive": "" });
+		let badge = el("p", { class: "zb-ge-badge", id: "zb-ge-drive-badge" }, "這個資料夾會同步到 Google 雲端硬碟");
+		let driveHint = el("p", { class: "zb-cl-why zb-ge-drive-hint", id: "zb-ge-drive-hint" },
+			"雲端硬碟要一點時間才會同步完成，同步好之後，檔案才會出現在 Gemini Notebook 的「新增來源」→「Google 雲端硬碟」裡。");
+		let accountRow = el("div", { class: "zb-ge-row zb-ge-account" });
+		let accountSelect = el("select", { id: "zb-ge-account" });
+		for (let [i, c] of accounts.entries()) accountSelect.append(el("option", { value: String(i) }, driveLabel(c)));
+		accountRow.append(el("label", { for: "zb-ge-account", class: "zb-cl-why" }, `偵測到 ${accounts.length} 個 Google 雲端硬碟帳號，用這個：`), accountSelect);
+		driveBox.append(badge, driveHint, accountRow);
+		let switchRow = el("div", { class: "zb-ge-row" });
+		let toggle = el("button", { type: "button", class: "zb-ge-switch" });
+		switchRow.append(toggle);
+		where.append(row, target, driveBox, switchRow);
+		accountSelect.addEventListener("change", () => {
+			account = accounts[Number(accountSelect.value)] || account;
+			folder = driveExportFolder(account.path);
+			remember = false;
+			update();
+		});
+		toggle.addEventListener("click", () => {
+			if (decided) return;
+			if (driveOf(folder, drive)) folder = info.downloads;
+			else if (account) folder = driveExportFolder(account.path);
+			remember = false;
+			update();
+		});
 
 		let options = el("section", { class: "zb-cl-item", "aria-labelledby": "zb-ge-options" });
 		options.append(el("h2", { class: "zb-cl-item-title", id: "zb-ge-options" }, "也放進去"));
@@ -350,13 +585,16 @@
 		let go = el("button", { type: "button", class: "zb-cl-apply" }, "匯出");
 		cancel.addEventListener("click", () => finish(null));
 		go.addEventListener("click", () => {
-			if (folder) finish({ folder, copyPDF: pdf.checked, highlights: mine.checked });
+			if (folder) finish({ folder, copyPDF: pdf.checked, highlights: mine.checked, remember });
 		});
 		pick.addEventListener("click", async () => {
 			pick.disabled = true;
 			try {
 				let chosen = handlers.pickFolder ? await handlers.pickFolder(folder) : null;
-				if (chosen) folder = chosen;
+				if (chosen) {
+					folder = chosen;
+					remember = true;
+				}
 			}
 			finally {
 				pick.disabled = decided;
@@ -377,6 +615,16 @@
 		function update() {
 			path.textContent = folder || "（還沒選資料夾）";
 			target.textContent = folder ? `會在這裡建立「${info.folderName}」資料夾。` : "請先選一個資料夾。";
+			let inDrive = driveOf(folder, drive);
+			if (inDrive) account = inDrive;
+			driveBox.hidden = !inDrive;
+			accountRow.hidden = !inDrive || accounts.length < 2;
+			if (inDrive) accountSelect.value = String(Math.max(0, accounts.indexOf(inDrive)));
+			// 改存到下載 while in Drive; 改存到 Google 雲端硬碟 when Drive was found but the folder is elsewhere
+			let canSwitch = inDrive ? !!info.downloads && normPath(info.downloads) !== normPath(folder) : !!account;
+			switchRow.hidden = !canSwitch;
+			toggle.textContent = inDrive ? "改存到下載" : "改存到 Google 雲端硬碟";
+			toggle.disabled = decided;
 			let check = capCheck({ items: info.titles.length, pdfs: info.pdfs, copyPDF: pdf.checked, highlights: mine.checked }, info.cap);
 			cap.textContent = capText(check);
 			cap.classList.toggle("zb-ge-over", check.over);
@@ -389,6 +637,8 @@
 			go.disabled = true;
 			cancel.disabled = true;
 			pick.disabled = true;
+			toggle.disabled = true;
+			accountSelect.disabled = true;
 			if (result) handlers.onExport(result);
 			else handlers.onCancel();
 		}
@@ -398,7 +648,7 @@
 			go.focus();
 		}
 		catch (e) {}
-		return { update, finish, boxes: { pdf, highlights: mine }, buttons: { go, cancel, pick } };
+		return { update, finish, boxes: { pdf, highlights: mine }, buttons: { go, cancel, pick, toggle }, account: accountSelect };
 	}
 
 	// ---------- Zotero ----------
@@ -434,15 +684,16 @@
 		return runtime.now ? runtime.now() : new Date();
 	}
 
-	/** The remembered destination, else the Downloads folder, else the home folder. */
-	async function defaultFolder() {
-		let saved = String(pref("geminiExport.folder") || "").trim();
-		if (saved) {
-			try {
-				if (await IOUtils.exists(saved)) return saved;
-			}
-			catch (e) {}
+	function homeDir() {
+		try {
+			return Services.dirsvc.get("Home", Components.interfaces.nsIFile).path;
 		}
+		catch (e) {
+			return "";
+		}
+	}
+
+	async function downloadsDir() {
 		if (runtime.downloads) return runtime.downloads();
 		try {
 			const { Downloads } = ChromeUtils.importESModule("resource://gre/modules/Downloads.sys.mjs");
@@ -450,12 +701,57 @@
 			if (dir) return dir;
 		}
 		catch (e) {}
+		return "";
+	}
+
+	/** findGoogleDrive on this computer (runtime.system() replaces the platform and home in tests). */
+	async function detectDrive() {
+		let sys = runtime.system ? runtime.system() : null;
+		if (!sys) {
+			let platform = typeof Zotero !== "undefined" && Zotero.isWin ? "win" : typeof Zotero !== "undefined" && Zotero.isMac ? "mac" : "other";
+			let env = {};
+			try {
+				env.USERPROFILE = Services.env.get("USERPROFILE");
+			}
+			catch (e) {}
+			sys = { platform, home: homeDir(), env };
+		}
 		try {
-			return Services.dirsvc.get("Home", Components.interfaces.nsIFile).path;
+			return await findGoogleDrive(Object.assign({
+				exists: p => IOUtils.exists(p),
+				list: async dir => (await IOUtils.getChildren(dir)).map(c => PathUtils.filename(c)),
+			}, sys));
 		}
 		catch (e) {
-			return "";
+			Zotero.logError(e);
+			return null;
 		}
+	}
+
+	/**
+	 * The default destination (chooseDestination): { folder, source, drive, downloads }. drive is findGoogleDrive's
+	 * result (also when the remembered folder wins, so the window can offer it).
+	 */
+	async function destination() {
+		let saved = String(pref("geminiExport.folder") || "").trim();
+		let savedExists = false;
+		if (saved) {
+			try {
+				savedExists = await IOUtils.exists(saved);
+			}
+			catch (e) {}
+		}
+		let preferDrive = pref("geminiExport.preferDrive") !== false;
+		let drive = preferDrive ? await detectDrive() : null;
+		let downloads = await downloadsDir();
+		let home = downloads ? "" : homeDir();
+		let chosen = chooseDestination({ saved, savedExists, drive, preferDrive, downloads, home });
+		return Object.assign(chosen, { drive, downloads });
+	}
+
+	/** The default destination folder (see destination()). */
+	async function defaultFolder() {
+		return (await destination()).folder;
 	}
 
 	/** The item's PDF to copy: { path } when its file is on this computer, { missing: true } when not, or null. */
@@ -519,8 +815,10 @@
 	}
 
 	/**
-	 * Write the export. opts: { folder (the destination), name (collection or 選取的文獻), copyPDF, highlights }.
-	 * Returns { dir, items, files, pdfs, sources, cap, over, notes, scanned, noText, missingPDF }.
+	 * Write the export. opts: { folder (the destination, created with its parents: <My Drive>/ZotMax/Gemini
+	 * Notebook on the first export into Drive), name (collection or 選取的文獻), copyPDF, highlights, driveRoot (the
+	 * My Drive folder when the destination is in Google Drive) }.
+	 * Returns { dir, items, files, pdfs, sources, cap, over, notes, scanned, noText, missingPDF, drivePath }.
 	 */
 	async function exportTo(items, opts) {
 		let date = dateStamp(now());
@@ -573,8 +871,10 @@
 		let check = capCheck({ items: entries.length, pdfs: r.pdfs, copyPDF: true, highlights: r.highlights }, pref("geminiExport.cap"));
 		Object.assign(r, { sources: check.count, cap: check.cap, over: check.over });
 		r.notes = exportNotes(r);
+		r.drivePath = opts.driveRoot ? drivePath(dir, opts.driveRoot) : "";
 		await IOUtils.writeUTF8(PathUtils.join(dir, README_FILE), readmeText({
 			date, scopeName, items: entries.length, highlights: r.highlights, pdfs: r.pdfs, sources: r.sources, cap: r.cap, over: r.over, notes: r.notes,
+			drivePath: r.drivePath,
 		}));
 		r.files.push(README_FILE);
 		return r;
@@ -693,10 +993,14 @@
 				let pdf = await pdfOf(item);
 				if (pdf && pdf.path) pdfs++;
 			}
+			let dest = await destination();
 			let info = {
 				scopeName,
 				titles: regular.map(i => i.getField("title")),
-				folder: await defaultFolder(),
+				folder: dest.folder,
+				folderSource: dest.source,
+				drive: dest.drive,
+				downloads: dest.downloads,
 				folderName: folderName(scopeName, now()),
 				pdfs,
 				cap: Number(pref("geminiExport.cap")) || DEFAULT_CAP,
@@ -713,12 +1017,14 @@
 				return null;
 			}
 			if (!choice) return { cancelled: true };
-			setPref("geminiExport.folder", choice.folder);
+			// Only a folder the user picked is remembered: the default (Drive or Downloads) is worked out each time
+			if (choice.remember) setPref("geminiExport.folder", choice.folder);
 			setPref("geminiExport.copyPDF", !!choice.copyPDF);
 			setPref("geminiExport.highlights", !!choice.highlights);
 			let result;
 			try {
-				result = await exportTo(regular, { folder: choice.folder, name: scopeName, copyPDF: choice.copyPDF, highlights: choice.highlights });
+				let inDrive = driveOf(choice.folder, dest.drive);
+				result = await exportTo(regular, { folder: choice.folder, name: scopeName, copyPDF: choice.copyPDF, highlights: choice.highlights, driveRoot: inDrive ? inDrive.path : "" });
 			}
 			catch (e) {
 				Zotero.logError(e);
@@ -740,7 +1046,8 @@
 		// pure
 		dateStamp, folderName, baseName, uniqueBaseNames, sourceCount, capCheck, capText, itemMarkdown, referencesMarkdown,
 		highlightsMarkdown, readmeText, doneText, exportNotes, renderDialog,
+		MY_DRIVE_NAMES, findGoogleDrive, driveExportFolder, driveOf, drivePath, chooseDestination, driveLabel,
 		// Zotero
-		defaultFolder, pdfOf, appraisalOf, exportTo, dialog, noticeInfo, run,
+		defaultFolder, destination, detectDrive, pdfOf, appraisalOf, exportTo, dialog, noticeInfo, run,
 	};
 });

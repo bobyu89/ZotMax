@@ -1,6 +1,8 @@
 // 匯出給 Gemini Notebook (content/gemini-export.js), the pure parts: folder and file names (sanitizing,
 // Chinese titles, duplicates), the source count against the cap, each item's Markdown, the reference list
-// through the APA module, the highlights file only with something in it, the README and the notes.
+// through the APA module, the highlights file only with something in it, the README and the notes; Google Drive
+// for desktop detection (macOS, Windows, localized names, several accounts), the destination precedence and the
+// README and dialog text for an export into Drive.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
@@ -166,4 +168,159 @@ test("notes and the dialog text after an export", () => {
 	assert.match(text, /沒有上傳任何東西/);
 	assert.doesNotMatch(text, /超過/);
 	assert.match(G.doneText(Object.assign({}, r, { over: true, sources: 70, notes: [] })), /超過 50 個來源的上限/);
+});
+
+// ---------- Google Drive for desktop ----------
+
+/** A fake file system holding only folders: exists() for them and their parents, list() for direct children. */
+function fakeFS(folders, sep = "/") {
+	let all = new Set();
+	for (let f of folders) {
+		let parts = f.split(sep);
+		for (let i = 1; i <= parts.length; i++) {
+			let p = parts.slice(0, i).join(sep);
+			all.add(p);
+			if (/^[A-Z]:$/.test(p)) all.add(p + sep);
+		}
+	}
+	let checked = [];
+	let listed = [];
+	return {
+		checked, listed,
+		exists: async (p) => {
+			checked.push(p);
+			return all.has(p);
+		},
+		list: async (dir) => {
+			listed.push(dir);
+			let prefix = dir.endsWith(sep) ? dir : dir + sep;
+			return [...new Set([...all].filter(p => p.startsWith(prefix) && p.length > prefix.length).map(p => p.slice(prefix.length).split(sep)[0]))];
+		},
+	};
+}
+
+test("Drive on macOS: ~/Library/CloudStorage/GoogleDrive-<account>/My Drive, localized names, legacy folders; nothing inside Drive is read", async () => {
+	let home = "/Users/student";
+	let fs = fakeFS([`${home}/Library/CloudStorage/GoogleDrive-student@gmail.com/My Drive/Thesis`, `${home}/Library/CloudStorage/GoogleDrive-student@gmail.com/Shared drives`,
+		`${home}/Library/CloudStorage/OneDrive-Personal/Documents`]);
+	let found = await G.findGoogleDrive(Object.assign({ platform: "Darwin", home }, fs));
+	assert.equal(found.path, `${home}/Library/CloudStorage/GoogleDrive-student@gmail.com/My Drive`);
+	assert.equal(found.account, "student@gmail.com");
+	assert.equal(found.candidates.length, 1);
+	assert.deepEqual(fs.listed, [`${home}/Library/CloudStorage`, "/Volumes"], "lists only the folders that hold Drive's own folder");
+	assert.ok(fs.checked.every(p => !/My Drive\/./.test(p)), "never looks inside My Drive");
+	// zh-TW Drive
+	let zh = await G.findGoogleDrive(Object.assign({ platform: "mac", home }, fakeFS([`${home}/Library/CloudStorage/GoogleDrive-陳美玲@ntu.edu.tw/我的雲端硬碟`])));
+	assert.equal(zh.path, `${home}/Library/CloudStorage/GoogleDrive-陳美玲@ntu.edu.tw/我的雲端硬碟`);
+	assert.equal(zh.account, "陳美玲@ntu.edu.tw");
+	// Spanish
+	let es = await G.findGoogleDrive(Object.assign({ platform: "mac", home }, fakeFS([`${home}/Library/CloudStorage/GoogleDrive-ana@gmail.com/Mi unidad`])));
+	assert.equal(es.path, `${home}/Library/CloudStorage/GoogleDrive-ana@gmail.com/Mi unidad`);
+	// Drive File Stream / older Drive for desktop mounted in /Volumes
+	let vol = await G.findGoogleDrive(Object.assign({ platform: "mac", home }, fakeFS(["/Volumes/GoogleDrive/My Drive", "/Volumes/Macintosh HD"])));
+	assert.equal(vol.path, "/Volumes/GoogleDrive/My Drive");
+	// Backup and Sync: ~/Google Drive is My Drive itself
+	let legacy = await G.findGoogleDrive(Object.assign({ platform: "mac", home }, fakeFS([`${home}/Google Drive/Papers`])));
+	assert.equal(legacy.path, `${home}/Google Drive`);
+	assert.equal(legacy.candidates[0].kind, "legacy");
+	// A CloudStorage folder without My Drive (signed out) is not Drive
+	assert.equal(await G.findGoogleDrive(Object.assign({ platform: "mac", home }, fakeFS([`${home}/Library/CloudStorage/GoogleDrive-x@gmail.com/.Encrypted`]))), null);
+});
+
+test("Drive on Windows: a streamed drive letter (G: or another), mirrored %USERPROFILE%\\My Drive, legacy Google Drive, localized names", async () => {
+	let home = "C:\\Users\\student";
+	let g = await G.findGoogleDrive(Object.assign({ platform: "WINNT", home }, fakeFS(["G:\\My Drive\\Thesis", "G:\\Shared drives", "D:\\Data"], "\\")));
+	assert.equal(g.path, "G:\\My Drive");
+	assert.equal(g.account, "G:");
+	assert.equal(G.driveLabel(g.candidates[0]), "G: 磁碟");
+	let h = await G.findGoogleDrive(Object.assign({ platform: "win", home }, fakeFS(["H:\\我的雲端硬碟"], "\\")));
+	assert.equal(h.path, "H:\\我的雲端硬碟", "another letter when G: was taken; zh-TW name");
+	let mirror = await G.findGoogleDrive(Object.assign({ platform: "win", home }, fakeFS([`${home}\\My Drive\\Papers`], "\\")));
+	assert.equal(mirror.path, `${home}\\My Drive`);
+	assert.equal(mirror.candidates[0].kind, "mirror");
+	let fromEnv = await G.findGoogleDrive(Object.assign({ platform: "win", env: { USERPROFILE: home } }, fakeFS([`${home}\\我的雲端硬碟`], "\\")));
+	assert.equal(fromEnv.path, `${home}\\我的雲端硬碟`, "USERPROFILE when there is no home");
+	let legacy = await G.findGoogleDrive(Object.assign({ platform: "win", home }, fakeFS([`${home}\\Google Drive\\My Drive`], "\\")));
+	assert.equal(legacy.path, `${home}\\Google Drive\\My Drive`);
+	let backup = await G.findGoogleDrive(Object.assign({ platform: "win", home }, fakeFS([`${home}\\Google Drive\\Papers`], "\\")));
+	assert.equal(backup.path, `${home}\\Google Drive`);
+	// A drive letter without My Drive is some other disk
+	let fs = fakeFS(["E:\\Backup", "C:\\Windows"], "\\");
+	assert.equal(await G.findGoogleDrive(Object.assign({ platform: "win", home }, fs)), null);
+	assert.ok(!fs.checked.some(p => /^[ABC]:\\$/.test(p)), "A:, B: and C: are never tried as Drive letters");
+	assert.ok(!fs.checked.some(p => /^E:\\Backup/.test(p)), "nothing else is read");
+});
+
+test("Drive: several accounts are all candidates (the first is the default), none found is null, other systems are null", async () => {
+	let home = "/Users/student";
+	let two = await G.findGoogleDrive(Object.assign({ platform: "mac", home }, fakeFS([
+		`${home}/Library/CloudStorage/GoogleDrive-work@hospital.org/My Drive`, `${home}/Library/CloudStorage/GoogleDrive-me@gmail.com/我的雲端硬碟`,
+	])));
+	assert.deepEqual(two.candidates.map(c => c.account), ["me@gmail.com", "work@hospital.org"], "sorted, so the default is stable");
+	assert.equal(two.path, two.candidates[0].path);
+	let win = await G.findGoogleDrive(Object.assign({ platform: "win", home: "C:\\Users\\s" }, fakeFS(["G:\\My Drive", "H:\\My Drive", "C:\\Users\\s\\My Drive"], "\\")));
+	assert.deepEqual(win.candidates.map(c => c.path), ["G:\\My Drive", "H:\\My Drive", "C:\\Users\\s\\My Drive"]);
+	assert.equal(await G.findGoogleDrive(Object.assign({ platform: "mac", home }, fakeFS([`${home}/Downloads`]))), null);
+	assert.equal(await G.findGoogleDrive(Object.assign({ platform: "Linux", home: "/home/s" }, fakeFS(["/home/s/My Drive"]))), null, "no Drive for desktop on Linux");
+	// A file system that throws is "not found", never an error
+	let broken = { exists: async () => { throw new Error("denied"); }, list: async () => { throw new Error("denied"); } };
+	assert.equal(await G.findGoogleDrive(Object.assign({ platform: "mac", home }, broken)), null);
+});
+
+test("Drive paths: the export folder inside My Drive, which account holds a folder, the path as Drive shows it", () => {
+	assert.equal(G.driveExportFolder("/Users/s/Library/CloudStorage/GoogleDrive-a@b.c/My Drive"), "/Users/s/Library/CloudStorage/GoogleDrive-a@b.c/My Drive/ZotMax/Gemini Notebook");
+	assert.equal(G.driveExportFolder("G:\\My Drive"), "G:\\My Drive\\ZotMax\\Gemini Notebook");
+	assert.equal(G.driveExportFolder("G:\\My Drive\\"), "G:\\My Drive\\ZotMax\\Gemini Notebook");
+	let drive = { path: "G:\\My Drive", candidates: [{ path: "G:\\My Drive", account: "G:" }, { path: "H:\\我的雲端硬碟", account: "H:" }] };
+	assert.equal(G.driveOf("G:\\My Drive\\ZotMax\\Gemini Notebook", drive).account, "G:");
+	assert.equal(G.driveOf("h:\\我的雲端硬碟\\論文", drive).account, "H:", "drive letters compare without case");
+	assert.equal(G.driveOf("G:\\My Drive", drive).account, "G:");
+	assert.equal(G.driveOf("G:\\My Drive 2", drive), null, "a sibling with the same prefix is not inside");
+	assert.equal(G.driveOf("C:\\Users\\s\\Downloads", drive), null);
+	assert.equal(G.driveOf("/x", null), null);
+	assert.equal(G.drivePath("G:\\My Drive\\ZotMax\\Gemini Notebook\\Gemini Notebook - 跌倒預防 - 2026-10-13", "G:\\My Drive"), "ZotMax/Gemini Notebook/Gemini Notebook - 跌倒預防 - 2026-10-13");
+	assert.equal(G.drivePath("/Users/s/Downloads/x", "/Users/s/My Drive"), "");
+});
+
+test("destination: a folder the user chose > My Drive/ZotMax/Gemini Notebook (preferDrive) > Downloads > home", () => {
+	let drive = { path: "/Users/s/Library/CloudStorage/GoogleDrive-a@b.c/My Drive", candidates: [] };
+	let inDrive = "/Users/s/Library/CloudStorage/GoogleDrive-a@b.c/My Drive/ZotMax/Gemini Notebook";
+	let downloads = "/Users/s/Downloads";
+	let base = { drive, preferDrive: true, downloads, home: "/Users/s" };
+	assert.deepEqual(G.chooseDestination(Object.assign({}, base, { saved: "/Users/s/Exports", savedExists: true })), { folder: "/Users/s/Exports", source: "saved" });
+	assert.deepEqual(G.chooseDestination(Object.assign({}, base, { saved: "/gone", savedExists: false })), { folder: inDrive, source: "drive" }, "a remembered folder that is gone");
+	assert.deepEqual(G.chooseDestination(base), { folder: inDrive, source: "drive" });
+	assert.deepEqual(G.chooseDestination(Object.assign({}, base, { saved: downloads + "/", savedExists: true })), { folder: inDrive, source: "drive" },
+		"Downloads remembered by 0.17 (its default) is not a choice");
+	assert.deepEqual(G.chooseDestination(Object.assign({}, base, { saved: downloads, savedExists: true, preferDrive: false })), { folder: downloads, source: "saved" });
+	assert.deepEqual(G.chooseDestination(Object.assign({}, base, { preferDrive: false })), { folder: downloads, source: "downloads" });
+	assert.deepEqual(G.chooseDestination(Object.assign({}, base, { drive: null })), { folder: downloads, source: "downloads" });
+	assert.deepEqual(G.chooseDestination({ drive: null, home: "/Users/s" }), { folder: "/Users/s", source: "home" });
+	assert.deepEqual(G.chooseDestination({}), { folder: "", source: "" });
+	assert.deepEqual(G.chooseDestination(Object.assign({}, base, { preferDrive: undefined })).source, "drive", "on unless switched off");
+});
+
+test("README and the dialog after an export, in Drive: add from Google Drive, wait for the sync, Markdown and PDF are snapshots", () => {
+	let o = { date: "2026-10-13", scopeName: "跌倒預防", items: 12, highlights: false, pdfs: 0, sources: 13, cap: 50, over: false, notes: [],
+		drivePath: "ZotMax/Gemini Notebook/Gemini Notebook - 跌倒預防 - 2026-10-13" };
+	let text = G.readmeText(o);
+	assert.match(text, /「新增來源」→「Google 雲端硬碟」，找到 我的雲端硬碟 › ZotMax › Gemini Notebook › Gemini Notebook - 跌倒預防 - 2026-10-13，選這次的 \.md 檔/);
+	assert.match(text, /先等雲端硬碟同步完成/);
+	assert.match(text, /只有 Google 文件、試算表、簡報會在 Gemini Notebook 裡自動跟著更新/);
+	assert.match(text, /\.md 和 PDF 加入後是當時的副本，不會自動更新：.*請重新匯出，再把新的檔案加入筆記本/);
+	assert.match(text, /改按「上傳檔案」/, "the upload way stays as the fallback");
+	assert.match(text, /ZotMax 本身沒有上傳任何東西/);
+	assert.doesNotMatch(text, /這個資料夾只在你的電腦上/, "it does not claim the folder stays on this computer");
+	assert.match(text, /共 13 個檔案要加入。/);
+	// Not in Drive: the upload steps, no Drive words
+	let plain = G.readmeText(Object.assign({}, o, { drivePath: "" }));
+	assert.match(plain, /「新增來源」→「上傳檔案」，把這個資料夾裡的 \.md 檔/);
+	assert.doesNotMatch(plain, /雲端硬碟/);
+	let r = { items: 12, dir: "G:\\My Drive\\ZotMax\\Gemini Notebook\\Gemini Notebook - 跌倒預防 - 2026-10-13", sources: 13, cap: 50, over: false, notes: [], drivePath: o.drivePath };
+	let done = G.doneText(r);
+	assert.match(done, /這個資料夾在 Google 雲端硬碟裡（我的雲端硬碟 › ZotMax › Gemini Notebook › Gemini Notebook - 跌倒預防 - 2026-10-13）/);
+	assert.match(done, /等雲端硬碟同步完成後，在 https:\/\/notebook\.google\.com 的筆記本按「新增來源」→「Google 雲端硬碟」→ 找到 ZotMax › Gemini Notebook › /);
+	assert.match(done, /不會自動更新/);
+	assert.doesNotMatch(done, /「上傳檔案」/);
+	assert.match(G.doneText(Object.assign({}, r, { drivePath: "" })), /「新增來源」→「上傳檔案」/);
 });

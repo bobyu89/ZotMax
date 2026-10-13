@@ -166,10 +166,12 @@ pref("extensions.zotero-bridge.setup.done", false);
 // 中文文獻補強 (content/zh-meta.js): what the last 套用勾選的修正 changed (JSON: per item the fields,
 // authors and item type before and after), for 復原上一次中文文獻修正
 pref("extensions.zotero-bridge.zhMeta.lastRun", "");
-// 匯出給 Gemini Notebook (content/gemini-export.js): where the export folder goes (empty = Downloads), how many
-// sources a notebook takes before the window warns (Gemini Notebook: about 50, varies by plan), the last choices
-// of 「也複製 PDF」 and 「我的劃線與評讀」
+// 匯出給 Gemini Notebook (content/gemini-export.js): where the export folder goes (a folder the user picked; empty =
+// Google Drive's My Drive/ZotMax/Gemini Notebook when Drive for desktop is found and preferDrive is on, else
+// Downloads), how many sources a notebook takes before the window warns (Gemini Notebook: about 50, varies by
+// plan), the last choices of 「也複製 PDF」 and 「我的劃線與評讀」
 pref("extensions.zotero-bridge.geminiExport.folder", "");
+pref("extensions.zotero-bridge.geminiExport.preferDrive", true);
 pref("extensions.zotero-bridge.geminiExport.cap", "50");
 pref("extensions.zotero-bridge.geminiExport.copyPDF", false);
 pref("extensions.zotero-bridge.geminiExport.highlights", false);
