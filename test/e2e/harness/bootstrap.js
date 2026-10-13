@@ -1849,8 +1849,11 @@ const TESTS = [
 				check(/\| 對照本題 \|/.test(note), "the 對照本題 column (no row has data, so it only holds —)");
 				check(note.includes("## 沒有結構化資料的文獻"), "both papers are listed without data");
 				check(note.trimEnd().endsWith("## ✍️ 我的筆記"), "the user's section at the end");
-				let csv = await IOUtils.readUTF8(PathUtils.join(result.dir, "E2E Review PICO 表.csv"));
-				check(csv.startsWith("\ufeff文獻,作者,年份"), "CSV with a BOM");
+				// IOUtils.readUTF8 drops a BOM, so the bytes say whether it is there
+				let csvBytes = await IOUtils.read(PathUtils.join(result.dir, "E2E Review PICO 表.csv"));
+				check(csvBytes[0] === 0xEF && csvBytes[1] === 0xBB && csvBytes[2] === 0xBF, "CSV with a UTF-8 BOM");
+				let csv = new TextDecoder().decode(csvBytes);
+				check(csv.startsWith("文獻,作者,年份"), `CSV header: ${csv.slice(0, 60)}`);
 				let html = await IOUtils.readUTF8(PathUtils.join(result.dir, "E2E Review PICO 表.html"));
 				check(html.startsWith("<!DOCTYPE html>") && html.includes("<table"), "the HTML for Word");
 				eq(JSON.stringify(noticed[0].buttons), JSON.stringify(["open", "copy", "close"]), "the dialog after it: 打開資料夾, 複製成表格, 關閉");
