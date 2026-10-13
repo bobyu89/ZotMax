@@ -511,6 +511,17 @@
 			features: ["statsExplainer"], needs: null, menus: [],
 			keywords: [...KW.ai, "讀懂統計", "統計", "statistics", "解釋", "explain", "odds ratio", "信賴區間", "confidence interval", "p 值", "p value", "效果量", "effect size", "pdf"],
 			run: sel => ZB().statsExplainer.explainCurrentSelection(sel && sel.window) },
+		// 匯出給 Gemini Notebook (gemini-export.js): only writes files; the selected items, else the selected collection
+		{ id: "gemini-export", group: "ai", l10n: "zotero-bridge-cmd-gemini-export", label: "匯出給 Gemini Notebook（選取項目或分類）…",
+			features: ["geminiExport"], needs: "itemsOrCollection", menus: ["item", "collection"],
+			keywords: ["gemini", "gemini notebook", "notebooklm", "notebook lm", "google", "匯出", "export", "來源", "sources", "上傳", "upload",
+				"全文", "full text", "markdown", "pdf", "參考文獻", "references", "apa", "筆記本", "notebook"],
+			run: (sel) => {
+				let t = writingTarget(sel);
+				// The folder is named after the collection when a collection is exported, else 「選取的文獻」
+				let name = sel.surface === "collection" ? t.scope.label : t.scope.collection ? (t.scope.collection.name || "") : "";
+				return ZB().geminiExport.run(t.items, { name });
+			} },
 		// Like the Tools entries: only while batches are pending
 		{ id: "ai-batch-check", group: "ai", l10n: "zotero-bridge-menu-ai-batch-check", label: "檢查 AI 批次進度",
 			features: [], needs: null, menus: [], tools: true,
@@ -580,6 +591,8 @@
 			keywords: ["ai", "api key", "claude", "openai", "anthropic", "模型", "model", "提示詞", "prompt"] },
 		{ id: "usage", label: "本月 AI 用量", features: ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "progressReport", "conceptsAI"],
 			keywords: ["用量", "費用", "usage", "cost", "token", "花費"] },
+		{ id: "geminiNotebook", label: "Gemini Notebook", features: ["geminiExport"],
+			keywords: ["gemini", "gemini notebook", "notebooklm", "匯出", "export", "上傳", "upload", "來源", "sources", "google"] },
 	];
 	for (let s of SECTIONS) {
 		// aiBatch → ai-batch, pubmedWatch → pubmed-watch

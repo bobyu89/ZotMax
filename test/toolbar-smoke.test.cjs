@@ -341,7 +341,7 @@ test("menu: 快速指令… first, groups in workflow order with labels, setting
 	({ groups, entries } = openMenu(env));
 	assert.deepEqual(groups, ["sync", "organize", "search", "appraise", "ai"]);
 	assert.deepEqual(entries.search, ["quick-search", "search-item", "pubmed-watch", "chase-items", "chase-included", "chase-import"]);
-	assert.deepEqual(entries.ai, ["regenerate", "synthesis", "review-draft", "progress-report", "concepts-ai", "explain-stats"]);
+	assert.deepEqual(entries.ai, ["regenerate", "synthesis", "review-draft", "progress-report", "concepts-ai", "explain-stats", "gemini-export"]);
 	assert.deepEqual(entries.sync, GUIDED.sync, "resume, stop and discard only with a batch");
 	assert.deepEqual(entries.organize, GUIDED.organize, "undo only after a run");
 
@@ -353,7 +353,7 @@ test("menu: 快速指令… first, groups in workflow order with labels, setting
 	({ groups, entries, separators } = openMenu(env));
 	assert.deepEqual(groups, ["organize", "search", "ai"]);
 	assert.equal(entries.appraise, undefined);
-	assert.deepEqual(entries.ai, ["synthesis", "review-draft", "progress-report", "concepts-ai"], "AI notes need the sync");
+	assert.deepEqual(entries.ai, ["synthesis", "review-draft", "progress-report", "concepts-ai", "gemini-export"], "AI notes need the sync; the export does not");
 	assert.deepEqual(separators, ["search", "ai", "settings"], "the first visible group has no separator above it");
 	assert.equal(popup.querySelector('[data-zb-group="appraise"]').hidden, true);
 	assert.equal(popup.querySelector('[data-zb-group-separator="appraise"]').hidden, true);

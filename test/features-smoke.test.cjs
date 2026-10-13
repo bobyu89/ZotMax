@@ -601,14 +601,14 @@ test("settings pane: 劃線顏色與意義 rows edit, reorder and reset the colo
 const HTML_NS = "http://www.w3.org/1999/xhtml";
 // The section IDs other code links to (the toolbar's command palette); "sync" is the 同步 tab itself
 const SECTION_IDS = ["features", "sync", "obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography", "concepts",
-	"fulltext", "colors", "classify", "searchLinks", "ncbi", "pubmedWatch", "citationChase", "screening", "ai", "usage"];
+	"fulltext", "colors", "classify", "searchLinks", "ncbi", "pubmedWatch", "citationChase", "screening", "ai", "usage", "geminiNotebook"];
 const TAB_SECTIONS = {
 	features: ["features"],
 	sync: ["obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography"],
 	organize: ["fulltext", "colors", "concepts", "classify"],
 	search: ["searchLinks", "ncbi", "pubmedWatch", "citationChase"],
 	appraise: ["screening"],
-	ai: ["ai", "usage"],
+	ai: ["ai", "usage", "geminiNotebook"],
 };
 const tick = () => new Promise(r => setTimeout(r, 0));
 
@@ -657,7 +657,7 @@ test("settings pane: every section has a known ID in exactly one workflow tab; A
 
 	// Every groupbox is a section with a known, unique ID, in exactly one tab panel
 	let groupboxes = [...doc.getElementsByTagNameNS(XUL_NS, "groupbox")];
-	assert.equal(groupboxes.length, 19);
+	assert.equal(groupboxes.length, 20);
 	let ids = groupboxes.map(g => g.getAttribute("data-zb-section"));
 	assert.deepEqual([...new Set(ids)].length, ids.length, "section IDs are unique");
 	for (let g of groupboxes) {
@@ -749,12 +749,13 @@ test("settings pane: a tab whose features are all off says which and leads to �
 	// 研究生引導: every tab has something (AI 文獻筆記 is on)
 	for (let tab of Object.keys(TAB_SECTIONS)) assert.equal(empty(tab).hasAttribute("hidden"), true, tab);
 	F.setEnabled("aiNotes", false);
+	F.setEnabled("geminiExport", false);
 	let box = empty("ai");
 	assert.equal(box.hasAttribute("hidden"), false);
 	assert.equal(box.getAttribute("no-highlight"), "true");
 	let text = box.querySelector("p");
 	assert.equal(text.getAttribute("data-l10n-id"), "zotero-bridge-prefs-tab-empty");
-	assert.match(text.textContent, /^這一頁的功能都關著：AI 文獻筆記、批次 API、文獻比較表、文獻探討草稿、進度報告、概念卡片 AI 綜整。/);
+	assert.match(text.textContent, /^這一頁的功能都關著：AI 文獻筆記、批次 API、文獻比較表、文獻探討草稿、進度報告、概念卡片 AI 綜整、匯出給 Gemini Notebook。/);
 	assert.equal(JSON.parse(text.getAttribute("data-l10n-args")).features.split("、")[0], "AI 文獻筆記");
 	p.window.ZoteroBridgePrefs.selectTab("ai");
 	let go = box.querySelector("button");

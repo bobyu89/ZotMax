@@ -575,3 +575,17 @@ zotero-bridge-cmd-zh-meta-undo =
     .label = 復原上一次中文文獻修正
 zotero-bridge-pane-zh-meta = 中文資料：{ $count } 個地方要檢查
 zotero-bridge-pane-zh-meta-review = 檢查並修正…
+
+## 匯出給 Gemini Notebook (content/gemini-export.js): the switch, the commands, the settings section
+zotero-bridge-feature-gemini-export = 匯出給 Gemini Notebook
+zotero-bridge-feature-gemini-export-desc = 把選取的文獻或分類匯出成一個資料夾（全文 Markdown、APA 參考文獻、使用說明）給 Gemini Notebook 當來源；只寫入你電腦上的檔案，上傳由你自己來。
+zotero-bridge-cmd-gemini-export =
+    .label = 匯出給 Gemini Notebook（選取項目或分類）…
+zotero-bridge-section-gemini-notebook = Gemini Notebook
+zotero-bridge-gemini-heading = Gemini Notebook
+zotero-bridge-gemini-intro = 「匯出給 Gemini Notebook…」會在你的電腦上建立一個資料夾：每篇一個全文 Markdown 檔、參考文獻清單（APA 7）和使用說明。上傳由你自己到 notebook.google.com 做，ZotMax 不會送出任何東西。
+zotero-bridge-gemini-folder = 匯出到（留空 = 下載資料夾）：
+zotero-bridge-gemini-folder-pick =
+    .label = 選擇資料夾…
+zotero-bridge-gemini-cap = 一本筆記本的來源上限（超過時提醒你）：
+zotero-bridge-gemini-cap-hint = Gemini Notebook 每本筆記本約 50 個來源（依方案而異），每個上傳的檔案算一個來源。

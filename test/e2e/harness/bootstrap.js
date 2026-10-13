@@ -19,7 +19,7 @@ const PANE_TABS = {
 	organize: ["fulltext", "colors", "concepts", "classify"],
 	search: ["searchLinks", "ncbi", "pubmedWatch", "citationChase"],
 	appraise: ["screening"],
-	ai: ["ai", "usage"],
+	ai: ["ai", "usage", "geminiNotebook"],
 };
 const E2E_PREF = "extensions.zb-e2e.";
 const ZB_PREF = "extensions.zotero-bridge.";
@@ -359,6 +359,7 @@ const TESTS = [
 				concepts: ["update", "afterSync", "dashboardSection", "runFromMenu", "synthesizeFromMenu"],
 				classify: ["parseRules", "evaluate", "parseTopics", "suggest", "defaultPicks", "planApply", "apply", "undoLast", "readLastRun", "review", "renderReview", "run"],
 				zhMeta: ["analyze", "itemData", "findingsFor", "paneCount", "buildPlan", "defaultPicks", "review", "renderReview", "apply", "undoLast", "readLastRun", "run"],
+				geminiExport: ["folderName", "baseName", "capCheck", "itemMarkdown", "referencesMarkdown", "readmeText", "renderDialog", "exportTo", "dialog", "noticeInfo", "run"],
 				citationChase: ["chaseCollection", "chaseItems", "importChecked"],
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "menuTargets", "relatedFor", "showMore", "openTarget"],
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "batchParams", "parseResults"],
@@ -1685,6 +1686,88 @@ const TESTS = [
 				if (win && !win.closed) win.close();
 				if (Z.readLastRun()) await Z.undoLast({ silent: true });
 				await messy.eraseTx();
+			}
+		},
+	},
+	{
+		name: "匯出給 Gemini Notebook writes Markdown, the APA list and the README into the work dir; the PDF only when asked; the window opens from chrome://zotero-bridge/ (ZB.geminiExport)",
+		needs: ["create items with PDF attachments in the real library"],
+		timeout: 90000,
+		async fn(d) {
+			let G = zb().geminiExport;
+			let C = zb().commands;
+			let out = PathUtils.join(workDir, "gemini");
+			await IOUtils.makeDirectory(out, { createAncestors: true, ignoreExisting: true });
+			let win = null;
+			setPref("feature.geminiExport", true);
+			try {
+				eq(C.isVisible(C.get("gemini-export")), true, "the command shows once its switch is on");
+				d.commands = C.COMMANDS.filter(c => /gemini/.test(c.id)).map(c => c.id);
+				eq(JSON.stringify(d.commands), JSON.stringify(["gemini-export"]), "the only Gemini Notebook command (no upload of any kind)");
+				let items = [ctx.english, ctx.chinese, ctx.book];
+				let noticed = [];
+				// Markdown only (the default)
+				let first = await G.run(items, { name: "E2E Review" }, {
+					dialog: async (info) => {
+						d.dialogInfo = { scopeName: info.scopeName, titles: info.titles.length, pdfs: info.pdfs, cap: info.cap, copyPDF: info.copyPDF };
+						return { folder: out, copyPDF: false, highlights: false };
+					},
+					notice: (info) => {
+						noticed.push({ text: info.text, buttons: info.buttons.slice() });
+						return "close";
+					},
+				});
+				check(first && first.dir, `the export returned ${JSON.stringify(first)}`);
+				d.dir = PathUtils.filename(first.dir);
+				check(/^Gemini Notebook - E2E Review - \d{4}-\d{2}-\d{2}$/.test(d.dir), `folder name ${d.dir}`);
+				let names = (await IOUtils.getChildren(first.dir)).map(p => PathUtils.filename(p)).sort();
+				d.files = names;
+				for (let want of ["00 參考文獻（APA 7）.md", "README - 如何加入 Gemini Notebook.txt", "Lee 2021 - Exercise and falls.md", "Smith 2019 - Nursing research methods.md"]) {
+					check(names.includes(want), `${want} missing in ${JSON.stringify(names)}`);
+				}
+				check(names.some(n => /^陳 2023 - 護理人員跌倒預防衛教之成效\.md$/.test(n)), `the Chinese item's Markdown missing in ${JSON.stringify(names)}`);
+				check(!names.some(n => n.endsWith(".pdf")), "no PDF without 「也複製 PDF」");
+				let lee = await IOUtils.readUTF8(PathUtils.join(first.dir, "Lee 2021 - Exercise and falls.md"));
+				d.leeHead = lee.slice(0, 300);
+				check(lee.startsWith("# Exercise and falls\n"), "the Markdown starts with the title");
+				check(/- DOI：https:\/\/doi\.org\/10\.1016\/j\.gerinurse\.2021\.01\.001/.test(lee), "the DOI line");
+				let refs = await IOUtils.readUTF8(PathUtils.join(first.dir, "00 參考文獻（APA 7）.md"));
+				d.refs = refs.slice(0, 600);
+				check(/陳美玲、林小華、歐陽志明（2023）/.test(refs), "Chinese APA 7 in the reference list");
+				let readme = await IOUtils.readUTF8(PathUtils.join(first.dir, "README - 如何加入 Gemini Notebook.txt"));
+				check(/notebook\.google\.com/.test(readme) && /回到原文核對/.test(readme), "the README says where and to check");
+				eq(JSON.stringify(noticed[0].buttons), JSON.stringify(["open", "close"]), "the dialog after the export: 打開資料夾 and 關閉 only");
+				d.notice = noticed[0].text;
+				// With PDFs
+				let second = await G.run(items, { name: "E2E Review" }, {
+					dialog: async () => ({ folder: out, copyPDF: true, highlights: false }),
+					notice: () => "close",
+				});
+				let names2 = (await IOUtils.getChildren(second.dir)).map(p => PathUtils.filename(p)).sort();
+				d.filesWithPDF = names2;
+				check(second.dir !== first.dir, "a second export on the same day gets its own folder");
+				check(names2.includes("Lee 2021 - Exercise and falls.pdf"), `the text PDF was not copied: ${JSON.stringify(names2)}`);
+				eq(second.pdfs, 2, "PDFs copied (text.pdf and scan.pdf)");
+				// The export window itself, from the registered chrome package, with its stylesheet; 取消 writes nothing
+				let opened = null;
+				let pending = G.dialog({ scopeName: "E2E Review", titles: ["a"], folder: out, folderName: "x", pdfs: 1, cap: 50, copyPDF: false, highlights: false },
+					{ onOpen: (w) => {
+						opened = w;
+					} });
+				win = await waitFor(() => opened, "the export window (chrome://zotero-bridge/content/gemini-export.xhtml)", 30000);
+				let root = win.document.getElementById(G.DIALOG_ROOT);
+				eq(win.document.documentURI, G.DIALOG_URL, "export window URL");
+				d.optionDisplay = win.getComputedStyle(root.querySelector(".zb-ge-option")).display;
+				eq(d.optionDisplay, "grid", "display of .zb-ge-option (is gemini-export.css loaded?)");
+				d.cap = root.querySelector(".zb-ge-cap").textContent;
+				root.querySelector(".zb-cl-cancel").click();
+				eq(await pending, null, "dialog() after 取消");
+				await waitFor(() => win.closed, "the export window to close after 取消", 10000);
+			}
+			finally {
+				if (win && !win.closed) win.close();
+				Zotero.Prefs.clear(ZB_PREF + "feature.geminiExport", true);
+				for (let key of ["geminiExport.folder", "geminiExport.copyPDF", "geminiExport.highlights"]) Zotero.Prefs.clear(ZB_PREF + key, true);
 			}
 		},
 	},

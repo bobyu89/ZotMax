@@ -385,7 +385,7 @@ test("catalog: unique IDs, every command and variant runnable, real switches, ke
 	same(C.GROUPS.map(g => g.label), ["同步", "整理", "找文獻", "篩選與評讀", "AI 輔助與寫作"]);
 	for (let g of C.GROUPS) assert.equal(ftlText(zh, g.l10n), g.label);
 	same(C.SECTIONS.map(s => s.id), ["features", "sync", "obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography",
-		"concepts", "fulltext", "colors", "classify", "searchLinks", "ncbi", "pubmedWatch", "citationChase", "screening", "ai", "usage"]);
+		"concepts", "fulltext", "colors", "classify", "searchLinks", "ncbi", "pubmedWatch", "citationChase", "screening", "ai", "usage", "geminiNotebook"]);
 	for (let s of C.SECTIONS) {
 		assert.equal(ftlText(zh, s.l10n), s.label, `section ${s.id}`);
 		assert.ok(ftlText(en, s.l10n), `en-US section ${s.id}`);
@@ -482,14 +482,14 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"zotero-bridge-classify-tools", "zotero-bridge-cmd-zh-meta", "zotero-bridge-search-menu ▸", "zotero-bridge-toolbar-chase-items", "zotero-bridge-toolbar-screen ▸",
 		"zotero-bridge-cmd-appraisal-coach",
-		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft",
+		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-cmd-gemini-export",
 	]);
 	same(shown(collMenu, cctx).filter(x => !x.startsWith("#") && x !== "—"), [
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"zotero-bridge-classify-tools", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
 		"zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
 		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary",
-		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft",
+		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-cmd-gemini-export",
 	]);
 	// Tools: 設定… and 快速指令… always; the batch entries only while they apply
 	let tools = env.menus.find(o => o.menuID === "zotero-bridge-tools").menus;
@@ -552,7 +552,7 @@ test("right-click commands act on what was right-clicked, as the old entries did
 	let env = await setup();
 	env.ZB.features.applyPreset("advanced");
 	let { a, b, note, collection, other } = papers(env);
-	let calls = spies(env, ["main.run", "main.runSynthesis", "reviewDraft.run", "classify.run", "zhMeta.run", "screening.setDecision", "screening.dedupCollection",
+	let calls = spies(env, ["main.run", "main.runSynthesis", "reviewDraft.run", "classify.run", "zhMeta.run", "geminiExport.run", "screening.setDecision", "screening.dedupCollection",
 		"screening.generateReport", "citationChase.chaseItems", "citationChase.chaseCollection", "citationChase.importChecked",
 		"bibliography.exportCollections", "appraisalForm.exportCollections", "searchLinks.showMore", "searchLinks.openTarget"]);
 	let itemMenu = zbSubmenu(env, "zotero-bridge-item");
@@ -578,6 +578,9 @@ test("right-click commands act on what was right-clicked, as the old entries did
 	same(await fire(entry(collMenu, "zotero-bridge-classify-tools"), cctx), ["classify.run", [a, b, b]]);
 	same(await fire(entry(itemMenu, "zotero-bridge-cmd-zh-meta"), ctx), ["zhMeta.run", [a, note, b]]);
 	same(await fire(entry(collMenu, "zotero-bridge-cmd-zh-meta"), cctx), ["zhMeta.run", [a, b, b]]);
+	// 匯出給 Gemini Notebook: right-clicked items as 「選取的文獻」, a right-clicked collection by its name
+	same(await fire(entry(itemMenu, "zotero-bridge-cmd-gemini-export"), ctx), ["geminiExport.run", [a, note, b], { name: "" }]);
+	same(await fire(entry(collMenu, "zotero-bridge-cmd-gemini-export"), cctx), ["geminiExport.run", [a, b, b], { name: "跌倒回顧、睡眠" }]);
 	same(await fire(entry(itemMenu, "zotero-bridge-toolbar-chase-items"), ctx), ["citationChase.chaseItems", [a, note, b], collection]);
 	same(await fire(entry(collMenu, "zotero-bridge-chase-tools-included"), cctx), ["citationChase.chaseCollection", collection]);
 	same(await fire(entry(collMenu, "zotero-bridge-chase-tools-import"), cctx), ["citationChase.importChecked", collection]);
@@ -643,6 +646,28 @@ test("toolbar and palette commands keep the selection messages; Tools entries ru
 	same(env.errors, []);
 });
 
+test("Gemini Notebook: the export follows the toolbar selection (items, else the collection) and hides while switched off", async () => {
+	let env = await setup();
+	let { ZB } = env;
+	let C = ZB.commands;
+	let { a, b, collection } = papers(env);
+	let calls = spies(env, ["geminiExport.run"]);
+	assert.equal(C.isVisible(C.get("gemini-export")), false, "off in 研究生引導");
+	ZB.features.applyPreset("advanced");
+	assert.equal(C.isVisible(C.get("gemini-export")), true);
+	// Items selected: 「選取的文獻」; nothing selected but a collection: that collection by name
+	env.selection.items = [a, b];
+	env.selection.collection = collection;
+	await C.execute("gemini-export", C.fromWindow(env.win, "toolbar"));
+	same(calls.pop(), ["geminiExport.run", [a, b], { name: "" }]);
+	env.selection.items = [];
+	await C.execute("gemini-export", C.fromWindow(env.win, "toolbar"));
+	same(calls.pop(), ["geminiExport.run", [a, b], { name: "跌倒回顧" }]);
+	// No upload command of any kind: ZotMax only writes files
+	assert.ok(!C.COMMANDS.some(c => /upload/.test(c.id)));
+	same(env.errors, []);
+});
+
 // ---------- 快速指令 ----------
 
 test("palette search: Chinese and English keywords, case- and width-insensitive, multi-word and fuzzy", async () => {
@@ -688,7 +713,7 @@ test("palette search: Chinese and English keywords, case- and width-insensitive,
 	let all = C.search(entries, "  ");
 	assert.equal(all.length, entries.length);
 	assert.equal(all[0].id, "sync");
-	assert.equal(all.at(-1).id, "settings:usage");
+	assert.equal(all.at(-1).id, "settings:geminiNotebook");
 	// Switched-off commands are found too, after the ones that can run when they score the same
 	env.ZB.features.setEnabled("synthesis", false);
 	let off = C.paletteEntries(C.fromWindow(env.win, "palette"));

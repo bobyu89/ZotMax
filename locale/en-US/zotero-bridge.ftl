@@ -582,3 +582,17 @@ zotero-bridge-cmd-zh-meta-undo =
     .label = Undo Last Chinese Data Fix
 zotero-bridge-pane-zh-meta = Chinese data: { $count } things to check
 zotero-bridge-pane-zh-meta-review = Review and fix…
+
+## 匯出給 Gemini Notebook (content/gemini-export.js): the switch, the commands, the settings section
+zotero-bridge-feature-gemini-export = Export for Gemini Notebook
+zotero-bridge-feature-gemini-export-desc = Exports the selected items or a collection as a folder (full text as Markdown, APA references, a how-to) to use as Gemini Notebook sources; it only writes files on your computer, and you upload them yourself.
+zotero-bridge-cmd-gemini-export =
+    .label = Export for Gemini Notebook (Selected Items or Collection)…
+zotero-bridge-section-gemini-notebook = Gemini Notebook
+zotero-bridge-gemini-heading = Gemini Notebook
+zotero-bridge-gemini-intro = “Export for Gemini Notebook…” creates a folder on your computer: one full-text Markdown file per paper, a reference list (APA 7) and a how-to. You upload the files yourself at notebook.google.com; ZotMax sends nothing.
+zotero-bridge-gemini-folder = Export to (empty = Downloads):
+zotero-bridge-gemini-folder-pick =
+    .label = Choose Folder…
+zotero-bridge-gemini-cap = Sources per notebook before you are warned:
+zotero-bridge-gemini-cap-hint = Gemini Notebook takes about 50 sources per notebook (it depends on your plan); each uploaded file is one source.
