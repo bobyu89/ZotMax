@@ -1840,14 +1840,14 @@ const TESTS = [
 				eq(info.folderSource, "vault", "into the vault's Reviews folder");
 				check(result && result.dir === PathUtils.join(ctx.noteDir, "Reviews"), `the export went to ${result && result.dir}`);
 				eq(JSON.stringify(result.files), JSON.stringify(["E2E Review PICO 表.md", "E2E Review PICO 表.csv", "E2E Review PICO 表.html"]), "files");
-				eq(result.noData, 1, "the Chinese paper has no AI note");
+				eq(result.noData, 2, "the stubbed AI note has no structured data and the Chinese paper has no AI note: both rows are empty");
 				let note = await IOUtils.readUTF8(PathUtils.join(result.dir, "E2E Review PICO 表.md"));
 				d.noteHead = note.slice(0, 400);
 				check(/^---\ntitle: "E2E Review：PICO 表"\ntype: "pico-table"\n/.test(note), "frontmatter");
 				check(note.includes("## 本題 PICO") && note.includes("## PICO 表（2 篇）"), "the card and the table");
 				check(/\| \[\[Zotero\/[^\]|]+\\\|Lee & 陳, 2021\]\] \| /.test(note) || /\| Lee & 陳, 2021 \| /.test(note), `the English item's row: ${note.split("## PICO 表")[1]}`);
-				check(/P[✓？] I[✓？] C[✓？—] O[✓？]/.test(note), "the 對照本題 column");
-				check(note.includes("## 沒有結構化資料的文獻"), "the Chinese paper is listed without data");
+				check(/\| 對照本題 \|/.test(note), "the 對照本題 column (no row has data, so it only holds —)");
+				check(note.includes("## 沒有結構化資料的文獻"), "both papers are listed without data");
 				check(note.trimEnd().endsWith("## ✍️ 我的筆記"), "the user's section at the end");
 				let csv = await IOUtils.readUTF8(PathUtils.join(result.dir, "E2E Review PICO 表.csv"));
 				check(csv.startsWith("\ufeff文獻,作者,年份"), "CSV with a BOM");
@@ -2584,8 +2584,11 @@ const TESTS = [
 					F.setEnabled("appraisalForm", false);
 					F.setEnabled("screening", false);
 					let menu = await openToolbarMenu(button);
+					check(menu.groups.includes("appraise"), `toolbar menu keeps 篩選與評讀 while PICO is on: ${JSON.stringify(menu.groups)}`);
+					F.setEnabled("pico", false);
+					menu = await openToolbarMenu(button);
 					d.toolbar.custom = menu.groups;
-					check(!menu.groups.includes("appraise"), `toolbar menu groups with 篩選 and 評讀表 off: ${JSON.stringify(menu.groups)}`);
+					check(!menu.groups.includes("appraise"), `toolbar menu groups with 篩選, 評讀表 and PICO off: ${JSON.stringify(menu.groups)}`);
 				}
 				// The PubMed watch timer only runs while the feature is on (no watches are saved: nothing is fetched)
 				setPref("pubmedWatch.autoCheck", true);
