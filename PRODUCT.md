@@ -33,6 +33,7 @@ ZotMax 是 Zotero 10 的外掛（bootstrap plugin），介面跑在 Zotero 內�
 - 筆記端：Obsidian vault（Markdown、frontmatter、Bases）或 Notion 資料庫。
 - 研究流程：PICO 問題 → 搜尋（PubMed、CINAHL、Cochrane、華藝等）→ 篩選（PRISMA 2020）→ 評讀（CASP / JBI）→ 整合 → 寫作 → 指導教授會議。
 - AI 使用者自備 API key（Claude 或 OpenAI），要花錢，所以費用要透明。
+- 外部 AI 工具：有些使用者把文獻放進 Gemini Notebook（原 NotebookLM）問問題。個人帳號沒有官方 API，所以 ZotMax 只匯出檔案（全文 Markdown、APA 參考文獻、使用說明），上傳由使用者自己來。
 
 ## Capabilities and Constraints
 
@@ -41,6 +42,7 @@ ZotMax 是 Zotero 10 的外掛（bootstrap plugin），介面跑在 Zotero 內�
 - 設定頁必須用 Zotero 的設定頁機制（XHTML fragment + `preferences.js`），不能載入外部字型或 CDN。
 - 網站是純靜態 HTML/CSS/JS，不能放 API key。
 - 已發布版本的 `updates.json` 項目不可更動。
+- 給外部 AI 工具的匯出（匯出給 Gemini Notebook）只寫入使用者電腦上的檔案，不代為上傳；要說清楚上傳就是把全文交給 Google，AI 的回答要回原文核對。
 
 ## Brand Commitments
 

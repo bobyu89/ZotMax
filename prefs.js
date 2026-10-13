@@ -113,7 +113,7 @@ pref("extensions.zotero-bridge.searchLinks.meshHelper", true);
 // images.export. features.version: the one-time migrations done (0 = none yet; 1 turns everything on for
 // profiles that used the plugin before the switches existed; 2 gives 進階 profiles the v0.10.0 switches:
 // 全文筆記, 文獻自動分類, 工具列按鈕, AI 標重點 and AI 主題分類; 3 the v0.12.0 switches: 評讀陪練;
-// 4 the v0.14.0 switch: 中文文獻補強)
+// 4 the v0.14.0 switch: 中文文獻補強; 5 the v0.17.0 switch: 匯出給 Gemini Notebook)
 pref("extensions.zotero-bridge.features.version", 0);
 pref("extensions.zotero-bridge.feature.sync", true);
 pref("extensions.zotero-bridge.feature.bibliography", true);
@@ -136,6 +136,7 @@ pref("extensions.zotero-bridge.feature.toolbarButton", true);
 pref("extensions.zotero-bridge.feature.appraisalCoach", false);
 pref("extensions.zotero-bridge.feature.statsExplainer", false);
 pref("extensions.zotero-bridge.feature.zhMeta", true);
+pref("extensions.zotero-bridge.feature.geminiExport", false);
 // Settings pane (content/preferences.js): the tab chosen last, and a section (data-zb-section ID, e.g.
 // "notion") to open the next time the pane is on screen; the pane clears it once it has opened it
 pref("extensions.zotero-bridge.prefs.lastTab", "features");
@@ -165,3 +166,10 @@ pref("extensions.zotero-bridge.setup.done", false);
 // 中文文獻補強 (content/zh-meta.js): what the last 套用勾選的修正 changed (JSON: per item the fields,
 // authors and item type before and after), for 復原上一次中文文獻修正
 pref("extensions.zotero-bridge.zhMeta.lastRun", "");
+// 匯出給 Gemini Notebook (content/gemini-export.js): where the export folder goes (empty = Downloads), how many
+// sources a notebook takes before the window warns (Gemini Notebook: about 50, varies by plan), the last choices
+// of 「也複製 PDF」 and 「我的劃線與評讀」
+pref("extensions.zotero-bridge.geminiExport.folder", "");
+pref("extensions.zotero-bridge.geminiExport.cap", "50");
+pref("extensions.zotero-bridge.geminiExport.copyPDF", false);
+pref("extensions.zotero-bridge.geminiExport.highlights", false);

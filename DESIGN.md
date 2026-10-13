@@ -118,6 +118,10 @@ components:
     # one name in the 設定精靈's step list; the current one Ink with a 2px {colors.accent} rule, like settings-tab-selected
     textColor: "{colors.text-muted}"
     padding: "0.25em 0 0.5em"
+  export-option:
+    # a choice in the 匯出給 Gemini Notebook window: native checkbox, label, Pencil hint indented under it
+    textColor: "{colors.text}"
+    padding: "0.5em 0 0"
   setup-option:
     # a choice in the 設定精靈 (mode, where notes go): the preset-option component
     backgroundColor: "{colors.surface}"
@@ -141,7 +145,7 @@ The surface is **Operate** mode. A nursing graduate student opens settings to ge
 - Sizes in `em`, so Zotero's font-size setting scales the whole pane.
 - Settings by workflow: a search box, then six tabs in research order (功能 · 同步 · 整理 · 找文獻 · 篩選與評讀 · AI); every section has a stable ID other code can open.
 - Progressive disclosure twice over: sections of a switched-off feature disappear, and expert options sit behind a closed `<details>`.
-- Standard controls only: native checkboxes, radios, buttons, XUL menulists. No custom switches, no modals; the plugin's own windows are the 文獻自動分類 review, 快速指令 and the 設定精靈 (opened by itself once on a fresh install, otherwise on request), all non-modal.
+- Standard controls only: native checkboxes, radios, buttons, XUL menulists. No custom switches, no modals; the plugin's own windows are the 文獻自動分類 and 中文文獻補強 reviews, the 匯出給 Gemini Notebook window, 快速指令 and the 設定精靈 (opened by itself once on a fresh install, otherwise on request), all non-modal.
 - One command catalog: the toolbar menu, the right-click menus and 快速指令 show the same commands, in the same groups, with the same words; the ZotMax panel's 動作 runs a few of the same commands for one item.
 - Traditional Chinese copy; method terms (PICO, MeSH, CASP, JBI, PRISMA) stay in English.
 
@@ -206,7 +210,7 @@ Zotero's settings window already has a left sidebar of panes, so the plugin's ow
 | 整理 `organize` | 全文筆記 `fulltext` · 劃線顏色與意義 `colors` · 概念卡片 `concepts` · 文獻自動分類 `classify` |
 | 找文獻 `search` | 醫學文獻快速搜尋 `searchLinks` · NCBI `ncbi` · PubMed 追蹤 `pubmedWatch` · 引文追蹤 `citationChase` |
 | 篩選與評讀 `appraise` | 篩選 `screening` |
-| AI `ai` | AI 服務 `ai` · 本月 AI 用量 `usage` |
+| AI `ai` | AI 服務 `ai` · 本月 AI 用量 `usage` · Gemini Notebook `geminiNotebook` |
 
 - **Section IDs are an API.** Other code (the toolbar's command palette) links to them; `sync` names the 同步 tab itself (no single section is "sync"). Rename one only together with every caller.
 - **Opening a section:** `ZoteroBridgePrefs.showSection(id)` selects the tab, scrolls the section to the top, gives it a 2-second Accent outline on a Wash background and moves focus to its heading. A section hidden because its feature is off opens 功能 instead, at the switch to turn on (or the switch it needs first), with one line under it: where the settings will appear, and 「前往設定」 once the switch is on. A tab ID opens that tab.
@@ -287,6 +291,15 @@ The second window of the same kind, for the same reason: many fields of many ite
 - **Foot:** the live count (`role="status"`: 「已勾選 6 項修正，會改動 1 篇文獻。另有 1 項資料要你自己補（不會自動填入）。」), 「取消」 and 「套用勾選的修正」 (600, disabled while nothing is ticked). Esc cancels; a decision disables both.
 - **Words:** say what is wrong and what will be written, never 「錯誤」 about the user; uncertain fixes say what to check in the original (「請看原文」).
 
+### Export window (匯出給 Gemini Notebook, `gemini-export.xhtml`, `gemini-export.css`)
+The third window of the review kind, because a folder is about to be written and the user decides where and what goes in. It loads `classify-review.css` (tokens, head, list, foot, focus) and adds only its rows (`gemini-export.css`); the root carries both classes (`.zb-classify .zb-gemini`), about 620 × 600.
+- **Head:** 「匯出給 Gemini Notebook」 (600), then one Pencil sentence that carries the promise: only a folder on this computer, nothing is uploaded, the user adds the files to Gemini Notebook themselves.
+- **List:** three blocks with a Hairline between them, each with a 600 title. What: 「<collection or 選取的文獻>：12 篇文獻」, a Pencil line on what each file holds, the titles folded in a `<details>`. Where: the destination path in a Hairline-bordered box (it wraps, never cut) beside a native 「選擇資料夾…」 (Zotero's FilePicker), then 「會在這裡建立「Gemini Notebook - … - date」資料夾。」 in Pencil. Also: two native checkboxes in a two-column grid, each with its label and a Pencil hint (`aria-describedby`): 「也複製 PDF（n 篇有 PDF 檔）」 (off by default; disabled when there is no PDF) and 「加入「我的劃線與評讀」」 (off by default).
+- **Source count:** one `role="status"` line under the options, recounted on every tick: 「會產生 n 個來源檔案；Gemini Notebook 每本筆記本約 50 個來源（依方案而異）。」 Over the cap (設定 → AI → Gemini Notebook) the words say so and what to do, set in Ink at 600; no red, no icon.
+- **Foot:** 「只寫入你電腦上的檔案。」, then 「取消」 and 「匯出」 (600, disabled without a folder). Esc cancels; a decision disables the buttons. Focus starts on 「匯出」.
+- **After:** a native `confirmEx`: where the folder is, how many files to upload, the notes (scans with only an abstract, PDFs that couldn't be copied, over the cap), 「沒有上傳任何東西」, and 「打開資料夾」 (default) / 「關閉」.
+- **Files:** `Author Year - Short title.md` per item (the bibliographic head, then the full text from the 全文筆記 pipeline, or the abstract with the reason), `00 參考文獻（APA 7）.md`, `01 我的劃線與評讀.md` (only when ticked and the user has highlights or a form of their own; labelled as the user's notes), the PDFs when ticked, `README - 如何加入 Gemini Notebook.txt`. The README and the dialog say plainly that uploading hands the papers to Google and that AI answers must be checked against the papers.
+
 ### Toolbar button (`content/toolbar.js`, `toolbar.css`)
 The mouse way into every command, next to the items it acts on. It is a guest in Zotero's own toolbar, so it borrows everything and adds only its icon.
 - **Place:** the items toolbar (`#zotero-items-toolbar`, above the item list), right after Zotero's 「新增筆記」: that row holds the buttons that act on the selected items, before the search box. Not the tab bar (window-level: tabs, sync) and not the collections toolbar.
@@ -301,7 +314,7 @@ The mouse way into every command, next to the items it acts on. It is a guest in
 The single list of everything the plugin can be asked to do; every surface is generated from it, so a command reads and acts the same wherever it is found.
 - **Entry:** id, l10n ID and its zh-TW label (identical to the FTL), workflow group, the feature switches that show it (any of them), what it acts on (selected items, the selected collection, either, or nothing), the right-click surfaces it belongs to, an extra live condition (a batch to resume, a run to undo), Chinese and English search keywords, and the function it runs, or variants (decisions, databases, exclusion reasons).
 - **Surfaces:** the toolbar menu and 快速指令 offer every command, plus 「設定精靈…」 (outside the groups, never switched off: next to 設定… in the menu, first in 快速指令's 設定 group) and 「回報問題…」「試用回饋…」 (the same, right before 設定精靈…); the ZotMax panel's 動作 a fixed few item commands (with short labels of their own); the item menu the ones that act on items; the collection menu the ones that act on a collection; the Tools menu only 「ZotMax 設定…」, 「ZotMax 快速指令…」 and the batch entries while they apply.
-- **Settings destinations:** the sections of the settings pane by their stable IDs (`features, sync, obsidian, notion, routing, autosync, status, apaZh, bibliography, concepts, fulltext, colors, classify, searchLinks, ncbi, pubmedWatch, citationChase, screening, ai, usage`), opened through `prefs.pendingSection`, which the pane reads.
+- **Settings destinations:** the sections of the settings pane by their stable IDs (`features, sync, obsidian, notion, routing, autosync, status, apaZh, bibliography, concepts, fulltext, colors, classify, searchLinks, ncbi, pubmedWatch, citationChase, screening, ai, usage, geminiNotebook`), opened through `prefs.pendingSection`, which the pane reads.
 
 ### Right-click menus (`content/menus.js`)
 - **One entry each:** the item menu and the collection menu hold exactly one 「ZotMax ▸」 submenu (the plugin's icon), never a row of separate plugin entries.

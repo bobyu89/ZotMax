@@ -1275,6 +1275,17 @@
 			input.dispatchEvent(new Event("input"));
 		},
 
+		/** Gemini Notebook: the default export folder. */
+		async pickGeminiFolder() {
+			const { FilePicker } = ChromeUtils.importESModule("chrome://zotero/content/modules/filePicker.mjs");
+			let fp = new FilePicker();
+			fp.init(window, "匯出給 Gemini Notebook 的資料夾", fp.modeGetFolder);
+			if (await fp.show() !== fp.returnOK) return;
+			let input = document.getElementById("zb-gemini-folder");
+			input.value = fp.file;
+			input.dispatchEvent(new Event("input"));
+		},
+
 		/** 「把 Notion 欄位改成中文」: main.js lists the renames and asks before changing anything. */
 		async renameNotionColumns() {
 			let status = document.getElementById("zb-notion-status");

@@ -355,7 +355,8 @@ test("the reader popup gets 「ZotMax：解釋統計」; a click explains the se
 	assert.deepEqual([...entry.querySelectorAll(".zb-st-terms dt")].map(e => e.textContent), ["OR", "95% CI", "NNT"]);
 	let nnt = entry.querySelectorAll(".zb-st-terms dd")[2];
 	assert.equal(nnt.textContent, "需治數。 在這段裡：大約 ［數字已移除］ 人運動就能少一人跌倒。");
-	assert.doesNotMatch(entry.textContent, /\b13\b|31%/, "the invented numbers are gone");
+	// (today's date in the model · date line is not one of them: on the 13th it would match)
+	assert.doesNotMatch(entry.textContent.replace(/\d{4}-\d{2}-\d{2}/g, ""), /\b13\b|31%/, "the invented numbers are gone");
 	assert.match(entry.textContent, /0\.62/, "the text's numbers stay");
 	let warn = p => entry.querySelector(`[data-zb-part="${p}"] [data-zb-warning]`);
 	assert.equal(warn("terms").textContent, "⚠ 這個數字不在原文裡，已移除");

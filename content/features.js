@@ -33,7 +33,7 @@
 	const PREF = "extensions.zotero-bridge.";
 	// Bumped when a later version needs another one-time migration (see MIGRATIONS)
 	const MIGRATION_PREF = "features.version";
-	const MIGRATION_VERSION = 4;
+	const MIGRATION_VERSION = 5;
 
 	const GROUPS = [
 		{ id: "organize", label: "整理與同步", l10n: "zotero-bridge-feature-group-organize" },
@@ -157,6 +157,10 @@
 			usesAI: true, usesNetwork: true, requires: ["aiNotes"],
 			label: "讀懂統計",
 			desc: "在 PDF 選一段文字，AI 用白話解釋裡面的統計（OR、信賴區間、p 值…）和要注意的地方；每個數字都和原文核對。" },
+		// Feeds an external AI tool, so it sits with the AI features; it neither calls an AI nor goes online
+		{ id: "geminiExport", group: "ai", pref: "feature.geminiExport", presets: { guided: false, advanced: true }, since: 5,
+			label: "匯出給 Gemini Notebook",
+			desc: "把選取的文獻或分類匯出成一個資料夾（全文 Markdown、APA 參考文獻、使用說明）給 Gemini Notebook 當來源；只寫入你電腦上的檔案，上傳由你自己來。" },
 	];
 
 	for (let f of FEATURES) {
@@ -329,6 +333,8 @@
 		{ version: 3, run: s => ({ added: FEATURES.filter(f => f.since === 3).map(f => f.id), newSwitches: migrateNewSwitches(s, 3) }) },
 		// v0.14.0: 中文文獻補強 (every switch marked since: 4), the same way as step 2
 		{ version: 4, run: s => ({ added: FEATURES.filter(f => f.since === 4).map(f => f.id), newSwitches: migrateNewSwitches(s, 4) }) },
+		// v0.17.0: 匯出給 Gemini Notebook (every switch marked since: 5), the same way as step 2
+		{ version: 5, run: s => ({ added: FEATURES.filter(f => f.since === 5).map(f => f.id), newSwitches: migrateNewSwitches(s, 5) }) },
 	];
 
 	/**
