@@ -251,6 +251,24 @@ async function listFiles(dir) {
 	}
 }
 
+/** findNote() in dir and its subfolders (the organized layout puts notes under 10 文獻/<collection>). */
+async function findNoteDeep(dir, key, depth = 0) {
+	let hit = await findNote(dir, key);
+	if (hit || depth > 6) return hit;
+	for (let path of await listFiles(dir)) {
+		if (PathUtils.filename(path).startsWith(".") || /\.[a-z0-9]+$/i.test(path)) continue;
+		try {
+			if ((await IOUtils.stat(path)).type !== "directory") continue;
+		}
+		catch (e) {
+			continue;
+		}
+		hit = await findNoteDeep(path, key, depth + 1);
+		if (hit) return hit;
+	}
+	return null;
+}
+
 /** The vault note whose frontmatter has zotero_key "library/<key>". */
 async function findNote(dir, key) {
 	for (let path of await listFiles(dir)) {
@@ -361,6 +379,7 @@ const TESTS = [
 				zhMeta: ["analyze", "itemData", "findingsFor", "paneCount", "buildPlan", "defaultPicks", "review", "renderReview", "apply", "undoLast", "readLastRun", "run"],
 				obsidianStyle: ["css", "versionOf", "enableIn", "install", "afterSync", "describe"],
 				topics: ["groupTopics", "topicStats", "topicSection", "homeSection", "buildPage", "writeAll", "afterDashboard"],
+				vaultLayout: ["planMigration", "linkMap", "rewriteLinks", "plan", "apply", "detect", "relocate", "afterMoves", "run"],
 				grade: ["normalizeTable", "certainty", "hints", "summary", "sofMarkdown", "sofCSV", "sofHTML", "renderWindow", "tableFor", "saveTable", "studyRows", "dialog", "writeFiles", "open"],
 				wordStyle: ["styleInfo", "isNewer", "describe", "init", "install", "refreshInstalled", "status", "runFromMenu"],
 				geminiExport: ["folderName", "baseName", "capCheck", "itemMarkdown", "referencesMarkdown", "readmeText", "renderDialog", "exportTo", "dialog", "noticeInfo", "run",
@@ -906,6 +925,8 @@ const TESTS = [
 			ctx.vault = vault;
 			ctx.noteDir = PathUtils.join(vault, "Zotero");
 			setPref("obsidian.vaultPath", vault);
+			// The tests up to 整理 vault check the flat layout (before 0.23.0); that test moves this vault over
+			setPref("obsidian.structure", "flat");
 			setPref("export.bibtex", true);
 			// A red highlight on the text PDF: coloured in place in the full-text note (fulltext.js)
 			let highlight = new Zotero.Item("annotation");
@@ -2040,6 +2061,48 @@ const TESTS = [
 		},
 	},
 	{
+		name: "整理 vault: the flat vault the tests above wrote moves to 10 文獻/<collection>, 00 首頁 and 90 系統 in the real profile; the user's links follow; the next sync writes in place (ZB.vaultLayout)",
+		needs: ["sync to Obsidian writes notes, frontmatter, .base and Chinese APA (ZB.main.run, ai: none)"],
+		async fn(d) {
+			let VL = zb().vaultLayout;
+			let root = PathUtils.join(ctx.vault, "Zotero");
+			let enName = PathUtils.filename(ctx.notes.english.path).replace(/\.md$/, "");
+			// A note of the user's linking to the English note and its full text
+			let mine = PathUtils.join(ctx.vault, "我的想法.md");
+			await IOUtils.writeUTF8(mine, `[[Zotero/${enName}|Lee]] 和 [[Zotero/全文/${enName}|全文]]\n`);
+			let asked = "";
+			let result = await VL.run({ confirm: (t) => { asked = t; return true; } });
+			d.asked = asked;
+			check(result, "整理 vault did not run");
+			d.result = { moved: result.moved, links: result.links, failed: result.failed.map(f => `${f.from.join("/")}: ${f.error}`) };
+			check(!result.failed.length, `moves failed: ${d.result.failed.join("; ")}`);
+			check(/會在「Zotero」裡搬動 \d+ 個檔案/.test(asked), `the plan text: ${asked}`);
+			eq(Zotero.Prefs.get(ZB_PREF + "obsidian.structure", true), "organized", "obsidian.structure after 整理 vault");
+			// Its folder: 10 文獻/<its deepest collection> (E2E Review, unless a test above left it in a sub-collection)
+			let en = await findNoteDeep(PathUtils.join(root, "10 文獻"), ctx.english.key);
+			check(en, "no English note under Zotero/10 文獻");
+			let dir = PathUtils.parent(en.path);
+			let rel = dir.slice(ctx.vault.length + 1).split(/[\\/]/).join("/");
+			d.folder = rel;
+			check(rel.startsWith("Zotero/10 文獻/E2E Review"), `the English note went to ${rel}`);
+			check(await IOUtils.exists(PathUtils.join(dir, `${enName} · 全文.md`)), "the full text did not move next to its note");
+			eq(await IOUtils.readUTF8(mine), `[[${rel}/${enName}|Lee]] 和 [[${rel}/${enName} · 全文|全文]]\n`, "the user's links");
+			for (let f of ["Zotero 文獻庫.base", "references.json"]) check(await IOUtils.exists(PathUtils.join(root, "90 系統", f)), `no 90 系統/${f}`);
+			let top = (await listFiles(root)).map(p => PathUtils.filename(p)).sort();
+			d.top = top;
+			check(!top.some(n => /\.md$/.test(n) && !/^0\d /.test(n)), `literature notes left in Zotero/: ${top.join(", ")}`);
+			check(!top.includes("全文") && !top.includes("Reviews"), `old folders left: ${top.join(", ")}`);
+			// The real sync afterwards: in place, the full-text link and the navigation bar in the organized layout
+			await zb().main.run([ctx.english], { targets: ["obsidian"], ai: "none" });
+			let again = await findNote(dir, ctx.english.key);
+			eq(again && again.path, en.path, "the note after the next sync");
+			check(again.text.includes(`fulltext: "[[${rel}/${enName} · 全文]]"`), "the note's full-text link after the sync");
+			check(/^> \[!zm-nav\] /m.test(again.text), "no navigation bar after the sync");
+			let logs = (await listFiles(PathUtils.join(root, "90 系統"))).map(p => PathUtils.filename(p)).filter(n => n.startsWith("整理紀錄"));
+			eq(logs.length, 1, "整理紀錄 notes");
+		},
+	},
+	{
 		name: "設定精靈 opens from its command, points Obsidian at a vault, syncs one item (試一次, no AI), 完成 sets setup.done and closes it",
 		needs: ["create items with PDF attachments in the real library"],
 		timeout: 120000,
@@ -2129,7 +2192,7 @@ const TESTS = [
 				d.result = await waitFor(() => $("zb-su-try-result").getAttribute("data-zb-result"), "the 試一次 sync to finish", 90000);
 				d.resultText = $("zb-su-try-result").textContent;
 				eq(d.result, "ok", `試一次 result (${d.resultText})`);
-				let note = await findNote(PathUtils.join(vault, "Zotero"), ctx.english.key);
+				let note = await findNoteDeep(PathUtils.join(vault, "Zotero"), ctx.english.key);
 				check(note, `no literature note for the e2e item in ${PathUtils.join(vault, "Zotero")}`);
 				d.note = PathUtils.filename(note.path);
 				check(d.resultText.includes(d.note.replace(/\.md$/, "")), `the result line does not name the note: ${d.resultText}`);

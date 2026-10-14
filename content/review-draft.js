@@ -377,12 +377,14 @@
 
 	/**
 	 * Where the draft goes and how Pandoc reaches the bibliography from there.
-	 * @param {string[]} folderParts the vault's default Zotero folder (references.json lives there)
+	 * @param {string[]} folderParts the vault's default Zotero folder (references.json lives there in the flat layout)
+	 * @param {{ dirParts?: string[], referencesParts?: string[] }} layout the drafts folder and the folder of
+	 *   references.json in the vault layout (core.js); flat (Drafts/ and folderParts) without it
 	 */
-	function draftPaths(folderParts, name) {
+	function draftPaths(folderParts, name, layout = {}) {
 		let base = `文獻探討-${core.sanitizeFilename(name)}`;
-		let dirParts = [...folderParts, DRAFTS_FOLDER];
-		let referencesRel = relativePath(dirParts, [...folderParts, REFERENCES_FILE]);
+		let dirParts = layout.dirParts || [...folderParts, DRAFTS_FOLDER];
+		let referencesRel = relativePath(dirParts, [...(layout.referencesParts || folderParts), REFERENCES_FILE]);
 		// apa.csl in the vault root, as the README's Pandoc section says
 		let cslRel = relativePath(dirParts, ["apa.csl"]);
 		let fileName = base + ".md";
@@ -859,7 +861,8 @@ end
 				line.setText("寫入 Obsidian…");
 				try {
 					let folderParts = core.splitFolder(settings.defaults.obsidianFolder);
-					meta.paths = draftPaths(folderParts, where.name);
+					meta.paths = draftPaths(folderParts, where.name,
+						{ dirParts: core.vaultFolder(settings, "drafts"), referencesParts: core.vaultFolder(settings, "system") });
 					let dir = PathUtils.join(settings.vaultPath, ...meta.paths.dirParts);
 					await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
 					let path = PathUtils.join(dir, meta.paths.fileName);
@@ -870,7 +873,7 @@ end
 					let missingKeys = entries.filter(e => !e.citekey).map(e => e.citation);
 					if (missingKeys.length) notes.push(`⚠️ 沒有 citekey 的文獻（Pandoc 無法引用）：${missingKeys.join("; ")}`);
 					try {
-						notes.push(await ensureReferences(settings, folderParts, entries));
+						notes.push(await ensureReferences(settings, core.vaultFolder(settings, "system"), entries));
 					}
 					catch (e) {
 						Zotero.logError(e);

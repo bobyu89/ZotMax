@@ -68,7 +68,8 @@ function makeEnv({ prefs = {}, files = {}, logins = [] } = {}) {
 		getAttachments() { return []; }
 	}
 
-	let prefStore = Object.assign({}, prefs);
+	// The suites below were written for the flat vault layout; vault-layout-smoke covers the organized one
+	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat" }, prefs);
 	let dom = new JSDOM(MAIN_WINDOW);
 	let win = dom.window;
 	win.document.createXULElement = tag => win.document.createElement(tag);

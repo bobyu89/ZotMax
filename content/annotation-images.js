@@ -17,6 +17,7 @@
 	const IMAGE_TYPES = ["image", "ink"];
 	// Subfolder of the note's folder that holds the copied PNGs
 	const FOLDER = "attachments";
+	const ORGANIZED_FOLDER = "附件";
 	// Zotero item and annotation keys (8 characters from 2-9 and A-Z), safe in file names
 	const KEY_RE = /^[0-9A-Z]{8}$/;
 	// Single-part limit of the Notion File Upload API (free workspaces allow 5 MiB per file)
@@ -45,9 +46,14 @@
 	 * Vault-relative path for `![[...]]`, from the note's folder parts. A folder the user named with
 	 * characters that end a wikilink falls back to the bare file name, which is unique in the vault.
 	 */
-	function embedPath(folderParts, fileName) {
+	function embedPath(folderParts, fileName, folder = FOLDER) {
 		if (folderParts.some(p => /[[\]|#^]/.test(p))) return fileName;
-		return [...folderParts, FOLDER, fileName].join("/");
+		return [...folderParts, folder, fileName].join("/");
+	}
+
+	/** The images' subfolder: 附件 in the organized layout (core.js), attachments in the flat one. */
+	function folderFor(obsidian) {
+		return obsidian && obsidian.structure === "organized" ? ORGANIZED_FOLDER : FOLDER;
 	}
 
 	/**
@@ -249,7 +255,8 @@
 	 */
 	async function writeToVault(obsidian, data, images, messages) {
 		if (!images || !images.export) return data;
-		let dir = PathUtils.join(obsidian.dir, FOLDER);
+		let folder = folderFor(obsidian);
+		let dir = PathUtils.join(obsidian.dir, folder);
 		let folderParts = obsidian.relParts.slice(0, -1);
 		let embeds = new Map();
 		let failed = 0;
@@ -262,11 +269,11 @@
 						await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
 						await IOUtils.write(dest, bytes);
 					}
-					embeds.set(e.annotation.key, embedPath(folderParts, e.name));
+					embeds.set(e.annotation.key, embedPath(folderParts, e.name, folder));
 				}
 				else if (await IOUtils.exists(dest)) {
 					// Zotero couldn't render it this time: keep showing the copy from an earlier sync
-					embeds.set(e.annotation.key, embedPath(folderParts, e.name));
+					embeds.set(e.annotation.key, embedPath(folderParts, e.name, folder));
 				}
 			}
 			catch (err) {

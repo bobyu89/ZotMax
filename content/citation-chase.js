@@ -604,7 +604,7 @@
 
 	/** The note's path; a note of another collection with the same name keeps its file. */
 	async function notePath(settings, collection) {
-		let dirParts = [...core.splitFolder(settings.defaults.obsidianFolder), screening.REVIEW_FOLDER];
+		let dirParts = core.vaultFolder(settings, "reviews");
 		let dir = PathUtils.join(settings.vaultPath, ...dirParts);
 		let key = collectionKey(collection);
 		let base = core.sanitizeFilename((collection ? collection.name : SELECTION_NAME) + NOTE_SUFFIX);

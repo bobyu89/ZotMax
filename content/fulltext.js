@@ -315,9 +315,17 @@
 
 	// ---------- Obsidian ----------
 
-	/** Where the full-text note of a literature note goes: <note folder>/<folder>/<same file name>. */
+	/**
+	 * Where the full-text note of a literature note goes: next to it as "<name> · 全文.md" (the organized layout,
+	 * core.js), or <note folder>/<folder>/<same file name> (flat).
+	 */
 	function obsidianTarget(obsidian, folder) {
 		let name = obsidian.relParts[obsidian.relParts.length - 1];
+		if (obsidian.structure === "organized") {
+			let file = name.replace(/\.md$/i, "") + ZB().core.FULLTEXT_SUFFIX + ".md";
+			let relParts = [...obsidian.relParts.slice(0, -1), file];
+			return { dir: obsidian.dir, path: PathUtils.join(obsidian.dir, file), link: relParts.join("/").replace(/\.md$/i, "") };
+		}
 		let relParts = [...obsidian.relParts.slice(0, -1), folder, name];
 		return {
 			dir: PathUtils.join(obsidian.dir, folder),

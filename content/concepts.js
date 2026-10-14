@@ -691,7 +691,9 @@
 		};
 	}
 
+	/** <F>/概念 (flat) or <F>/20 概念 (organized, core.js); a folder the user named stays under <F>. */
 	function folderParts(settings, options = readOptions()) {
+		if (core.structureOf(settings) === "organized" && options.folder === DEFAULT_FOLDER) return core.vaultFolder(settings, "concepts");
 		return [...core.splitFolder(settings.defaults.obsidianFolder), ...core.splitFolder(options.folder)];
 	}
 
@@ -1011,6 +1013,6 @@
 		splitOutcomes, paperRecord, collectConcepts, assignFiles, searchLine, buildConceptSection, buildOrphanSection,
 		buildManagedNote, buildConceptNote, buildMermaid, buildIndexSection, buildIndexNote, buildDashboardSection,
 		buildConceptPrompt, processConceptDraft, buildAIBlock, insertAIBlock,
-		readOptions, update, afterSync, dashboardSection, runFromMenu, synthesizeFromMenu,
+		readOptions, folderParts, update, afterSync, dashboardSection, runFromMenu, synthesizeFromMenu,
 	};
 });

@@ -22,8 +22,6 @@
 	const PREF = "extensions.zotero-bridge.";
 	const NOTE_NAME = "研究儀表板";
 	const BASE_NAME = "研究儀表板.base";
-	const REVIEW_FOLDER = "Reviews";
-	const DRAFTS_FOLDER = "Drafts";
 	const NO_VALUE = "（未填）";
 	const NO_COLLECTION = "（未分類）";
 	const NO_STATUS = "（未設定）";
@@ -920,9 +918,9 @@
 		return records;
 	}
 
-	/** Reviews/*.md or Drafts/*.md under the default folder, newest first. */
-	async function projectRecords(settings, sub) {
-		let dirParts = [...core.splitFolder(settings.defaults.obsidianFolder), sub];
+	/** The review notes or drafts (kind "reviews" / "drafts": Reviews/, Drafts/ or their organized folders), newest first. */
+	async function projectRecords(settings, kind) {
+		let dirParts = core.vaultFolder(settings, kind);
 		let children;
 		try {
 			children = await IOUtils.getChildren(PathUtils.join(settings.vaultPath, ...dirParts));
@@ -944,12 +942,17 @@
 		return out.sort((a, b) => String(b.generatedAt).localeCompare(String(a.generatedAt)) || a.name.localeCompare(b.name));
 	}
 
-	/** Create `研究儀表板.base` once (Bases setting on); an existing file is never overwritten. */
-	async function ensureBase(settings, dir, folderParts) {
+	/** Create `研究儀表板.base` once (Bases setting on; in 90 系統 when organized); an existing file is never overwritten. */
+	async function ensureBase(settings) {
 		if (!settings.createBase) return "";
+		let parts = core.vaultFolder(settings, "system");
+		let dir = PathUtils.join(settings.vaultPath, ...parts);
 		let path = PathUtils.join(dir, BASE_NAME);
-		if (!(await IOUtils.exists(path))) await IOUtils.writeUTF8(path, buildDashboardBase());
-		return [...folderParts, BASE_NAME].join("/");
+		if (!(await IOUtils.exists(path))) {
+			await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
+			await IOUtils.writeUTF8(path, buildDashboardBase());
+		}
+		return [...parts, BASE_NAME].join("/");
 	}
 
 	/**
@@ -964,12 +967,12 @@
 		await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
 		let records = await literatureRecords(settings);
 		let stats = aggregate(records, { now });
-		let reviews = await projectRecords(settings, REVIEW_FOLDER);
-		let drafts = await projectRecords(settings, DRAFTS_FOLDER);
+		let reviews = await projectRecords(settings, "reviews");
+		let drafts = await projectRecords(settings, "drafts");
 		let report = usageReport(usage.parseLedger(pref("usage.ledger")), usage.parsePrices(pref("usage.prices")).prices, { now });
 		let baseLink = "";
 		try {
-			baseLink = await ensureBase(settings, dir, folderParts);
+			baseLink = await ensureBase(settings);
 		}
 		catch (e) {
 			Zotero.logError(e);
@@ -989,14 +992,15 @@
 		}
 		let gap = gapMap(records, { aliases });
 		let section = buildDashboardSection(stats, { now, reviews, drafts, usage: report, baseLink, latestReport, concepts, layout, gapMap: gap });
-		let path = PathUtils.join(dir, NOTE_NAME + ".md");
+		let name = core.vaultPage(settings, "dashboard");
+		let path = PathUtils.join(dir, name + ".md");
 		let existing = (await IOUtils.exists(path)) ? await IOUtils.readUTF8(path) : null;
 		let text = buildDashboardNote(existing, section, { updated: now.toISOString() });
 		if (text !== existing) await IOUtils.writeUTF8(path, text);
 		// 首頁 and 主題頁 (topics.js) from the same records; never throws
 		let topics = scope.ZB && scope.ZB.topics
 			? await scope.ZB.topics.afterDashboard(settings, { records, stats, reviews, latestReport, layout, aliases, now }) : null;
-		return { relPath: [...folderParts, NOTE_NAME + ".md"].join("/"), stats, written: text !== existing, topics };
+		return { relPath: [...folderParts, name + ".md"].join("/"), stats, written: text !== existing, topics };
 	}
 
 	/** After a manual sync run (main.js): rebuild when 「同步後更新研究儀表板」 is on. Never throws. */

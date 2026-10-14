@@ -1291,7 +1291,7 @@
 	/** Where the table goes: the vault's Reviews folder > the folder from the settings > Downloads > home. */
 	async function destination(settings) {
 		if (settings.vaultPath) {
-			let dirParts = [...core.splitFolder(settings.defaults.obsidianFolder), REVIEW_FOLDER];
+			let dirParts = core.vaultFolder(settings, "reviews");
 			return { folder: PathUtils.join(settings.vaultPath, ...dirParts), source: "vault", dirParts };
 		}
 		let saved = String(pref("pico.folder") || "").trim();

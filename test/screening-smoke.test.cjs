@@ -71,7 +71,8 @@ function makeEnv({ prefs, fetch, confirm = () => true }) {
 	}
 
 	let collections = new Map();
-	let prefStore = Object.assign({}, prefs);
+	// The suites below were written for the flat vault layout; vault-layout-smoke covers the organized one
+	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat" }, prefs);
 	let activeCollection = null;
 	let Zotero = {
 		Prefs: { get: k => prefStore[k], set: (k, v) => { prefStore[k] = v; }, clear: (k) => { delete prefStore[k]; } },

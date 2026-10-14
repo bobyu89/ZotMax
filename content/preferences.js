@@ -1296,7 +1296,25 @@
 			}
 		},
 
-		/** 「安裝 Word 中文 APA 樣式」: the CSL styles into Zotero (word-style.js). */
+		/** 「整理 vault 資料夾…」: the flat vault moved to the organized layout (vault-layout.js; it asks first). */
+		async reorganizeVault() {
+			let status = document.getElementById("zb-vault-status");
+			status.textContent = "整理中…";
+			try {
+				let result = await Zotero.ZoteroBridge.vaultLayout.run();
+				let menu = document.getElementById("zb-vault-structure");
+				if (menu) menu.value = Zotero.Prefs.get(ZB_PREF + "obsidian.structure", true) || "organized";
+				status.textContent = !result ? "沒有搬動任何檔案。"
+					: result.moved ? `已搬動 ${result.moved} 個檔案，更新 ${result.links} 個連結${result.log ? `；紀錄：${result.log}` : ""}。`
+						: "資料夾已經是新的結構。";
+			}
+			catch (e) {
+				Zotero.logError(e);
+				status.textContent = `整理失敗：${e.message || e}`;
+			}
+		},
+
+				/** 「安裝 Word 中文 APA 樣式」: the CSL styles into Zotero (word-style.js). */
 		async installWordStyle() {
 			let status = document.getElementById("zb-word-style-status");
 			status.textContent = "安裝中…";

@@ -72,6 +72,20 @@
 				</menulist>
 			</hbox>
 			<hbox align="center">
+				<label value="資料夾結構："/>
+				<menulist id="zb-vault-structure" preference="extensions.zotero-bridge.obsidian.structure" native="true">
+					<menupopup>
+						<menuitem label="依 Zotero 分類（00 首頁、10 文獻／分類、20 概念、30 評讀與綜整、40 寫作、90 系統）" value="organized"/>
+						<menuitem label="舊版平鋪（文獻筆記都在預設子資料夾）" value="flat"/>
+					</menupopup>
+				</menulist>
+			</hbox>
+			<hbox align="center">
+				<button id="zb-vault-reorganize" label="整理 vault 資料夾…" oncommand="ZoteroBridgePrefs.reorganizeVault()"/>
+			</hbox>
+			<html:p class="zb-hint">依 Zotero 分類：文獻筆記放在 10 文獻 底下和 Zotero 一樣的資料夾，全文「· 全文」緊跟在旁邊，每個分類的主題總覽是資料夾裡的第一個檔；之後在 Zotero 換分類，下次同步筆記會跟著搬。從舊版改過來請按「整理 vault 資料夾…」：先列出要搬的檔案，確認後搬好並更新所有連結（包含你自己的筆記），紀錄存在 90 系統。</html:p>
+			<html:p id="zb-vault-status" class="zb-hint" role="status"></html:p>
+			<hbox align="center">
 				<label value="文獻筆記最上面的「重點」："/>
 				<menulist id="zb-note-layout" preference="extensions.zotero-bridge.obsidian.layout" native="true">
 					<menupopup>
@@ -91,7 +105,8 @@
 			</vbox>
 			<vbox data-zb-feature="dashboard">
 				<checkbox label="手動同步後更新「研究儀表板」筆記（只讀 vault 裡的筆記，不連網、不呼叫 AI；也可從 工具 → 更新研究儀表板）" preference="extensions.zotero-bridge.dashboard.autoUpdate"/>
-				<checkbox label="一起產生「首頁」和每個 Zotero 分類的「主題頁」（證據說什麼、趨勢、研究缺口；筆記不搬動）" preference="extensions.zotero-bridge.dashboard.topicPages"/>
+				<checkbox label="一起產生「首頁」和每個 Zotero 分類的「主題頁」（證據說什麼、趨勢、研究缺口）" preference="extensions.zotero-bridge.dashboard.topicPages"/>
+				<checkbox label="每個主題頁旁邊產生「證據地圖」Canvas（依結論方向分組的文獻卡片）" preference="extensions.zotero-bridge.dashboard.canvas"/>
 			</vbox>
 		</groupbox>
 

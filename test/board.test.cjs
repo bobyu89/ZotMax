@@ -148,6 +148,9 @@ test("CSS snippet: header with the version, a grid board, flat cards, pills, lar
 	for (let t of used) assert.ok(t === "zm-board" || style.CARDS.some(([c]) => c === t), `${t} has a colour`);
 	assert.match(css, /\.callout\[data-callout="zm-chart"\] \.mermaid svg \{\n\tmax-width: 100%;/, "the designs pie fits its card");
 	assert.ok(style.CARDS.some(([c]) => c === "zm-chart") && style.CARDS.some(([c]) => c === "zm-kpi"), "the dashboard's cards too");
+	assert.match(css, /\.callout\[data-callout="zm-nav"\] \{\n\t--callout-color: 100, 116, 139;\n\t--callout-icon: lucide-compass;/, "the notes' navigation bar");
+	assert.match(css, /\.is-mobile \.callout\[data-callout="zm-board"\] \{\n\tpadding: 8px 8px 10px;/, "tighter on phones and tablets");
+	assert.match(css, /\.is-mobile \.markdown-rendered:has\(\.callout\[data-callout\^="zm-"\]\) table \{\n\tdisplay: block;/, "wide tables scroll sideways");
 	assert.equal(style.versionOf("/* my own */\n.x{}"), null);
 	assert.equal(style.versionOf("/* ZotMax 看板樣式 v7 — …"), 7);
 });
