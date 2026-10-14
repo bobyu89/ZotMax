@@ -142,6 +142,8 @@ test("CSS snippet: header with the version, a grid board, flat cards, pills, lar
 	// Every card type the notes use has a rule
 	let used = new Set([...core.buildBoard(item(), { aiMarkdown: AI_FULL, study: STUDY, appraisalBoard: BOARD }).matchAll(/\[!(zm-[\w-]+)/g)].map(m => m[1]));
 	for (let t of used) assert.ok(t === "zm-board" || style.CARDS.some(([c]) => c === t), `${t} has a colour`);
+	assert.match(css, /\.callout\[data-callout="zm-chart"\] \.mermaid svg \{\n\tmax-width: 100%;/, "the designs pie fits its card");
+	assert.ok(style.CARDS.some(([c]) => c === "zm-chart") && style.CARDS.some(([c]) => c === "zm-kpi"), "the dashboard's cards too");
 	assert.equal(style.versionOf("/* my own */\n.x{}"), null);
 	assert.equal(style.versionOf("/* ZotMax 看板樣式 v7 — …"), 7);
 });

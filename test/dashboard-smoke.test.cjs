@@ -270,6 +270,10 @@ test("a manual sync writes the dashboard and its .base; 快速指令 or the tool
 	assert.match(text, /\| （未分類） \| 1 \|/);
 	assert.match(text, /\| RCT \| 1 \|/);
 	assert.match(text, /有 AI 文獻筆記：\*\*1\*\* 篇；沒有：\*\*2\*\* 篇/);
+	// The 圖表 board (看板 layout, the default) and the gap map, which needs two AI notes with I and O
+	assert.match(text, /\n> \[!zm-board\] 圖表\n> > \[!zm-chart\] 研究設計\n/);
+	assert.match(text, /> > \[!zm-chart\] 出版年份\n> > 2024 ▰▰▰▰▰▰▰▰▰▰ 3/);
+	assert.match(text, /## 🗺️ 證據缺口地圖\n\n還畫不出來/);
 	// Oldest unread first, with links to the notes
 	let unread = text.slice(text.indexOf("### 待讀最久"), text.indexOf("### ⚠️ 資料品質"));
 	assert.deepEqual([...unread.matchAll(/\[\[([^|\]]+)\|/g)].map(m => m[1]), [

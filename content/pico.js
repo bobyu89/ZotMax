@@ -20,6 +20,9 @@
  *            export; 「✍️ 我的筆記」 is kept.
  *   PRISMA   the PRISMA note of a collection with a card gets a 「本題 PICO」 section (screening.js asks
  *            cardMarkdown for it).
+ *   檢索詞    pearl growing: the subject terms the papers carry as Zotero tags (MeSH from PubMed, author keywords),
+ *            counted by paper and marked when the card already has them — a section of the PICO 表 note, and in
+ *            the card window the collection's common terms the card lacks (keywordSuggestions).
  *
  * The functions down to "Zotero" are pure (Node tests); the rest needs Zotero.
  */
@@ -300,6 +303,76 @@
 
 	const MATCH_LEGEND = "「對照本題」只是字詞比對：✓ 這篇的該要素和問題卡有共同字詞，？ 沒有共同字詞（換個說法也可能是同一件事），— 這篇沒有該要素的資料。符不符合本題，由你讀原文判斷。";
 
+	// ---------- search terms from the papers' own keywords (pure) ----------
+
+	// The plugin's and the user's workflow tags, not subject terms
+	const WORKFLOW_TAG_RE = /^(?:狀態|篩選|排除原因|來源|自動分類)\/|^zotero-bridge|^_/;
+	const MAX_KEYWORDS = 15;
+
+	function termKey(s) {
+		return String(s || "").normalize("NFKC").toLowerCase().replace(/[\s\-‐-―_]+/g, " ").trim();
+	}
+
+	/** A tag as a subject term: "*Accidental Falls/prevention & control" → "Accidental Falls"; "" for workflow tags. */
+	function tagTerm(tag) {
+		let t = String(tag || "").normalize("NFKC").trim();
+		if (!t || WORKFLOW_TAG_RE.test(t)) return "";
+		t = t.replace(/^\*/, "").split("/")[0].trim();
+		if (t.length < 2 || t.length > 80 || /^\d+$/.test(t)) return "";
+		let stop = (searchLinks && searchLinks.MESH_STOP) || new Set();
+		return stop.has(t.toLowerCase()) ? "" : t;
+	}
+
+	/**
+	 * Pearl growing: the subject terms the papers carry in Zotero (PubMed's MeSH, a database's author keywords),
+	 * by how many papers have them, each marked when the card or its search string already has it.
+	 * tagLists: one array of tags per paper. Returns [{ term, papers, inSearch }] (at most MAX_KEYWORDS; terms
+	 * on one paper only when there are fewer than four papers).
+	 */
+	function keywordSuggestions(tagLists, card, opts = {}) {
+		let lists = (tagLists || []).filter(Array.isArray);
+		let counts = new Map();
+		for (let tags of lists) {
+			let seen = new Set();
+			for (let tag of tags) {
+				let term = tagTerm(tag);
+				let k = termKey(term);
+				if (!k || seen.has(k)) continue;
+				seen.add(k);
+				let e = counts.get(k) || { term, papers: 0 };
+				e.papers++;
+				counts.set(k, e);
+			}
+		}
+		let c = card ? normalizeCard(card) : null;
+		let q = opts.query || null;
+		let hay = termKey([c ? [c.p, c.i, c.c, c.o, c.question].join(" ") : "", q ? `${q.en || ""} ${q.all || ""}` : ""].join(" "));
+		let min = lists.length >= 4 ? 2 : 1;
+		return [...counts.entries()].filter(([, e]) => e.papers >= min)
+			.map(([k, e]) => ({ term: e.term, papers: e.papers, inSearch: !!hay && hay.includes(k) }))
+			.sort((a, b) => b.papers - a.papers || a.term.localeCompare(b.term, "en"))
+			.slice(0, opts.max || MAX_KEYWORDS);
+	}
+
+	/** 「🔎 檢索詞建議」 for the PICO 表 note ("" without terms). total: how many papers the terms came from. */
+	function keywordSection(list, total, withCard) {
+		if (!list || !list.length) return "";
+		let head = withCard ? ["詞", "篇數", "已在問題卡"] : ["詞", "篇數"];
+		let lines = [`| ${head.join(" | ")} |`, `|${head.map((h, i) => (i ? ":---:" : "---")).join("|")}|`];
+		for (let k of list) {
+			let row = [cell(k.term), `${core.bar(k.papers, total, 6)} ${k.papers}`];
+			if (withCard) row.push(k.inSearch ? "✓" : "");
+			lines.push(`| ${row.join(" | ")} |`);
+		}
+		let missing = withCard ? list.filter(k => !k.inSearch).length : 0;
+		return [
+			"## 🔎 檢索詞建議（從這些文獻反推）",
+			`這些詞取自上面 ${total} 篇文獻在 Zotero 的標籤（從 PubMed 匯入的 MeSH、其他資料庫的作者關鍵字），依出現篇數排序。`
+				+ (withCard ? `沒有打勾的 ${missing} 個，問題卡和檢索式裡還沒有；可以考慮加成同義詞，再到 MeSH Database 確認。` : "建立 PICO 問題卡後，會標出哪些已經在你的檢索式裡。"),
+			lines.join("\n"),
+		].join("\n\n");
+	}
+
 	// ---------- card as Markdown (pure) ----------
 
 	function cell(v) {
@@ -379,6 +452,8 @@
 			appraisalOverall: textOf(s.appraisal_overall),
 			appraisalStatus: status,
 			match: entry.card ? matchCard(entry.card, entry.study) : null,
+			// The item's Zotero tags, for 檢索詞建議 (not a column)
+			tags: Array.isArray(r.tags) ? r.tags : [],
 		};
 	}
 
@@ -511,6 +586,8 @@
 		if (withCard) out.push(cardMarkdown(card, { heading: "## 本題 PICO", query: meta.query }));
 		out.push(`## PICO 表（${rows.length} 篇）`, tableMarkdown(rows, { links: meta.links, match: withCard }));
 		if (withCard) out.push(MATCH_LEGEND);
+		let kw = keywordSection(meta.keywords, rows.length, withCard);
+		if (kw) out.push(kw);
 		let none = rows.filter(r => !r.hasData);
 		if (none.length) {
 			out.push("## 沒有結構化資料的文獻", none.map(r => `- ${meta.links && r.link ? `[[${r.link}\\|${cell(r.citation)}]]` : cell(r.citation)}`).join("\n")
@@ -578,7 +655,8 @@
 	}
 
 	/**
-	 * Draw the card window into `root`. info: { scopeName, card, isNew, search: boolean (search links on) }
+	 * Draw the card window into `root`. info: { scopeName, card, isNew, search: boolean (search links on),
+	 * tagLists: the collection's papers' Zotero tags, one array per paper (for the keyword suggestions) }
 	 * handlers: { onSave(card), onDelete(), onCancel(), search(card) → { en, all, skipped, targets: [{ name, url, copy, query }] } | null,
 	 * open(target), copy(text) }
 	 */
@@ -679,7 +757,11 @@
 		let skipped = el(doc, "p", { class: "zb-cl-why" });
 		let links = el(doc, "div", { class: "zb-pc-links" });
 		let searchHint = el(doc, "p", { class: "zb-cl-why" });
-		searchSec.append(queryEn, queryAll, skipped, links, searchHint);
+		// Pearl growing: subject terms the collection's papers carry that the card doesn't have yet
+		let kwHead = el(doc, "p", { class: "zb-pc-label", id: "zb-pc-kw-h" });
+		let kwList = el(doc, "div", { class: "zb-pc-links", "data-zb-keywords": "", "aria-labelledby": "zb-pc-kw-h" });
+		let kwHint = el(doc, "p", { class: "zb-cl-why" }, "取自這個分類文獻的 Zotero 標籤（MeSH、作者關鍵字）。按一下複製，再決定要不要加進欄位；記得到 MeSH Database 確認。");
+		searchSec.append(queryEn, queryAll, skipped, links, searchHint, kwHead, kwList, kwHint);
 
 		list.append(typeSec, elemSec, qSec, checkSec, searchSec);
 
@@ -755,6 +837,16 @@
 					b.addEventListener("click", () => handlers.open && handlers.open(t));
 					links.append(b);
 				}
+			}
+			kwList.replaceChildren();
+			let missing = info.tagLists && info.tagLists.length
+				? keywordSuggestions(info.tagLists, c, { query: q, max: 30 }).filter(k => !k.inSearch).slice(0, 8) : [];
+			kwHead.hidden = kwList.hidden = kwHint.hidden = !missing.length;
+			kwHead.textContent = missing.length ? `這個分類的文獻常用、但問題卡還沒有的詞（${missing.length}）` : "";
+			for (let k of missing) {
+				let b = el(doc, "button", { type: "button", class: "zb-pc-link", title: `${k.papers} 篇文獻有這個詞；按一下複製` }, `${k.term}（${k.papers}）`);
+				b.addEventListener("click", () => handlers.copy && handlers.copy(k.term));
+				kwList.append(b);
 			}
 			let warns = found.filter(f => f.level === "warn").length;
 			summary.textContent = warns ? `還有 ${warns} 項要補；也可以先存，之後再改。` : "可以儲存了；之後隨時回來改。";
@@ -1146,7 +1238,16 @@
 		}
 		let sc = scopeOf(collection);
 		let existing = cardFor(collection);
-		let info = { scopeName: sc.name, card: existing || emptyCard(), isNew: !existing, search: featureOn("searchLinks") && !!ZB().searchLinks };
+		let tagLists = [];
+		if (collection) {
+			try {
+				tagLists = scopeItems(ZB().adapter.itemsInCollection(collection, true), collection).items.map(i => i.getTags().map(t => t.tag));
+			}
+			catch (e) {
+				Zotero.logError(e);
+			}
+		}
+		let info = { scopeName: sc.name, card: existing || emptyCard(), isNew: !existing, search: featureOn("searchLinks") && !!ZB().searchLinks, tagLists };
 		let choice;
 		try {
 			choice = await (opts.dialog || cardDialog)(info);
@@ -1242,6 +1343,7 @@
 		let record = {
 			creators: item.getCreatorsJSON(), title: field(item, "title"), year: field(item, "year"), publication: field(item, "publicationTitle"),
 			doi, uri: `zotero://select/${lib.path}/items/${item.key}`,
+			tags: item.getTags().map(t => t.tag),
 		};
 		let study = null;
 		let md = "";
@@ -1359,6 +1461,7 @@
 			links: !!o.dirParts,
 			query: o.query,
 			screened: o.screened,
+			keywords: keywordSuggestions(o.rows.map(r => r.tags), o.card, { query: o.query }),
 		};
 		let r = { dir: o.folder, files: [], items: o.rows.length, noData: o.rows.filter(x => !x.hasData).length, notionUrl: "", notionError: "", card: !!(o.card && cardHasContent(o.card)), rows: o.rows };
 		await IOUtils.makeDirectory(o.folder, { createAncestors: true, ignoreExisting: true });
@@ -1479,6 +1582,7 @@
 		MATCH_LEGEND, SOURCE_NOTE, CSV_COLUMNS, runtime,
 		// pure
 		emptyCard, normalizeCard, fieldLabels, fieldHints, cardHasContent, terms, cardAsStudy, cardQuery, composeQuestion, checkCard,
+		tagTerm, keywordSuggestions, keywordSection,
 		matchField, matchCard, cardMarkdown, tableRow, sortRows, tableMarkdown, tableCSV, tableFragment, tableTSV, tableHTML,
 		noteSection, noteFrontmatter, buildNote, fileNames, doneText, renderCard, renderTable,
 		// Zotero

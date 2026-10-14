@@ -2,8 +2,8 @@
  * ZotMax — the 看板 style for Obsidian: one CSS snippet, `<vault>/.obsidian/snippets/zotmax.css`.
  *
  * The literature notes' 「重點」 board and the 研究儀表板's 總覽 are written as nested callouts with ZotMax's own
- * types (core.js buildBoard, dashboard.js overviewBoard): `[!zm-board]` holds `[!zm-summary]`, `[!zm-pico]`,
- * `[!zm-findings]`, `[!zm-appraisal]`, `[!zm-highlights]`, `[!zm-next]` and `[!zm-kpi]` cards. Without the
+ * types (core.js buildBoard, dashboard.js overviewBoard and chartsBoard): `[!zm-board]` holds `[!zm-summary]`,
+ * `[!zm-pico]`, `[!zm-findings]`, `[!zm-appraisal]`, `[!zm-highlights]`, `[!zm-next]`, `[!zm-kpi]` and `[!zm-chart]` cards. Without the
  * snippet they read as stacked callouts; with it the board becomes a grid of flat cards (two to four columns,
  * one on a phone), the facts line becomes pills, each card type gets its own colour and Lucide icon, and KPI
  * numbers are set large. Only Obsidian's own CSS variables are used, so light, dark and any theme follow.
@@ -39,6 +39,7 @@
 		["zm-highlights", "202, 138, 4", "lucide-highlighter"],
 		["zm-next", "225, 29, 72", "lucide-list-todo"],
 		["zm-kpi", "79, 70, 229", "lucide-activity"],
+		["zm-chart", "13, 148, 136", "lucide-chart-column"],
 	];
 
 	function header() {
@@ -122,6 +123,25 @@
 	line-height: 1.15;
 	color: var(--text-normal);
 	font-variant-numeric: tabular-nums;
+}
+
+/* 圖表卡：Mermaid 圓餅圖縮到卡片寬度；文字長條用等寬數字 */
+.callout[data-callout="zm-chart"] .mermaid svg {
+	max-width: 100%;
+	height: auto;
+}
+.callout[data-callout="zm-chart"] > .callout-content {
+	font-variant-numeric: tabular-nums;
+}
+/* 每月新增的走勢線：放大、去掉程式碼底色 */
+.callout[data-callout="zm-chart"] code {
+	display: inline-block;
+	font-size: 1.6em;
+	line-height: 1.1;
+	letter-spacing: 1px;
+	padding: 0;
+	background: none;
+	color: rgb(var(--callout-color));
 }
 
 /* 每種卡片的顏色和圖示 */

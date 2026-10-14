@@ -262,3 +262,39 @@ test("fileNames and doneText", () => {
 	assert.match(err, /⚠ Notion 沒有寫入：401/);
 	assert.doesNotMatch(err, /問題卡|沒有 AI 筆記/);
 });
+
+test("tagTerm and keywordSuggestions: subject terms from Zotero tags (MeSH qualifiers and stars dropped, workflow tags skipped), counted by paper, marked when the card has them", () => {
+	assert.equal(P.tagTerm("*Accidental Falls/prevention & control"), "Accidental Falls");
+	assert.equal(P.tagTerm("狀態/已讀"), "");
+	assert.equal(P.tagTerm("篩選/納入"), "");
+	assert.equal(P.tagTerm("zotero-bridge"), "");
+	assert.equal(P.tagTerm("_todo"), "");
+	assert.equal(P.tagTerm("Humans"), "", "MeSH check tags are not search terms");
+	assert.equal(P.tagTerm("2021"), "");
+	let tags = [
+		["*Accidental Falls/prevention & control", "Exercise Therapy", "Humans", "狀態/已讀"],
+		["Accidental Falls", "Exercise Therapy/methods", "Hospitalization"],
+		["accidental falls", "Hospitalization", "Aged"],
+		["Accidental Falls/statistics & numerical data", "Exercise Therapy", "Rare Term", "Accidental Falls"],
+	];
+	let list = P.keywordSuggestions(tags, CARD);
+	assert.deepEqual(list.map(k => [k.term, k.papers]), [["Accidental Falls", 4], ["Exercise Therapy", 3], ["Hospitalization", 2]],
+		"one count per paper, case folded; with four papers a term needs two");
+	assert.ok(list.every(k => !k.inSearch));
+	let withFalls = P.keywordSuggestions(tags, Object.assign({}, CARD, { o: "跌倒 accidental falls" }));
+	assert.equal(withFalls.find(k => k.term === "Accidental Falls").inSearch, true);
+	assert.equal(P.keywordSuggestions(tags.slice(0, 2), null).some(k => k.term === "Hospitalization"), true, "one paper is enough with fewer than four");
+	assert.equal(P.keywordSuggestions(tags, CARD, { max: 1 }).length, 1);
+	assert.deepEqual(P.keywordSuggestions([], CARD), []);
+	// The PICO 表 note's section
+	let md = P.keywordSection(list, 4, true);
+	assert.match(md, /^## 🔎 檢索詞建議（從這些文獻反推）\n\n這些詞取自上面 4 篇文獻/);
+	assert.match(md, /沒有打勾的 3 個/);
+	assert.match(md, /\| 詞 \| 篇數 \| 已在問題卡 \|\n\|---\|:---:\|:---:\|\n\| Accidental Falls \| ▰▰▰▰▰▰ 4 \| {2}\|/);
+	assert.doesNotMatch(P.keywordSection(list, 4, false), /已在問題卡 \|/);
+	assert.equal(P.keywordSection([], 4, true), "");
+	let section = P.noteSection(rows(), CARD, { scopeName: "跌倒回顧", generatedAt: "2026-10-13T01:00:00.000Z", keywords: list });
+	assert.ok(section.indexOf("## 🔎 檢索詞建議") > section.indexOf("「對照本題」只是字詞比對"));
+	assert.ok(section.indexOf("## 🔎 檢索詞建議") < section.indexOf("## 沒有結構化資料的文獻"));
+	assert.doesNotMatch(P.noteSection(rows(), CARD, { scopeName: "跌倒回顧", generatedAt: "2026-10-13T01:00:00.000Z" }), /檢索詞建議/);
+});

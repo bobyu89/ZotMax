@@ -881,7 +881,7 @@
 		BUILTIN, CHECK_LABELS, CI_LABELS, CI_DATE, MENU_SLOTS, PANE_COUNT, PICO_FIELDS,
 		encodeQuery, fillTemplate, isChinese, titleWords, wrapProxy, validProxy, parseIDList, parseCustom, normalizeConfig, findSource,
 		buildTarget, routeSources, sourceLabel, itemInfo, cleanTitle, findQuery, itemTargets, relatedURL,
-		meshTerms, meshLookupURL, picoTerms, englishPhrases, picoQuery, meshConcepts, parseMeshSummary, buildMeshQuery,
+		MESH_STOP, meshTerms, meshLookupURL, picoTerms, englishPhrases, picoQuery, meshConcepts, parseMeshSummary, buildMeshQuery,
 		quickEntries, noteCallout, describeSources,
 		runtime, readConfig, openTarget, calloutFor, renderPaneRow, showMore, suggestMesh, quickSearch, menuTargets, relatedFor,
 	};
