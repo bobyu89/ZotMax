@@ -140,6 +140,9 @@
 			// The AI note's I and O (the evidence gap map)
 			intervention: asText(f.intervention),
 			outcomes: asText(f.outcomes),
+			// 主題頁 (topics.js): the primary outcome's direction, the sample size, the setting
+			direction: asText(f.effect_direction),
+			sampleSize: Number.isFinite(Number(asText(f.sample_size))) && asText(f.sample_size) !== "" ? Number(asText(f.sample_size)) : null,
 			hasAI: !!(asText(f.ai_model) || asText(f.ai_generated)),
 			hasStudyData: ["study_design", "evidence_level", "jbi_level", "sample_size", "appraisal_overall"].some(k => asText(f[k])),
 			dateAdded: asText(f.date_added),
@@ -489,9 +492,13 @@
 		};
 	}
 
-	/** 「🗺️ 證據缺口地圖」: the map as a table of heat squares, the legend, and the best-studied pairs with links. */
-	function gapMapSection(map) {
-		let parts = ["## 🗺️ 證據缺口地圖"];
+	/**
+	 * 「🗺️ 證據缺口地圖」: the map as a table of heat squares, the legend, and the best-studied pairs with links.
+	 * opts.level: the heading level (2; a 主題頁 nests it at 3).
+	 */
+	function gapMapSection(map, opts = {}) {
+		let level = opts.level || 2;
+		let parts = [`${"#".repeat(level)} 🗺️ 證據缺口地圖`];
 		if (map.studied < 2 || !map.rows.length || !map.cols.length) {
 			parts.push("還畫不出來：至少要兩篇文獻的 AI 筆記有「介入」和「結果指標」。產生 AI 筆記後再更新儀表板。");
 			return parts.join("\n\n");
@@ -516,7 +523,7 @@
 			+ (map.hiddenRows || map.hiddenCols ? `（另有 ${map.hiddenRows} 個介入、${map.hiddenCols} 個結果指標篇數較少，沒有列出）` : ""));
 		pairs.sort((a, b) => b.recs.length - a.recs.length || (a.level || "9").localeCompare(b.level || "9"));
 		if (pairs.length) {
-			parts.push("### 證據最多的組合");
+			parts.push(`${"#".repeat(level + 1)} 證據最多的組合`);
 			parts.push(pairs.slice(0, GAP_TOP).map(p => `- **${p.row.name} × ${p.col.name}**：${p.recs.length} 篇${p.level ? `（最強 CEBM ${p.level}）` : ""} — `
 				+ p.recs.slice(0, 4).map(r => wikilink(r.link, r.title)).join("、") + (p.recs.length > 4 ? ` 等 ${p.recs.length} 篇` : "")).join("\n"));
 		}
@@ -986,7 +993,10 @@
 		let existing = (await IOUtils.exists(path)) ? await IOUtils.readUTF8(path) : null;
 		let text = buildDashboardNote(existing, section, { updated: now.toISOString() });
 		if (text !== existing) await IOUtils.writeUTF8(path, text);
-		return { relPath: [...folderParts, NOTE_NAME + ".md"].join("/"), stats, written: text !== existing };
+		// 首頁 and 主題頁 (topics.js) from the same records; never throws
+		let topics = scope.ZB && scope.ZB.topics
+			? await scope.ZB.topics.afterDashboard(settings, { records, stats, reviews, latestReport, layout, aliases, now }) : null;
+		return { relPath: [...folderParts, NOTE_NAME + ".md"].join("/"), stats, written: text !== existing, topics };
 	}
 
 	/** After a manual sync run (main.js): rebuild when 「同步後更新研究儀表板」 is on. Never throws. */
@@ -1022,7 +1032,8 @@
 				let result = await update(settings);
 				let s = result.stats;
 				ZB.main.notify(headline, `已更新 ${result.relPath}：${s.total} 篇文獻，已讀完成率 ${s.readPercent}%`
-					+ `，待讀 ${s.unread.length} 篇${s.issues.length ? `，${s.issues.length} 篇有資料品質問題` : ""}。`);
+					+ `，待讀 ${s.unread.length} 篇${s.issues.length ? `，${s.issues.length} 篇有資料品質問題` : ""}。`
+					+ (result.topics ? `也更新了 ${result.topics.home} 和 ${result.topics.topics} 個主題頁。` : ""));
 				return result;
 			}
 			catch (e) {
@@ -1042,7 +1053,7 @@
 	return {
 		NOTE_NAME, BASE_NAME, ISSUE_LABELS,
 		parseFrontmatter, suspectChineseNames, noteRecord, projectRecord, aggregate, usageReport,
-		buildStatusPie, share, overviewBoard, splitTerms, gapMap, gapMapSection, chartsBoard, yearRows, monthRows, sparkline, buildDashboardSection, buildDashboardNote, buildDashboardBase,
-		update, afterSync, runFromMenu,
+		buildStatusPie, share, kpi, wikilink, cell, bestLevel, termKey, overviewBoard, splitTerms, gapMap, gapMapSection, chartsBoard, yearRows, monthRows, sparkline, buildDashboardSection, buildDashboardNote, buildDashboardBase,
+		literatureRecords, projectRecords, update, afterSync, runFromMenu,
 	};
 });

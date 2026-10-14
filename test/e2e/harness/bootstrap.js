@@ -360,6 +360,7 @@ const TESTS = [
 				classify: ["parseRules", "evaluate", "parseTopics", "suggest", "defaultPicks", "planApply", "apply", "undoLast", "readLastRun", "review", "renderReview", "run"],
 				zhMeta: ["analyze", "itemData", "findingsFor", "paneCount", "buildPlan", "defaultPicks", "review", "renderReview", "apply", "undoLast", "readLastRun", "run"],
 				obsidianStyle: ["css", "versionOf", "enableIn", "install", "afterSync", "describe"],
+				topics: ["groupTopics", "topicStats", "topicSection", "homeSection", "buildPage", "writeAll", "afterDashboard"],
 				geminiExport: ["folderName", "baseName", "capCheck", "itemMarkdown", "referencesMarkdown", "readmeText", "renderDialog", "exportTo", "dialog", "noticeInfo", "run",
 					"findGoogleDrive", "chooseDestination", "destination"],
 				pico: ["normalizeCard", "composeQuestion", "checkCard", "matchCard", "cardMarkdown", "tableRow", "tableMarkdown", "tableCSV", "tableHTML", "noteSection", "renderCard", "renderTable",

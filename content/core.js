@@ -19,6 +19,7 @@
 	const STUDY_KEYS = [
 		"study_design", "sample_size", "evidence_level", "jbi_level", "appraisal_tool", "appraisal_overall",
 		"setting", "population", "intervention", "comparison", "outcomes", "measures", "country",
+		"effect_direction",
 	];
 
 	// Frontmatter keys owned by the plugin; every other key is the user's and survives re-sync.

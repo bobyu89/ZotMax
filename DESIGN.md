@@ -421,6 +421,12 @@ Then `[!zm-board] 圖表` with `[!zm-chart]` cards, each only when it has data: 
 
 **PICO 表 → 🔎 檢索詞建議** (pico.js): after the word-match legend, a table 詞 | 篇數 (▰▱ bar over the papers) | 已在問題卡 (✓) of the subject terms the papers carry as Zotero tags (MeSH qualifiers and `*` dropped; workflow tags `狀態/`, `篩選/`…, `_…` and MeSH check tags skipped), at most 15, terms on one paper only with fewer than four papers. The card window lists up to 8 terms the card lacks as copy buttons under the search links.
 
+**首頁 and 主題頁** (topics.js, with the dashboard; pref `dashboard.topicPages`). Notes never move: a topic is a Zotero collection path from the notes' `collections` frontmatter, so a note in two collections is on two pages.
+- `首頁.md` (`type: home`): info callout (Bookmarks／Homepage hint), the dashboard's `[!zm-board] 總覽`, `[!zm-board] 主題（n）` with one `[!zm-topic]` card per topic (title = wikilink to the page; rows: **n 篇** · 已讀 %, bar, 🧭 verdict (top／judged) · CEBM best, 📈 近 5 年 n 篇 ↑→↓, ➡️ the first next step, 📁 parent path), at most 12 cards then one line of links; the unfiled count; `## 🚀 快速入口`. Classic: `## 🗂️ 主題` as a table with the same columns.
+- `主題/<path with ／>.md` (`type: topic`, `zotero_collection`, `studies`): info with ← 首頁 · 研究儀表板, `[!zm-board] 主題總覽` (文獻, 已讀, 最強證據, 證據說什麼; classic: one line), `## 🧭 證據說什麼` (verdict sentence, a 結論方向 table with bars, `### 依介入` table, `[!warning]` AI 初判 ≠ GRADE), `## 📈 趨勢` (last five years vs the five before, a bar per year with the year in inline code, common interventions and outcomes), `## 🕳️ 研究缺口與下一步` (≤6 rule-based steps in a fixed priority, then `### 🗺️ 證據缺口地圖`), `## 📚 文獻` (strongest level, then newest). A page whose collection lost its notes gets a `[!warning]` block instead; the user's part stays.
+- The verdict: none judged → 尚無判斷; one → 僅 1 篇：<direction>; ≥⅔ one direction → 多數<direction>; else 結論分歧. Directions come from the AI note's `effect_direction` (有效／無差異／有害／不一致; null without a comparison group).
+- `[!zm-topic]`: cyan, Lucide folder-open.
+
 ### Classic layout (`obsidian.layout` = `classic`)
 1. **`> [!abstract] 重點`** (open). In this order, each part only when it exists:
    - **一句話**：the AI note's one-sentence summary.

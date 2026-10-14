@@ -3,7 +3,7 @@
  *
  * The literature notes' 「重點」 board and the 研究儀表板's 總覽 are written as nested callouts with ZotMax's own
  * types (core.js buildBoard, dashboard.js overviewBoard and chartsBoard): `[!zm-board]` holds `[!zm-summary]`,
- * `[!zm-pico]`, `[!zm-findings]`, `[!zm-appraisal]`, `[!zm-highlights]`, `[!zm-next]`, `[!zm-kpi]` and `[!zm-chart]` cards. Without the
+ * `[!zm-pico]`, `[!zm-findings]`, `[!zm-appraisal]`, `[!zm-highlights]`, `[!zm-next]`, `[!zm-kpi]`, `[!zm-chart]` and `[!zm-topic]` cards. Without the
  * snippet they read as stacked callouts; with it the board becomes a grid of flat cards (two to four columns,
  * one on a phone), the facts line becomes pills, each card type gets its own colour and Lucide icon, and KPI
  * numbers are set large. Only Obsidian's own CSS variables are used, so light, dark and any theme follow.
@@ -40,6 +40,7 @@
 		["zm-next", "225, 29, 72", "lucide-list-todo"],
 		["zm-kpi", "79, 70, 229", "lucide-activity"],
 		["zm-chart", "13, 148, 136", "lucide-chart-column"],
+		["zm-topic", "8, 145, 178", "lucide-folder-open"],
 	];
 
 	function header() {

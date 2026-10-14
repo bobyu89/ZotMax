@@ -9,6 +9,8 @@ pref("extensions.zotero-bridge.obsidian.layout", "board");
 pref("extensions.zotero-bridge.obsidian.styleInstalled", false);
 // Rebuild <folder>/研究儀表板.md after each manual sync (content/dashboard.js)
 pref("extensions.zotero-bridge.dashboard.autoUpdate", true);
+// With the dashboard: <folder>/首頁.md and one page per Zotero collection in <folder>/主題/ (content/topics.js)
+pref("extensions.zotero-bridge.dashboard.topicPages", true);
 // Concept hub notes (content/concepts.js): rebuild <folder>/<concepts.folder>/*.md after each manual sync;
 // measures (and outcomes) from the structured data as concepts; alias groups, one per line: 跌倒 = Accidental Falls = falls;
 // a custom prompt for 「為概念卡片產生 AI 綜整」 (empty = built-in)
