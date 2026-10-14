@@ -447,6 +447,9 @@ Then `[!zm-board] 圖表` with `[!zm-chart]` cards, each only when it has data: 
 3. Outside the markers, in the user's part: `> [!note]- 統計筆記`, created by the first 「存到筆記」 of 讀懂統計 at the end of the note and only appended to afterwards (each explanation: date · page with a link back to the PDF, the selection quoted, the four parts, a closing italic line on the number check). Because it is outside the markers, every re-sync keeps it as the user left it.
 4. Sections without content are left out; nothing is said twice (the summary and the Zotero/Notion links live only in 重點; the full text is linked, never embedded).
 
+### Word citation style (`content/styles/*.csl`, word-style.js)
+Two CSL-M styles built by `scripts/csl.mjs` from Zotero's official APA 7 (CC BY-SA 3.0): `default-locale="en-US"` (English items stay English whatever the document language), `default-locale-sort="zh-TW"` (Chinese names by stroke count), a first sort key `zh-first` (`<if locale="zh">`), and `layout locale="zh"` for citation and bibliography that writes what apa-zh.js writes (test/word-style.test.cjs compares them through citeproc-js). Italic text variables sit inside an italic `<group>` (citeproc-js drops italics on a bare `<text variable="title">` in these layouts). Variants differ only in the delimiter between parts (「。」 or 「．」). Installed silently by the button or 快速指令; refreshed on startup only when already installed and the bundled `<updated>` is newer. The same files are served from the site (`site/styles/`).
+
 ### Notion
 The managed container keeps the same order: 重點 as open blocks at its top, each folded section a **toggle**; highlight-group toggles take their colour's background (`yellow_background`…), the others stay default. Toggles go in their own requests (Notion nests two levels per request); 文獻評讀表's real table is inserted inside its toggle.
 

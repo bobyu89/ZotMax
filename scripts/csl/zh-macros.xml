@@ -1,0 +1,217 @@
+  <!-- ===== ZotMax：中文文獻（語言欄 zh、zh-TW）的中文 APA 7 寫法 =====
+       陳美玲、林小華（2023）。題目。期刊，70(2)，45–56。https://doi.org/…（期刊名與卷號斜體）
+       內文：(陳美玲，2023)、(陳美玲、林小華，2023)、(陳美玲等，2023) -->
+  <macro name="zh-first">
+    <!-- 參考文獻排序的第一個鍵：中文文獻在前 -->
+    <choose>
+      <if locale="zh">
+        <text value="0"/>
+      </if>
+      <else>
+        <text value="1"/>
+      </else>
+    </choose>
+  </macro>
+  <macro name="zh-names">
+    <names variable="author">
+      <name delimiter="、" delimiter-precedes-et-al="never" delimiter-precedes-last="always" initialize-with=". " name-as-sort-order="all" sort-separator=", "/>
+      <label form="short" prefix="（" suffix="）"/>
+      <substitute>
+        <names variable="editor"/>
+        <names variable="translator"/>
+        <text macro="zh-title"/>
+      </substitute>
+    </names>
+  </macro>
+  <macro name="zh-names-short">
+    <names variable="author">
+      <name delimiter="、" delimiter-precedes-et-al="never" delimiter-precedes-last="always" form="long" initialize-with=". " name-as-sort-order="all" sort-separator=", "/>
+      <et-al term="et-al"/>
+      <substitute>
+        <names variable="editor"/>
+        <names variable="translator"/>
+        <text macro="zh-title-short"/>
+      </substitute>
+    </names>
+  </macro>
+  <macro name="zh-year">
+    <choose>
+      <if variable="issued">
+        <group>
+          <date variable="issued">
+            <date-part name="year"/>
+          </date>
+          <text variable="year-suffix"/>
+        </group>
+      </if>
+      <else>
+        <group>
+          <text value="無日期"/>
+          <text prefix="-" variable="year-suffix"/>
+        </group>
+      </else>
+    </choose>
+  </macro>
+  <macro name="zh-title">
+    <choose>
+      <if match="any" type="article-journal article-magazine article-newspaper chapter entry entry-dictionary entry-encyclopedia paper-conference post post-weblog review review-book">
+        <text variable="title"/>
+      </if>
+      <else-if type="thesis">
+        <group>
+          <group font-style="italic">
+            <text variable="title"/>
+          </group>
+          <choose>
+            <if match="any" variable="DOI URL">
+              <group delimiter="，" prefix="〔" suffix="〕">
+                <choose>
+                  <if variable="genre">
+                    <text variable="genre"/>
+                  </if>
+                  <else>
+                    <text value="學位論文"/>
+                  </else>
+                </choose>
+                <text variable="publisher"/>
+              </group>
+            </if>
+            <else>
+              <group prefix="〔未出版之" suffix="〕">
+                <choose>
+                  <if variable="genre">
+                    <text variable="genre"/>
+                  </if>
+                  <else>
+                    <text value="學位論文"/>
+                  </else>
+                </choose>
+              </group>
+            </else>
+          </choose>
+        </group>
+      </else-if>
+      <else>
+        <group>
+          <group font-style="italic">
+            <text variable="title"/>
+          </group>
+          <choose>
+            <if is-numeric="edition">
+              <group prefix="（第" suffix="版）">
+                <number variable="edition"/>
+              </group>
+            </if>
+            <else>
+              <text prefix="（" suffix="）" variable="edition"/>
+            </else>
+          </choose>
+        </group>
+      </else>
+    </choose>
+  </macro>
+  <macro name="zh-title-short">
+    <choose>
+      <if match="any" type="article-journal article-magazine article-newspaper chapter entry entry-dictionary entry-encyclopedia paper-conference post post-weblog">
+        <text form="short" quotes="true" variable="title"/>
+      </if>
+      <else>
+        <group font-style="italic">
+          <text form="short" variable="title"/>
+        </group>
+      </else>
+    </choose>
+  </macro>
+  <macro name="zh-source">
+    <choose>
+      <if type="article-journal">
+        <group delimiter="，">
+          <group>
+            <group delimiter="，" font-style="italic">
+              <text variable="container-title"/>
+              <text variable="volume"/>
+            </group>
+            <choose>
+              <if variable="volume">
+                <text prefix="(" suffix=")" variable="issue"/>
+              </if>
+              <else>
+                <text prefix="，" variable="issue"/>
+              </else>
+            </choose>
+          </group>
+          <text variable="page"/>
+        </group>
+      </if>
+      <else-if match="any" type="chapter paper-conference entry entry-dictionary entry-encyclopedia">
+        <group delimiter="。">
+          <group prefix="載於">
+            <names suffix="，" variable="editor">
+              <name delimiter="、" delimiter-precedes-last="always" initialize-with=". " name-as-sort-order="all" sort-separator=", "/>
+              <label form="short" prefix="（" suffix="）"/>
+            </names>
+            <group font-style="italic">
+              <text variable="container-title"/>
+            </group>
+            <group prefix="（頁 " suffix="）">
+              <text variable="page"/>
+            </group>
+          </group>
+          <text variable="publisher"/>
+        </group>
+      </else-if>
+      <else-if match="any" type="article-magazine article-newspaper post post-weblog review review-book">
+        <group delimiter="，">
+          <group font-style="italic">
+            <text variable="container-title"/>
+          </group>
+          <text variable="page"/>
+        </group>
+      </else-if>
+      <else-if type="thesis">
+        <choose>
+          <if match="none" variable="DOI URL">
+            <text variable="publisher"/>
+          </if>
+        </choose>
+      </else-if>
+      <else>
+        <!-- 書、報告、網頁…：出版者或網站名（與作者相同時省略） -->
+        <choose>
+          <if variable="container-title">
+            <text variable="container-title"/>
+          </if>
+          <else>
+            <text variable="publisher"/>
+          </else>
+        </choose>
+      </else>
+    </choose>
+  </macro>
+  <macro name="zh-link">
+    <choose>
+      <if variable="DOI">
+        <text prefix="https://doi.org/" variable="DOI"/>
+      </if>
+      <else-if match="none" type="article-journal book chapter">
+        <text variable="URL"/>
+      </else-if>
+    </choose>
+  </macro>
+  <macro name="zh-bibliography">
+    <group>
+      <group delimiter="。" suffix="。">
+        <group>
+          <text macro="zh-names"/>
+          <text macro="zh-year" prefix="（" suffix="）"/>
+        </group>
+        <choose>
+          <if match="any" variable="author editor translator">
+            <text macro="zh-title"/>
+          </if>
+        </choose>
+        <text macro="zh-source"/>
+      </group>
+      <text macro="zh-link"/>
+    </group>
+  </macro>

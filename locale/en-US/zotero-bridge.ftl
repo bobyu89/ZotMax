@@ -587,6 +587,8 @@ zotero-bridge-pane-zh-meta-review = Review and fix…
 
 zotero-bridge-feature-pico = PICO question card and PICO table
 zotero-bridge-feature-pico-desc = Keeps one PICO question card per research project (collection): coaching questions help you focus it, the search string goes to the databases, and the question is yours to write. Then turns the selected papers into a PICO table (P, I, C, O, key findings, evidence level, appraisal; Markdown, CSV, pasteable into Word), with the AI's prefilled values marked so you can check them. No network, no AI.
+zotero-bridge-cmd-word-style =
+    .label = Install the Chinese APA style for Word
 zotero-bridge-cmd-pico-card =
     .label = PICO question card (current collection)…
 zotero-bridge-cmd-pico-table =

@@ -157,6 +157,12 @@
 				</menulist>
 			</hbox>
 			<checkbox label="中文文獻排在英文前（中文依筆畫、英文依字母；用於文獻比較表的參考文獻）" preference="extensions.zotero-bridge.apaZh.chineseFirst"/>
+			<html:h3>Word 的中文 APA 引用</html:h3>
+			<description>Zotero 官方的 APA 樣式把中文文獻寫成「陳, 美. &amp; 林, 小.」「et al.」。按下面的按鈕，把「APA 7 中英混排（臺灣，ZotMax）」和台灣護理學會版裝進 Zotero，再到 Word 的 Zotero 分頁 → Document Preferences 選它：語言是 zh-TW 的文獻改用中文 APA 7（全名、「、」「等」、（年）），英文文獻和官方樣式一樣，中文排在前面。文獻的語言欄要是 zh-TW，可以先用「中文文獻補強」檢查。</description>
+			<hbox align="center">
+				<button id="zb-word-style-install" label="安裝 Word 中文 APA 樣式" oncommand="ZoteroBridgePrefs.installWordStyle()"/>
+			</hbox>
+			<html:p id="zb-word-style-status" class="zb-hint" role="status"></html:p>
 		</groupbox>
 
 		<groupbox data-zb-section="bibliography" data-zb-feature="bibliography">

@@ -325,6 +325,12 @@
 			features: ["dashboard"], needs: null, menus: [],
 			keywords: ["儀表板", "dashboard", "進度", "progress", "待讀", "統計", "statistics", "obsidian"],
 			run: () => ZB().dashboard.runFromMenu() },
+		// Word 中文 APA 樣式 (word-style.js): the CSL styles for the Zotero Word plugin
+		{ id: "word-style", group: "organize", l10n: "zotero-bridge-cmd-word-style", label: "安裝 Word 中文 APA 樣式",
+			features: ["apaZh"], needs: null, menus: [],
+			keywords: ["word", "apa", "中文 apa", "引用", "citation", "citation style", "樣式", "style", "csl", "參考文獻", "bibliography",
+				"等", "et al", "中英混排", "libreoffice", "文書處理"],
+			run: () => ZB().wordStyle.runFromMenu() },
 		{ id: "concepts", group: "organize", l10n: "zotero-bridge-menu-concepts-update", label: "更新概念卡片",
 			features: ["concepts"], needs: null, menus: [],
 			keywords: ["概念", "概念卡片", "concept", "concepts", "卡片", "card", "索引", "index", "mesh", "wikilink"],
