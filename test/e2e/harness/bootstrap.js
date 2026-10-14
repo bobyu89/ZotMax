@@ -1711,6 +1711,9 @@ const TESTS = [
 		name: "Word 中文 APA 樣式: both CSL-M styles install into the real Zotero; Zotero's own citeproc writes Chinese APA for zh-TW items and English APA for English ones, also with a Chinese document language (ZB.wordStyle)",
 		needs: ["Zotero.ZoteroBridge is set and has every module"],
 		timeout: 60000,
+		// Zotero validates against CSL 1.0.2 and logs the CSL-M extensions (layout locale, default-locale-sort) once per
+		// installed style; the install goes on, as it does for the Zotero 中文社群's styles
+		allowUnattributed: [/^Style from ZotMax failed to validate/, /^Style from ZotMax failed to validate/],
 		async fn(d) {
 			let W = zb().wordStyle;
 			let zh = await createItem("journalArticle", {
@@ -2786,11 +2789,11 @@ async function runTest(t, passed) {
 	if (otherErrors.length) rec.otherConsoleErrors = otherErrors.slice(0, 10);
 	// An error without a source (a promise rejected with undefined, a failed Fluent translation) can't
 	// be attributed; Zotero without the plugin logs none (baseline), so count it against the test
-	// allowUnattributed lists texts that may occur, once per entry
+	// allowUnattributed lists texts (or patterns) that may occur, once per entry
 	let allowance = (t.allowUnattributed || []).slice();
 	let unattributed = otherErrors.filter((m) => {
 		if (m.source || m.stack) return false;
-		let i = allowance.indexOf(m.text);
+		let i = allowance.findIndex(a => (a instanceof RegExp ? a.test(m.text) : a === m.text));
 		if (i === -1) return true;
 		allowance.splice(i, 1);
 		return false;

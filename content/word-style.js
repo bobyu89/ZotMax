@@ -40,11 +40,16 @@
 		return { id: id ? id[1].trim() : "", updated: updated ? updated[1].trim() : "", title: title ? title[1].trim() : "" };
 	}
 
-	/** Should a bundled style replace the installed one? Only when it is newer (ISO dates compare as text). */
+	/** "2026-10-14T00:00:00+00:00" and Zotero's "2026-10-14 00:00:00" (Zotero.Style.updated) as one comparable form. */
+	function updatedKey(value) {
+		return String(value || "").trim().replace("T", " ").slice(0, 19);
+	}
+
+	/** Should a bundled style replace the installed one? Only when it is newer. */
 	function isNewer(bundledUpdated, installedUpdated) {
-		if (!bundledUpdated) return false;
-		if (!installedUpdated) return true;
-		return String(bundledUpdated) > String(installedUpdated);
+		if (!updatedKey(bundledUpdated)) return false;
+		if (!updatedKey(installedUpdated)) return true;
+		return updatedKey(bundledUpdated) > updatedKey(installedUpdated);
 	}
 
 	/** The style to pick in Word, by the 中文 APA 標點 setting. */

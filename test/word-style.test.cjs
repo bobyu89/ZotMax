@@ -95,6 +95,7 @@ test("the two styles: our ids and titles, CSL-M Chinese layouts on top of the of
 		assert.match(xml, /<layout locale="zh">\n\s*<text macro="zh-bibliography"\/>/);
 		assert.match(xml, /<link href="http:\/\/www.zotero.org\/styles\/apa" rel="template"\/>/);
 		assert.match(xml, /creativecommons.org\/licenses\/by-sa\/3.0/, "the official style's licence stays");
+		assert.doesNotMatch(xml.match(/<info>[\s\S]*<\/info>/)[0].match(/href="[^"]*"/g).join(" "), /[^\x20-\x7e]/, "ASCII links (the CSL schema's anyURI)");
 	}
 	assert.equal(W.preferred("twna").file, "apa-7-zh-tw-twna.csl");
 	assert.equal(W.preferred("whatever").file, "apa-7-zh-tw.csl");
@@ -102,6 +103,9 @@ test("the two styles: our ids and titles, CSL-M Chinese layouts on top of the of
 	assert.equal(W.isNewer("2026-10-14T00:00:00+00:00", "2026-10-14T00:00:00+00:00"), false);
 	assert.equal(W.isNewer("2026-10-14T00:00:00+00:00", ""), true);
 	assert.equal(W.isNewer("", "2026-10-14"), false);
+	// Zotero keeps <updated> as "2026-10-14 00:00:00" (Zotero.Style.updated): the same date is not newer
+	assert.equal(W.isNewer("2026-10-14T00:00:00+00:00", "2026-10-14 00:00:00"), false);
+	assert.equal(W.isNewer("2026-10-15T00:00:00+00:00", "2026-10-14 00:00:00"), true);
 });
 
 for (let [file, style] of [["apa-7-zh-tw.csl", "thesis"], ["apa-7-zh-tw-twna.csl", "twna"]]) {

@@ -39,7 +39,7 @@ function build(v) {
 		// English items always in English, whatever the document language; Chinese names by stroke count (ICU zh-TW)
 		'<style xmlns="http://purl.org/net/xbiblio/csl" class="in-text" default-locale="en-US" default-locale-sort="zh-TW" demote-non-dropping-particle="never"');
 	rep("    <title>APA Style 7th edition</title>\n    <title-short>Publication Manual of the American Psychological Association, with Bluebook</title-short>\n    <id>http://www.zotero.org/styles/apa</id>\n    <link href=\"http://www.zotero.org/styles/apa\" rel=\"self\"/>\n    <link href=\"http://www.zotero.org/styles/apa-6th-edition\" rel=\"template\"/>\n",
-		`    <title>${v.title}</title>\n    <title-short>${v.short}</title-short>\n    <id>https://bobyu89.github.io/ZotMax/styles/${v.id}</id>\n    <link href="https://bobyu89.github.io/ZotMax/styles/${v.file}" rel="self"/>\n    <link href="http://www.zotero.org/styles/apa" rel="template"/>\n    <link href="https://github.com/bobyu89/ZotMax#word-的中文-apa-引用" rel="documentation"/>\n`);
+		`    <title>${v.title}</title>\n    <title-short>${v.short}</title-short>\n    <id>https://bobyu89.github.io/ZotMax/styles/${v.id}</id>\n    <link href="https://bobyu89.github.io/ZotMax/styles/${v.file}" rel="self"/>\n    <link href="http://www.zotero.org/styles/apa" rel="template"/>\n    <link href="https://github.com/bobyu89/ZotMax#${encodeURIComponent("word-的中文-apa-引用")}" rel="documentation"/>\n`);
 	rep("    <contributor>\n      <name>Jay Pfaffman</name>",
 		"    <contributor>\n      <name>ZotMax</name>\n      <uri>https://github.com/bobyu89/ZotMax</uri>\n    </contributor>\n    <contributor>\n      <name>Jay Pfaffman</name>");
 	rep(/    <summary>[^<]*<\/summary>\n/.exec(s)[0],
