@@ -193,7 +193,7 @@ async function setup(prefs = {}) {
 		pages: "４５－５６頁", extra: "DOI: 10.6224/JN.202304_70(2).07", language: "",
 	}, [{ name: "陳美玲、林小華", creatorType: "author" }, { lastName: "歐", firstName: "陽志明", creatorType: "author" }]);
 	let english = new env.MockItem("journalArticle", {
-		key: "ENGLISH", title: "Exercise and falls", date: "民國112年", pages: "45~56", language: "zh", extra: "DOI: 10.1016/j.x.2021.01.001",
+		key: "ENGLISH", title: "Exercise and falls", date: "民國112年", pages: "45~56", language: "en", extra: "DOI: 10.1016/j.x.2021.01.001",
 	}, [{ name: "陳美玲、林小華", creatorType: "author" }]);
 	let tidy = new env.MockItem("journalArticle", {
 		key: "TIDY", title: "加護病房護理人員之睡眠品質", date: "2020", publicationTitle: "長庚護理", volume: "31", issue: "1", pages: "1-12",

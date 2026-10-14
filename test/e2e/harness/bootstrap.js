@@ -361,6 +361,7 @@ const TESTS = [
 				zhMeta: ["analyze", "itemData", "findingsFor", "paneCount", "buildPlan", "defaultPicks", "review", "renderReview", "apply", "undoLast", "readLastRun", "run"],
 				obsidianStyle: ["css", "versionOf", "enableIn", "install", "afterSync", "describe"],
 				topics: ["groupTopics", "topicStats", "topicSection", "homeSection", "buildPage", "writeAll", "afterDashboard"],
+				wordStyle: ["styleInfo", "isNewer", "describe", "init", "install", "refreshInstalled", "status", "runFromMenu"],
 				geminiExport: ["folderName", "baseName", "capCheck", "itemMarkdown", "referencesMarkdown", "readmeText", "renderDialog", "exportTo", "dialog", "noticeInfo", "run",
 					"findGoogleDrive", "chooseDestination", "destination"],
 				pico: ["normalizeCard", "composeQuestion", "checkCard", "matchCard", "cardMarkdown", "tableRow", "tableMarkdown", "tableCSV", "tableHTML", "noteSection", "renderCard", "renderTable",
@@ -1707,6 +1708,60 @@ const TESTS = [
 		},
 	},
 	{
+		name: "Word 中文 APA 樣式: both CSL-M styles install into the real Zotero; Zotero's own citeproc writes Chinese APA for zh-TW items and English APA for English ones, also with a Chinese document language (ZB.wordStyle)",
+		needs: ["Zotero.ZoteroBridge is set and has every module"],
+		timeout: 60000,
+		// Zotero validates against CSL 1.0.2 and logs the CSL-M extensions (layout locale, default-locale-sort) once per
+		// installed style; the install goes on, as it does for the Zotero 中文社群's styles
+		allowUnattributed: [/^Style from ZotMax failed to validate/, /^Style from ZotMax failed to validate/],
+		async fn(d) {
+			let W = zb().wordStyle;
+			let zh = await createItem("journalArticle", {
+				title: "護理師主導運動對住院長者跌倒之成效：樣式測試", date: "2023", publicationTitle: "護理雜誌", volume: "70", issue: "2",
+				pages: "45-56", DOI: "10.6224/JN.202304_70(2).07", language: "zh-TW",
+			}, [{ name: "陳美玲", creatorType: "author" }, { lastName: "林", firstName: "小華", creatorType: "author" }]);
+			let en = await createItem("journalArticle", {
+				title: "Exercise and falls in hospital: A style test", date: "2021", publicationTitle: "Journal of Fall Research", volume: "12", issue: "3",
+				pages: "100-110", language: "en",
+			}, [{ lastName: "Lee", firstName: "Anna", creatorType: "author" }, { lastName: "Smith", firstName: "John", creatorType: "author" }, { lastName: "Brown", firstName: "Kate", creatorType: "author" }]);
+			try {
+				let results = await W.install({ force: true });
+				d.install = results.map(r => `${r.title}: ${r.status}${r.error ? ` (${r.error})` : ""}`);
+				check(results.every(r => r.status === "installed" || r.status === "updated"), `install: ${d.install.join("; ")}`);
+				for (let s of W.STYLES) check(Zotero.Styles.get(s.id), `Zotero.Styles.get(${s.id}) is empty after install`);
+				eq((await W.status()).every(s => s.installed), true, "status() after install");
+				// Installing again with nothing newer bundled: nothing to do
+				eq((await W.install()).map(r => r.status).join(","), "current,current", "a second install without force");
+				for (let lang of ["en-US", "zh-TW"]) {
+					let engine = Zotero.Styles.get(W.STYLES[0].id).getCiteProc(lang, "text");
+					let bib = Zotero.Cite.makeFormattedBibliographyOrCitationList(engine, [en, zh], "text").trim();
+					d[`bibliography ${lang}`] = bib;
+					let lines = bib.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+					eq(lines.length, 2, `two references (${lang})`);
+					eq(lines[0], "陳美玲、林小華（2023）。護理師主導運動對住院長者跌倒之成效：樣式測試。護理雜誌，70(2)，45–56。https://doi.org/10.6224/JN.202304_70(2).07",
+						`the Chinese reference comes first, in Chinese APA (${lang})`);
+					check(/^Lee, A\., Smith, J\., & Brown, K\. \(2021\)\. Exercise and falls in hospital: A style test\. Journal of Fall Research, 12\(3\), 100–110\.$/.test(lines[1]),
+						`the English reference is the official APA 7 (${lang}): ${lines[1]}`);
+					let cites = Zotero.Cite.makeFormattedBibliographyOrCitationList(engine, [zh, en], "text", true).trim();
+					d[`citations ${lang}`] = cites;
+					check(cites.includes("(陳美玲、林小華，2023)") && cites.includes("(Lee et al., 2021)"), `in-text citations (${lang}): ${cites}`);
+				}
+				// The 台灣護理學會 variant: 「．」 between parts
+				let twna = Zotero.Styles.get(W.STYLES[1].id).getCiteProc("en-US", "text");
+				let line = Zotero.Cite.makeFormattedBibliographyOrCitationList(twna, [zh], "text").trim();
+				eq(line, "陳美玲、林小華（2023）．護理師主導運動對住院長者跌倒之成效：樣式測試．護理雜誌，70(2)，45–56。https://doi.org/10.6224/JN.202304_70(2).07", "the 台灣護理學會 variant");
+			}
+			finally {
+				for (let s of W.STYLES) {
+					let style = Zotero.Styles.get(s.id);
+					if (style) await style.remove();
+				}
+				await zh.eraseTx();
+				await en.eraseTx();
+			}
+		},
+	},
+	{
 		name: "匯出給 Gemini Notebook writes Markdown, the APA list and the README into the work dir; the PDF only when asked; the window opens from chrome://zotero-bridge/ (ZB.geminiExport)",
 		needs: ["create items with PDF attachments in the real library"],
 		timeout: 90000,
@@ -2734,11 +2789,11 @@ async function runTest(t, passed) {
 	if (otherErrors.length) rec.otherConsoleErrors = otherErrors.slice(0, 10);
 	// An error without a source (a promise rejected with undefined, a failed Fluent translation) can't
 	// be attributed; Zotero without the plugin logs none (baseline), so count it against the test
-	// allowUnattributed lists texts that may occur, once per entry
+	// allowUnattributed lists texts (or patterns) that may occur, once per entry
 	let allowance = (t.allowUnattributed || []).slice();
 	let unattributed = otherErrors.filter((m) => {
 		if (m.source || m.stack) return false;
-		let i = allowance.indexOf(m.text);
+		let i = allowance.findIndex(a => (a instanceof RegExp ? a.test(m.text) : a === m.text));
 		if (i === -1) return true;
 		allowance.splice(i, 1);
 		return false;

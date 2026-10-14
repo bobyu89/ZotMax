@@ -19,7 +19,8 @@
  * name is the surname, what the item type is) start unticked and say why. Missing data (卷期頁, 年份,
  * 學位類別, 校名) is reported with no suggestion and where to look: nothing is looked up online in this
  * version and nothing is invented. Items that are not Chinese (apa-zh's isChineseItem: the title decides)
- * get no findings at all.
+ * get one finding at most: an English title with a Chinese language field (Airiti marks every record zh), which
+ * the Word style 「APA 7 中英混排」 (word-style.js) would format with Chinese rules.
  *
  * Nothing is written without the review window: apply() writes the ticked fixes of each item in one
  * transaction and keeps what it changed (zhMeta.lastRun), so 「復原上一次中文文獻修正」 puts those
@@ -498,8 +499,19 @@
 	 * opts.hasField(itemType, field): whether the type has the field (Zotero.ItemFields inside Zotero).
 	 * Returns [] for items that are not Chinese.
 	 */
+	/** An English item whose language says Chinese: the Word style would use the Chinese layout. */
+	function englishLanguage(data) {
+		if (!data) return [];
+		let lang = str(data.language).trim();
+		if (!lang || !(GENERIC_ZH.test(lang) || /^zh[-_]/i.test(lang) || TRAD_LABEL.test(lang) || SIMP_LABEL.test(lang))) return [];
+		if (guessLanguage(data.title) !== "en") return [];
+		return [{ id: "language", field: "language", label: FIELD_LABELS.language, problem: "英文文獻的語言寫成中文", confidence: "check", current: lang, suggested: "en",
+			hint: "華藝等資料庫常把英文文章也標成中文。語言是中文時，Word 的「APA 7 中英混排」樣式會用中文格式（「、」「等」）；英文文章請改成 en。",
+			changes: { fields: { language: "en" } } }];
+	}
+
 	function analyze(data, opts = {}) {
-		if (!isChinese(data)) return [];
+		if (!isChinese(data)) return englishLanguage(data);
 		let hasField = opts.hasField || defaultHasField;
 		let type = str(data.itemType) || "journalArticle";
 		let out = [];
@@ -958,7 +970,10 @@
 		for (let item of items) {
 			let data = itemData(item);
 			if (!isChinese(data)) {
-				plan.skipped++;
+				// English items: only the language check (englishLanguage)
+				let findings = analyze(data, { hasField });
+				if (findings.length) plan.items.push({ id: item.id, key: item.key, libraryID: item.libraryID, title: data.title, meta: metaLine(data), findings });
+				else plan.skipped++;
 				continue;
 			}
 			let entry = { id: item.id, key: item.key, libraryID: item.libraryID, title: data.title, meta: metaLine(data), findings: analyze(data, { hasField }) };

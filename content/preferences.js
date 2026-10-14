@@ -1296,6 +1296,21 @@
 			}
 		},
 
+		/** 「安裝 Word 中文 APA 樣式」: the CSL styles into Zotero (word-style.js). */
+		async installWordStyle() {
+			let status = document.getElementById("zb-word-style-status");
+			status.textContent = "安裝中…";
+			try {
+				let W = Zotero.ZoteroBridge.wordStyle;
+				let results = await W.install({ force: true });
+				status.textContent = W.describe(results, Zotero.Prefs.get(ZB_PREF + "apaZh.style", true) || "thesis");
+			}
+			catch (e) {
+				Zotero.logError(e);
+				status.textContent = `安裝失敗：${e.message || e}`;
+			}
+		},
+
 		/** PICO 表: where it goes without an Obsidian vault. */
 		async pickPicoFolder() {
 			const { FilePicker } = ChromeUtils.importESModule("chrome://zotero/content/modules/filePicker.mjs");

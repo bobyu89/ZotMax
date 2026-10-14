@@ -208,7 +208,7 @@ test("correct Chinese items produce no findings (journal article with en dash, s
 	assert.deepEqual(Z.analyze(clean({ title: "護理人員跌倒預防衛教之成效：以某醫學中心為例？" })), []);
 });
 
-test("English items are never touched, even when their fields look messy or the language says zh (Airiti)", () => {
+test("English items are never touched, even when their fields look messy; only a zh language is a check (the Word style would use Chinese rules)", () => {
 	let english = {
 		itemType: "journalArticle", title: "Effects of nurse-led education on fall prevention: a randomized controlled trial.",
 		creators: [{ lastName: "Chen", firstName: "Mei-Ling", creatorType: "author" }, { name: "陳美玲、林小華", creatorType: "author" }],
@@ -216,7 +216,13 @@ test("English items are never touched, even when their fields look messy or the 
 		DOI: "https://doi.org/10.1111/jan.12345.", extra: "DOI: 10.1111/jan.12345", language: "zh",
 	};
 	assert.equal(Z.isChinese(english), false);
-	assert.deepEqual(Z.analyze(english), []);
+	let found = Z.analyze(english);
+	assert.equal(found.length, 1, "nothing but the language");
+	assert.deepEqual([found[0].field, found[0].problem, found[0].confidence, found[0].current, found[0].suggested], ["language", "英文文獻的語言寫成中文", "check", "zh", "en"]);
+	assert.deepEqual(found[0].changes, { fields: { language: "en" } });
+	assert.match(found[0].hint, /APA 7 中英混排/);
+	assert.equal(Z.analyze(Object.assign({}, english, { language: "zh-TW" })).length, 1);
+	assert.deepEqual(Z.analyze(Object.assign({}, english, { language: "en" })), []);
 	assert.deepEqual(Z.analyze({ itemType: "journalArticle", title: "Fall prevention", language: "" }), []);
 	assert.deepEqual(Z.analyze({ itemType: "journalArticle", title: "看護師の転倒予防に関する研究", language: "" }), [], "Japanese");
 	assert.deepEqual(Z.analyze(null), []);

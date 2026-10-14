@@ -1737,6 +1737,13 @@
 		ZB.statsExplainer.init({ pluginID });
 		// 設定精靈 (setup.js): opens by itself once on a fresh profile, after the main window is ready
 		ZB.setup.init({ reason: opts.reason });
+		// Word 中文 APA 樣式 (word-style.js): refreshes the styles installed earlier when this version bundles newer ones
+		try {
+			ZB.wordStyle.init({ rootURI, chrome: !!opts.chrome });
+		}
+		catch (e) {
+			Zotero.logError(e);
+		}
 	}
 
 	// A batch still marked running at startup was cut off by Zotero quitting or crashing

@@ -243,6 +243,7 @@ Zotero 的「工具」選單只留「ZotMax 設定…」、「ZotMax 快速指�
 - **中途停止與接續**：一次同步很多篇時，工具 → **停止 ZotMax 同步**；之後 **繼續未完成的 ZotMax 同步（N 筆）**。Zotero 關閉或當掉也不會從頭來過，失敗的會一起重試。
 - **圖片劃線**：在 PDF 用「選取區域」框選的表格、圖和手繪註記，連同截圖一起同步（Obsidian 存在 `attachments/`，Notion 上傳成圖片）。
 - **中文 APA**：中文期刊、學位論文自動改用中文 APA 7（`陳美玲、林小華（2023）。題目。護理雜誌，70(2)，45–56。`，內文「陳美玲等，2023」），參考文獻可以中文在前。→ 設定 → 同步 → 中文文獻與中文 APA
+- **Word 的中文 APA 引用**：Zotero 官方 APA 樣式會把中文寫成「陳, 美. & 林, 小.」「et al.」。ZotMax 附兩個 Word 用的引用樣式「APA 7 中英混排（臺灣，ZotMax）」和台灣護理學會版：中文文獻用中文 APA 7，英文文獻和官方樣式一樣，中文排前面（依筆畫）。在 Word 繼續用 Zotero 外掛插入引用，按 Refresh 就更新。→ ZotMax 按鈕或快速指令 → **安裝 Word 中文 APA 樣式**。見[下方](#word-的中文-apa-引用)。
 - **中文文獻補強**：從華藝、臺灣期刊論文索引、博碩士論文系統匯入的資料常有錯（兩位作者擠在一格、民國年、「４５－５６頁」、DOI 只在「其他」欄），會讓中文 APA 出錯。選取文獻或分類 → ZotMax 按鈕或右鍵 → **檢查中文文獻資料…**，在確認視窗勾選要修正的地方才寫回 Zotero，可以復原。右側面板的「狀態」也會提醒「中文資料：3 個地方要檢查」。
 
 <details>
@@ -1040,6 +1041,33 @@ Gemini Notebook（2026 年 7 月以前叫 NotebookLM）可以只根據你上傳�
 - **參考文獻檔**：把文獻庫匯出成 vault 裡的 `Zotero/references.json`（CSL JSON，可加 BibTeX），條目 id 就是筆記的 `citekey`。在 Obsidian 用 `[@citekey]` 寫，再用 Pandoc 轉成 APA 7 的 Word。→ ZotMax 按鈕或快速指令 → **匯出參考文獻到 Obsidian**、分類右鍵 **ZotMax ▸ 匯出目前分類的參考文獻**、設定 → 參考文獻檔
 - 文獻比較表、PRISMA、評讀總表、PICO 表、引文追蹤的 CSV（UTF-8 BOM）都能直接用 Excel 開；PICO 表另有 Word 可開的 HTML 和「複製成表格」。
 
+#### Word 的中文 APA 引用
+
+用 Zotero 的 Word（或 LibreOffice）外掛寫論文時，官方 APA 樣式只有英文規則：中文文獻會變成「陳, 美., & 林, 小. (2023)」、內文「(陳 et al., 2023)」。ZotMax 附兩個引用樣式，中文文獻改用中文 APA 7，英文文獻維持官方 APA 7：
+
+| | 中文文獻（語言 zh-TW） | 英文文獻 |
+|---|---|---|
+| 參考文獻 | 陳美玲、林小華（2023）。題目。*護理雜誌，70*(2)，45–56。https://doi.org/… | Lee, A., Smith, J., & Brown, K. (2021). Title. *Journal, 12*(3), 100–110. |
+| 內文 | (陳美玲、林小華，2023)、(王大明等，2021)、(陳美玲，2023，頁 5) | (Lee et al., 2021) |
+
+- **兩個版本**：「APA 7 中英混排（臺灣，ZotMax）」各部分之間用「。」（各校論文 APA 7 指引常用）；「APA 7 中英混排（臺灣護理學會，ZotMax）」用「．」、最後是「。」。
+- **其他規則**：作者全名、以「、」相連，三位以上內文用「等」，參考文獻 21 位以上列前 19 位、「…」和最後一位；期刊名和卷號斜體；書名、學位論文斜體，學位論文寫〔未出版之碩士論文〕或〔碩士論文，校名〕；書的版次（第3版）、編者（主編）、章節「載於…（主編），*書名*（頁 x–y）」。參考文獻中文在前（依筆畫），英文在後（依字母）。
+
+**用法**
+1. ZotMax 按鈕或快速指令 → **安裝 Word 中文 APA 樣式**（或 設定 → 中文 APA 的同名按鈕）。兩個樣式會裝進 Zotero 設定 → 引用 → 樣式；之後 ZotMax 更新樣式時會自動換成新版。
+2. 先用 **檢查中文文獻資料…**（中文文獻補強）整理中文文獻：姓名改成單欄全名、語言設成 `zh-TW`。**語言欄是關鍵**：語言不是 zh／zh-TW 的文獻會用英文規則；反過來，華藝常把英文文章也標成中文，補強也會提醒改成 `en`。
+3. Word → Zotero 分頁 → **Document Preferences** → 選「APA 7 中英混排（臺灣，ZotMax）」→ OK，再按 **Refresh**。已經插入的引用會一起更新，不用重插。
+4. 中文變成方框 □：那是字型沒有中文字。Word → 常用 → 樣式 →「書目」（Bibliography）→ 修改 → 格式 → 字型，把**亞洲文字字型**設成新細明體或標楷體；內文引用跟著段落的字型。
+
+沒有裝 ZotMax 的同學也能用：到 [ZotMax 網站下載 .csl 檔](https://bobyu89.github.io/ZotMax/styles/apa-7-zh-tw.csl)（[護理學會版](https://bobyu89.github.io/ZotMax/styles/apa-7-zh-tw-twna.csl)），在 Zotero 設定 → 引用 → 樣式按「+」加入。Zotero 會說它「不是有效的 CSL 1.0.2 檔」，這是正常的：中英混排用到 Zotero 支援的 CSL-M 擴充，按確定安裝即可。
+
+**限制**
+- 題目以「？」「！」結尾時會變成「？。」，交稿前把「。」刪掉（Zotero 會提醒你改過，選保留）。
+- 網頁的網站名和作者相同時，APA 會省略網站名，這個樣式不會；可以把 Zotero 的「網站標題」留空。
+- 只認語言欄：中文題名、語言是空白的文獻仍用英文規則，所以第 2 步不能省。
+- Pandoc 不支援 CSL-M，所以這兩個樣式只能在 Zotero 的 Word／LibreOffice 外掛使用；Pandoc 的限制見下一段。
+- 樣式以 Zotero 官方「APA Style 7th edition」（CC BY-SA 3.0）為基礎改作，同樣以 CC BY-SA 3.0 授權；英文文獻的輸出與官方樣式相同。
+
 #### 在 Obsidian 寫論文並用 Pandoc 產生 APA Word
 
 <details>
@@ -1087,7 +1115,7 @@ pandoc 論文.md --citeproc --bibliography Zotero/references.json --csl apa.csl 
 
 **5.（選用）邊寫邊預覽**：安裝社群外掛 **Pandoc Reference List**，填入 `Zotero/references.json` 的完整路徑與 `apa.csl`，側欄會列出這份筆記引用的文獻，方便檢查 citekey 有沒有打錯。
 
-**中文文獻在 Pandoc 的限制**：`references.json` 裡中文姓名寫成完整姓名（`"literal": "陳美玲"`），中文文獻加 `"language": "zh-TW"`，所以內文是 `(陳美玲 et al., 2023)`、參考文獻 `陳美玲, 林小華, & 歐陽志明. (2023). …`：姓名對了，但標點與用語仍是英文規則，中文文獻也排在英文後面。目前沒有 Pandoc 能用的中文 APA 樣式（[Zotero 中文社群的樣式](https://github.com/zotero-chinese/styles)用 CSL-M，Pandoc 的 citeproc 不支援，見 [citeproc 更新紀錄](https://github.com/jgm/citeproc/blob/master/CHANGELOG.md)），所以外掛沒有附 CSL 檔。交稿前建議：英文文獻用 Pandoc 的結果；中文文獻從文獻筆記的「APA 7」或比較表的參考文獻複製（Obsidian 閱讀模式複製會保留斜體），放在最前面，並把內文的 `et al.` 改成「等」、`&` 改成「、」。
+**中文文獻在 Pandoc 的限制**：`references.json` 裡中文姓名寫成完整姓名（`"literal": "陳美玲"`），中文文獻加 `"language": "zh-TW"`，所以內文是 `(陳美玲 et al., 2023)`、參考文獻 `陳美玲, 林小華, & 歐陽志明. (2023). …`：姓名對了，但標點與用語仍是英文規則，中文文獻也排在英文後面。目前沒有 Pandoc 能用的中文 APA 樣式（[Zotero 中文社群的樣式](https://github.com/zotero-chinese/styles)用 CSL-M，Pandoc 的 citeproc 不支援，見 [citeproc 更新紀錄](https://github.com/jgm/citeproc/blob/master/CHANGELOG.md)）；ZotMax 的「APA 7 中英混排」也是 CSL-M，只能在 Word／LibreOffice 的 Zotero 外掛使用（見[上一段](#word-的中文-apa-引用)）。用 Pandoc 交稿前建議：英文文獻用 Pandoc 的結果；中文文獻從文獻筆記的「APA 7」或比較表的參考文獻複製（Obsidian 閱讀模式複製會保留斜體），放在最前面，並把內文的 `et al.` 改成「等」、`&` 改成「、」。
 
 </details>
 
@@ -1217,6 +1245,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi，並更新 updates.j
 | `content/fulltext-md.js`／`fulltext.js` | 全文轉 Markdown（純函式）；轉換快取、markitdown、全文筆記、Notion 子頁面、AI 標重點核對 |
 | `content/markdown.js` | Markdown ⇄ Notion blocks ⇄ HTML |
 | `content/apa-zh.js` | 中文 APA 7 |
+| `content/word-style.js`、`content/styles/*.csl` | Word 用的「APA 7 中英混排」引用樣式（CSL-M，由 `scripts/csl.mjs` 從官方 APA 樣式產生）與安裝 |
 | `content/export.js` | 參考文獻檔（CSL JSON／BibTeX）與 citekey |
 | `content/annotation-images.js` | 圖片劃線：截圖、複製到 vault、上傳 Notion、傳給 Claude |
 | `content/classify.js`／`classify-review.*` | 文獻自動分類與確認視窗 |

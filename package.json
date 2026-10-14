@@ -1,6 +1,6 @@
 {
   "name": "zotero-bridge",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "private": true,
   "description": "Zotero 10 plugin: AI literature notes + sync to Notion and Obsidian",
   "scripts": {
@@ -9,6 +9,7 @@
     "compat": "node scripts/compat.mjs"
   },
   "devDependencies": {
+    "citeproc": "^2.4.63",
     "jsdom": "^26.1.0"
   }
 }
