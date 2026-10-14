@@ -4,10 +4,10 @@ var ZB;
 // the 快速指令 window, content/palette.xhtml, and the 設定精靈 window, content/setup.xhtml; also the
 // 中文文獻補強 review dialog, content/zh-meta-review.xhtml, and the 匯出給 Gemini Notebook window,
 // content/gemini-export.xhtml, and the PICO 問題卡 and PICO 表 windows, content/pico-card.xhtml and
-// content/pico-table.xhtml)
+// content/pico-table.xhtml, and the GRADE 證據確定性 window, content/grade.xhtml)
 var chromeHandle = null;
 
-const SCRIPTS = ["apa-zh.js", "appraisal-tools.js", "core.js", "markdown.js", "notion.js", "llm.js", "synthesis.js", "verify.js", "fulltext-md.js", "scanned.js", "usage.js", "secrets.js", "zotero-adapter.js", "fulltext.js", "export.js", "annotation-images.js", "status.js", "review-draft.js", "screening.js", "pubmed-watch.js", "dashboard.js", "citation-chase.js", "search-links.js", "ai-batch.js", "appraisal-coach.js", "appraisal-form.js", "pico.js", "progress-report.js", "concepts.js", "topics.js", "classify.js", "zh-meta.js", "word-style.js", "stats-explainer.js", "gemini-export.js", "obsidian-style.js", "features.js", "commands.js", "menus.js", "palette.js", "setup.js", "report.js", "toolbar.js", "sidepanel.js", "main.js"];
+const SCRIPTS = ["apa-zh.js", "appraisal-tools.js", "core.js", "markdown.js", "notion.js", "llm.js", "synthesis.js", "verify.js", "fulltext-md.js", "scanned.js", "usage.js", "secrets.js", "zotero-adapter.js", "fulltext.js", "export.js", "annotation-images.js", "status.js", "review-draft.js", "screening.js", "pubmed-watch.js", "dashboard.js", "citation-chase.js", "search-links.js", "ai-batch.js", "appraisal-coach.js", "appraisal-form.js", "pico.js", "grade.js", "progress-report.js", "concepts.js", "topics.js", "classify.js", "zh-meta.js", "word-style.js", "stats-explainer.js", "gemini-export.js", "obsidian-style.js", "features.js", "commands.js", "menus.js", "palette.js", "setup.js", "report.js", "toolbar.js", "sidepanel.js", "main.js"];
 
 function install() {}
 

@@ -361,6 +361,7 @@ const TESTS = [
 				zhMeta: ["analyze", "itemData", "findingsFor", "paneCount", "buildPlan", "defaultPicks", "review", "renderReview", "apply", "undoLast", "readLastRun", "run"],
 				obsidianStyle: ["css", "versionOf", "enableIn", "install", "afterSync", "describe"],
 				topics: ["groupTopics", "topicStats", "topicSection", "homeSection", "buildPage", "writeAll", "afterDashboard"],
+				grade: ["normalizeTable", "certainty", "hints", "summary", "sofMarkdown", "sofCSV", "sofHTML", "renderWindow", "tableFor", "saveTable", "studyRows", "dialog", "writeFiles", "open"],
 				wordStyle: ["styleInfo", "isNewer", "describe", "init", "install", "refreshInstalled", "status", "runFromMenu"],
 				geminiExport: ["folderName", "baseName", "capCheck", "itemMarkdown", "referencesMarkdown", "readmeText", "renderDialog", "exportTo", "dialog", "noticeInfo", "run",
 					"findGoogleDrive", "chooseDestination", "destination"],
@@ -1970,6 +1971,75 @@ const TESTS = [
 		},
 	},
 	{
+		name: "GRADE 證據確定性: the window opens from chrome://zotero-bridge/ with its stylesheets; an outcome is rated and 儲存並匯出 writes the Summary of Findings into the vault's Reviews folder (ZB.grade)",
+		needs: ["AI note through the plugin's fetch with a stubbed Claude API (no network)", "screening decisions on real items and the PRISMA note (ZB.screening)"],
+		timeout: 90000,
+		async fn(d) {
+			let GR = zb().grade;
+			let tablesBefore = Zotero.Prefs.get(ZB_PREF + "grade.tables", true);
+			let win = null;
+			try {
+				let opened = null;
+				let pending = GR.open(ctx.collection, {
+					dialog: info => GR.dialog(info, { onOpen: (w) => {
+						opened = w;
+					} }),
+					notice: (info) => {
+						d.notice = info.text;
+						return "close";
+					},
+				});
+				win = await waitFor(() => opened, "the GRADE window (chrome://zotero-bridge/content/grade.xhtml)", 30000);
+				let root = win.document.getElementById(GR.ROOT);
+				eq(win.document.documentURI, GR.URL, "window URL");
+				d.title = root.querySelector(".zb-cl-title").textContent;
+				d.suggestions = [...root.querySelectorAll("[data-zb-suggestions] button")].map(b => b.textContent);
+				let input = root.querySelector("#zb-gr-add");
+				input.value = "E2E 跌倒發生率";
+				root.querySelector(".zb-gr-add").click();
+				let sec = await waitFor(() => root.querySelector("[data-zb-outcome]"), "the outcome section", 10000);
+				d.gridDisplay = win.getComputedStyle(sec.querySelector(".zb-gr-grid")).display;
+				eq(d.gridDisplay, "grid", "display of .zb-gr-grid (is grade.css loaded?)");
+				d.fieldDisplay = win.getComputedStyle(root.querySelector(".zb-pc-field")).display;
+				eq(d.fieldDisplay, "grid", "display of .zb-pc-field (is pico.css loaded?)");
+				let id = sec.getAttribute("data-zb-outcome");
+				let box = sec.querySelector("[data-zb-study]");
+				check(box, "the collection's studies are listed");
+				if (!box.checked) box.click();
+				let rob = win.document.getElementById(`zb-gr-${id}-rob`);
+				rob.value = "1";
+				rob.dispatchEvent(new win.Event("change"));
+				let reason = win.document.getElementById(`zb-gr-${id}-rob-reason`);
+				reason.value = "E2E 隨機分派不清楚";
+				reason.dispatchEvent(new win.Event("input"));
+				d.rating = sec.querySelector("[data-zb-rating]").textContent;
+				check(/^⊕⊕⊕◯ 中|^⊕◯◯◯ 極低/.test(d.rating), `rating after one step down: ${d.rating}`);
+				root.querySelector(".zb-cl-apply").click();
+				let result = await pending;
+				check(result && result.result, `open() result: ${JSON.stringify(result && Object.keys(result))}`);
+				await waitFor(() => win.closed, "the GRADE window to close", 10000);
+				let settings = await zb().main.readSettings();
+				let dir = PathUtils.join(settings.vaultPath, ...zb().core.splitFolder(settings.defaults.obsidianFolder), "Reviews");
+				eq(result.result.dir, dir, "the vault's Reviews folder");
+				let note = await IOUtils.readUTF8(PathUtils.join(dir, `${result.saved && GR.fileNames("E2E Review").note}`)).catch(() => "");
+				if (!note) {
+					let names = (await IOUtils.getChildren(dir)).filter(p => /GRADE 證據摘要\.md$/.test(p));
+					check(names.length, `no GRADE note in ${dir}`);
+					note = await IOUtils.readUTF8(names[0]);
+				}
+				check(/\| E2E 跌倒發生率 \| 關鍵 \|/.test(note), "the SoF row in the note");
+				check(/E2E 隨機分派不清楚/.test(note), "the reason as a footnote");
+				let saved = GR.tableFor(ctx.collection);
+				eq(saved && saved.outcomes.length, 1, "the rating kept for the collection");
+			}
+			finally {
+				if (win && !win.closed) win.close();
+				if (tablesBefore === undefined) Zotero.Prefs.clear(ZB_PREF + "grade.tables", true);
+				else setPref("grade.tables", tablesBefore);
+			}
+		},
+	},
+	{
 		name: "設定精靈 opens from its command, points Obsidian at a vault, syncs one item (試一次, no AI), 完成 sets setup.done and closes it",
 		needs: ["create items with PDF attachments in the real library"],
 		timeout: 120000,
@@ -2656,11 +2726,14 @@ const TESTS = [
 					F.setEnabled("appraisalForm", false);
 					F.setEnabled("screening", false);
 					let menu = await openToolbarMenu(button);
-					check(menu.groups.includes("appraise"), `toolbar menu keeps 篩選與評讀 while PICO is on: ${JSON.stringify(menu.groups)}`);
+					check(menu.groups.includes("appraise"), `toolbar menu keeps 篩選與評讀 while PICO and GRADE are on: ${JSON.stringify(menu.groups)}`);
 					F.setEnabled("pico", false);
 					menu = await openToolbarMenu(button);
+					check(menu.groups.includes("appraise"), `toolbar menu keeps 篩選與評讀 while GRADE is on: ${JSON.stringify(menu.groups)}`);
+					F.setEnabled("grade", false);
+					menu = await openToolbarMenu(button);
 					d.toolbar.custom = menu.groups;
-					check(!menu.groups.includes("appraise"), `toolbar menu groups with 篩選, 評讀表 and PICO off: ${JSON.stringify(menu.groups)}`);
+					check(!menu.groups.includes("appraise"), `toolbar menu groups with 篩選, 評讀表, PICO and GRADE off: ${JSON.stringify(menu.groups)}`);
 				}
 				// The PubMed watch timer only runs while the feature is on (no watches are saved: nothing is fetched)
 				setPref("pubmedWatch.autoCheck", true);

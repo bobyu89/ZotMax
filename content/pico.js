@@ -1587,6 +1587,6 @@
 		noteSection, noteFrontmatter, buildNote, fileNames, doneText, renderCard, renderTable,
 		// Zotero
 		scopeOf, cardFor, saveCard, deleteCard, prismaSection, searchQuery, searchInfo, openCard, destination, scopeItems, entryFor,
-		writeTable, exportTable, cardDialog, tableDialog, noticeInfo,
+		writeTable, exportTable, cardDialog, tableDialog, noticeInfo, waitForDialog,
 	};
 });

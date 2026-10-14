@@ -314,6 +314,15 @@ Two more windows of the review kind. The card is a form the user fills, so it is
 - **Files:** `<scope> PICO 表.md` (frontmatter `type: pico-table`, the card's elements, the counts; a managed block with the info callout, 本題 PICO, the table, the word-match legend, the studies without data; 「✍️ 我的筆記」), `.csv` (UTF-8 BOM, every column), `.html` (a plain document Word opens as a table). The PRISMA note of a collection with a card gets a 「本題 PICO」 section ahead of the counts.
 - **Words:** 對照本題 is always called a word match (✓ shared words, ？ none, — no data), never a verdict; every table says the values are the AI's prefill and that the user checks them against the paper.
 
+### GRADE window (`grade.xhtml`, `grade.css`, `content/grade.js`)
+- **Root:** `.zb-classify .zb-pico .zb-grade` — the review window's head, list and foot, the PICO fields, checks and chips; grade.css adds the outcome card.
+- **Head:** 「GRADE 證據確定性：<scope>」, one Pencil sentence: start by design, every step the user's with a reason, hints are reminders, no AI.
+- **研究問題:** a textarea prefilled from the PICO card, and the count of studies by design.
+- **結果指標:** an input + 加入, then chips (the card's O first, then the AI notes' common outcomes, with paper counts); at most 7.
+- **Outcome card** (Hairline border, `--zb-radius-sm`): title row `n. name` · the live rating in 600 (「⊕⊕◯◯ 低（從「高」開始；偏誤風險 −1…）」) · 刪除; a label · field grid (名稱, 重要性, 起始); the studies as checkboxes in a scrolling Hairline box with design, N, appraisal and direction in Pencil; 相對效果, 絕對效果, 參與人數; five domain rows (label · level select · reason input, then the GRADE question and 「提示：…」 in Pencil); 升級 rows only while the start is observational; 備註; the checks list (warn in 600, info in Pencil).
+- **Foot:** the summary line; 取消 · 儲存 · 儲存並匯出證據摘要表 (primary; disabled without a named outcome). Esc cancels.
+- **Files:** `<scope> GRADE 證據摘要.md` (`type: grade`, the outcomes' certainty in the frontmatter; a managed block with the info callout, 研究問題, the Summary of Findings table with footnote letters and the legend, the evidence profile, the included studies' appraisals, notes; 「✍️ 我的筆記」), `.csv` (every domain and reason), `.html` (SoF and profile for Word). Where the PICO 表 goes.
+
 ### Toolbar button (`content/toolbar.js`, `toolbar.css`)
 The mouse way into every command, next to the items it acts on. It is a guest in Zotero's own toolbar, so it borrows everything and adds only its icon.
 - **Place:** the items toolbar (`#zotero-items-toolbar`, above the item list), right after Zotero's 「新增筆記」: that row holds the buttons that act on the selected items, before the search box. Not the tab bar (window-level: tabs, sync) and not the collections toolbar.

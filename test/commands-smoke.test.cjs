@@ -472,7 +472,7 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"—", "# zotero-bridge-toolbar-group-organize",
 		"zotero-bridge-classify-tools", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
 		"—", "# zotero-bridge-toolbar-group-appraise",
-		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary", "zotero-bridge-cmd-pico-card", "zotero-bridge-cmd-pico-table",
+		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary", "zotero-bridge-cmd-pico-card", "zotero-bridge-cmd-pico-table", "zotero-bridge-cmd-grade",
 		"—", "# zotero-bridge-toolbar-group-ai",
 		"zotero-bridge-menu-regenerate",
 	]);
@@ -488,7 +488,7 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"zotero-bridge-classify-tools", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
 		"zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
-		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary", "zotero-bridge-cmd-pico-card", "zotero-bridge-cmd-pico-table",
+		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary", "zotero-bridge-cmd-pico-card", "zotero-bridge-cmd-pico-table", "zotero-bridge-cmd-grade",
 		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-cmd-gemini-export",
 	]);
 	// Tools: 設定… and 快速指令… always; the batch entries only while they apply
