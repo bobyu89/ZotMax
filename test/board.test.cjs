@@ -134,6 +134,10 @@ test("CSS snippet: header with the version, a grid board, flat cards, pills, lar
 	assert.ok(css.startsWith(style.header()));
 	assert.match(css, /\.callout\[data-callout="zm-board"\] > \.callout-content \{\n\tdisplay: grid;\n\tgrid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 230px\), 1fr\)\);/);
 	assert.match(css, /\[data-callout-metadata~="wide"\] \{\n\tgrid-column: 1 \/ -1;/);
+	assert.match(css, /grid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 230px\), 1fr\)\);\n\tgap: 10px;\n[^}]*align-items: stretch;/, "cards in a row are equally tall");
+	assert.match(css, /> \.callout\[data-callout="zm-findings"\],\n[^{]*:not\(:has\(> \.callout\[data-callout="zm-appraisal"\]\)\) > \.callout\[data-callout="zm-pico"\] \{\n\tgrid-column: 1 \/ -1;/, "主要發現 full width; PICO too without an appraisal card");
+	assert.match(css, /--list-indent: 1\.1em;/);
+	assert.match(css, /:has\(> \.callout\[data-callout="zm-next"\]\) \{\n\tgrid-template-columns: repeat\(auto-fit, minmax\(min\(100%, max\(230px, calc\(50% - 5px\)\)\), 1fr\)\);/, "the note's board: two columns at most");
 	assert.match(css, /> p code \{[^}]*border-radius: 999px;/);
 	assert.match(css, /\.callout\[data-callout="zm-kpi"\] strong \{[^}]*font-size: 1\.9em;/);
 	for (let [type] of style.CARDS) assert.match(css, new RegExp(`\\.callout\\[data-callout="${type}"\\] \\{\\n\\t--callout-color: [\\d, ]+;\\n\\t--callout-icon: lucide-[a-z-]+;`));
