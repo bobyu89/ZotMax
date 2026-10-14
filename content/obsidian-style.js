@@ -27,7 +27,7 @@
 	const SNIPPET = "zotmax";
 	const FILE_NAME = `${SNIPPET}.css`;
 	// Bumped whenever the CSS changes, so installed copies are refreshed on the next sync
-	const VERSION = 1;
+	const VERSION = 2;
 	const HEADER_RE = /^\/\* ZotMax 看板樣式 v(\d+)\b/;
 
 	/** Card types: [callout type, "r, g, b", Lucide icon]. */
@@ -70,7 +70,13 @@
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
 	gap: 10px;
-	align-items: start;
+	/* 同一排的卡片一樣高；半欄的卡片補進前面的空位（PICO 旁邊放評讀） */
+	align-items: stretch;
+	grid-auto-flow: row dense;
+}
+/* 文獻筆記的「重點」（有「下一步」卡）最多兩欄；儀表板的數字卡可以三、四欄 */
+.callout[data-callout="zm-board"] > .callout-content:has(> .callout[data-callout="zm-next"]) {
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, max(230px, calc(50% - 5px))), 1fr));
 }
 /* 卡片以外的內容（第一行的標籤、最後一行的連結）佔滿整列 */
 .callout[data-callout="zm-board"] > .callout-content > :not(.callout) {
@@ -90,6 +96,11 @@
 .callout[data-callout="zm-board"] .callout[data-callout-metadata~="wide"] {
 	grid-column: 1 / -1;
 }
+/* 主要發現是長句子，佔滿整列才好讀；沒有評讀卡時，PICO 也佔滿整列，不會留半排空白 */
+.callout[data-callout="zm-board"] > .callout-content > .callout[data-callout="zm-findings"],
+.callout[data-callout="zm-board"] > .callout-content:not(:has(> .callout[data-callout="zm-appraisal"])) > .callout[data-callout="zm-pico"] {
+	grid-column: 1 / -1;
+}
 .callout[data-callout="zm-board"] > .callout-content > .callout > .callout-title {
 	font-size: 0.9em;
 	padding: 0 0 6px;
@@ -100,8 +111,14 @@
 .callout[data-callout="zm-board"] > .callout-content > .callout > .callout-content > :last-child {
 	margin-bottom: 0;
 }
+/* 卡片裡的清單：縮排比 Obsidian 預設小，項目之間留一點距離 */
+.callout[data-callout="zm-board"] > .callout-content > .callout {
+	--list-indent: 1.1em;
+	--list-spacing: 0.25em;
+}
 .callout[data-callout="zm-board"] > .callout-content > .callout ul {
-	padding-inline-start: 1.2em;
+	padding-inline-start: 1.1em;
+	margin-block: 0;
 }
 
 /* 第一行的研究設計、樣本數、證據等級：膠囊標籤 */
