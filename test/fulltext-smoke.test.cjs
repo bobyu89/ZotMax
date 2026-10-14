@@ -482,7 +482,8 @@ test("sync writes the full-text note with coloured highlights and the compact li
 	// The literature note: 重點 first, links to the full text, the AI's quotes listed apart
 	let note = fs.readFileSync(notePath(vault), "utf8");
 	assert.match(note, /^fulltext: "\[\[Zotero\/全文\/lee2024\]\]"$/m);
-	assert.match(note, /%%\n\n> \[!abstract\] 重點\n> \*\*一句話\*\*：護理師帶的運動課讓住院長者跌倒率下降 30%。\n>\n> RCT · N = 120 · CEBM 2 · JBI 1\.c · 評讀：納入（AI 初評）\n/);
+	assert.match(note, /%%\n\n> \[!zm-board\] 重點\n> `RCT` `N = 120` `CEBM 2` `JBI 1\.c`\n>\n> > \[!zm-summary\|wide\] 一句話\n> > 護理師帶的運動課讓住院長者跌倒率下降 30%。\n/);
+	assert.match(note, /> > \[!zm-appraisal\] 評讀\n> > [^\n]*AI 初評，待核對 {2}\n(?:> > .*\n)*> > \*\*整體\*\*：納入\n/, "the AI's verdict on the 評讀 card");
 	assert.match(note, /^> \[\[Zotero\/全文\/lee2024\|全文與劃線\]\] · \[Zotero\]/m);
 	assert.match(note, /^> \[!tip\]- AI 標的重點（僅供參考）\n(?:>.*\n)*> - 🤖 "Nurses can deliver structured exercise safely in hospital wards\." — 作者結論$/m);
 	assert.doesNotMatch(note, /invented by the model/);

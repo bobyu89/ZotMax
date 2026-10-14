@@ -136,6 +136,7 @@
 			evidenceLevel: asText(f.evidence_level),
 			jbiLevel: asText(f.jbi_level),
 			appraisal: asText(f.appraisal_overall),
+			appraisalVerified: asText(f.appraisal_verified) === "true",
 			hasAI: !!(asText(f.ai_model) || asText(f.ai_generated)),
 			hasStudyData: ["study_design", "evidence_level", "jbi_level", "sample_size", "appraisal_overall"].some(k => asText(f[k])),
 			dateAdded: asText(f.date_added),
@@ -277,6 +278,8 @@
 			jbiLevels: sortedCounts(countBy(notes, r => r.jbiLevel || NO_VALUE), NO_VALUE, levelOrder),
 			appraisals: sortedCounts(countBy(notes, r => r.appraisal || NO_VALUE)),
 			withAI: notes.filter(r => r.hasAI).length,
+			appraised: notes.filter(r => r.appraisal).length,
+			verified: notes.filter(r => r.appraisalVerified).length,
 			withStudyData: notes.filter(r => r.hasStudyData).length,
 			fullText: [...fullText],
 			unread,
@@ -334,6 +337,38 @@
 		return String(s).replace(/"/g, "'").replace(/[\r\n]+/g, " ");
 	}
 
+	/** "▰▰▱▱▱▱▱▱▱▱ 20%": a bar and the percentage, for the tables' 比例 column. */
+	function share(n, total) {
+		return `${core.bar(n, total)} ${percent(n, total)}%`;
+	}
+
+	/** A number card of the 總覽 board: the title, the number in bold, then up to two short lines (hard breaks). */
+	function kpi(title, value, ...lines) {
+		let rows = [`**${value}**`, ...lines.filter(Boolean)];
+		return [`> [!zm-kpi] ${title}`, ...rows.map((l, k) => `> ${l}${k < rows.length - 1 ? "  " : ""}`)].join("\n");
+	}
+
+	/**
+	 * 「總覽」 at the top of the dashboard: number cards for the vault at a glance (literature, reading, AI notes,
+	 * appraisal, to-dos, review projects) as a [!zm-board] of [!zm-kpi] callouts; the ZotMax CSS snippet sets them
+	 * out as tiles with large numbers, plain Obsidian shows them stacked.
+	 */
+	function overviewBoard(stats, meta = {}) {
+		if (!stats.total) return "";
+		let reviews = meta.reviews || [];
+		let included = reviews.reduce((n, r) => n + (r.prisma && Number.isFinite(r.prisma.included) ? r.prisma.included : 0), 0);
+		let cards = [
+			kpi("文獻", `${stats.total} 篇`, stats.added.length ? `本週新增 ${stats.added.length} 篇` : "本週沒有新增"),
+			kpi("已讀完成率", `${stats.readPercent}%`, core.bar(stats.read, stats.total), `已讀＋已引用 ${stats.read}／${stats.total}`),
+			kpi("AI 筆記", `${stats.withAI}／${stats.total}`, core.bar(stats.withAI, stats.total), stats.total - stats.withAI ? `還有 ${stats.total - stats.withAI} 篇沒有` : "每篇都有"),
+			kpi("評讀已核對", `${stats.verified}／${stats.total}`, core.bar(stats.verified, stats.total), `有評讀結果 ${stats.appraised} 篇（含 AI 初評）`),
+			kpi("待讀", `${stats.unread.length} 篇`, stats.issues.length ? `⚠️ ${stats.issues.length} 篇資料要補` : "資料都齊了"),
+			kpi("回顧專案", `${reviews.length} 個`, reviews.length ? `納入 ${included} 篇` : "還沒有 PRISMA 筆記"),
+		];
+		let body = cards.join("\n\n").split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
+		return `> [!zm-board] 總覽\n${body}`;
+	}
+
 	/** Mermaid pie chart of the reading statuses ("" when there is nothing to draw). */
 	function buildStatusPie(statuses) {
 		let slices = statuses.filter(([, n]) => n > 0);
@@ -352,7 +387,7 @@
 		let parts = ["## 📖 閱讀進度"];
 		parts.push(`共 **${stats.total}** 篇文獻，已讀完成率 **${stats.readPercent}%**（已讀 + 已引用 ${stats.read} 篇）。`
 			+ (stats.deleted ? ` 另有 ${stats.deleted} 篇已從 Zotero 刪除，不列入計算。` : ""));
-		parts.push(table(["狀態", "篇數", "比例"], stats.statuses.map(([s, n]) => [s, n, `${percent(n, stats.total)}%`])));
+		parts.push(table(["狀態", "篇數", "比例"], stats.statuses.map(([s, n]) => [s, n, share(n, stats.total)])));
 		let pie = buildStatusPie(stats.statuses);
 		if (pie) parts.push(pie);
 		parts.push("### 各分類進度");
@@ -376,15 +411,16 @@
 			`- 掃描檔（全文 none／partial，建議先 OCR 再產生 AI 筆記）：**${scannedCount}** 篇`,
 		].join("\n"));
 		parts.push("### 研究設計");
-		parts.push(table(["研究設計", "篇數"], stats.designs));
+		let withShare = rows => rows.map(([k, n]) => [k, n, share(n, stats.total)]);
+		parts.push(table(["研究設計", "篇數", "比例"], withShare(stats.designs)));
 		parts.push("### 證據等級（Oxford CEBM 2011）");
-		parts.push(table(["證據等級", "篇數"], stats.levels));
+		parts.push(table(["證據等級", "篇數", "比例"], withShare(stats.levels)));
 		if (stats.jbiLevels.some(([k]) => k !== NO_VALUE)) {
 			parts.push("### JBI 證據等級");
-			parts.push(table(["JBI 等級", "篇數"], stats.jbiLevels));
+			parts.push(table(["JBI 等級", "篇數", "比例"], withShare(stats.jbiLevels)));
 		}
 		parts.push("### 嚴格評讀整體結果");
-		parts.push(table(["評讀結果", "篇數"], stats.appraisals));
+		parts.push(table(["評讀結果", "篇數", "比例"], withShare(stats.appraisals)));
 		parts.push("### 全文狀態");
 		parts.push(table(["全文", "篇數"], stats.fullText.map(([k, n]) => [fullTextLabel(k), n])));
 		return parts.join("\n\n");
@@ -496,7 +532,7 @@
 	/**
 	 * The managed region's content.
 	 * meta: { now: Date, reviews, drafts, usage: usageReport(), baseLink: "Zotero/研究儀表板.base" | "", latestReport: { date, link } | null,
-	 *   concepts: the 「🧠 熱門概念」 section (concepts.js) | "" }
+	 *   concepts: the 「🧠 熱門概念」 section (concepts.js) | "", layout: "board" (the 總覽 cards) | anything else (none) }
 	 */
 	function buildDashboardSection(stats, meta = {}) {
 		let info = [
@@ -507,6 +543,8 @@
 		if (meta.latestReport) info.push(`> 最新進度報告（給指導教授）：[[${meta.latestReport.link}|${meta.latestReport.date}]]`);
 		return [
 			info.join("\n"),
+			// The number cards first with the 看板 layout (the sync passes the pref)
+			...(meta.layout === "board" && overviewBoard(stats, meta) ? [overviewBoard(stats, meta)] : []),
 			progressSection(stats),
 			evidenceSection(stats),
 			todoSection(stats),
@@ -726,7 +764,8 @@
 		let latestReport = scope.ZB && scope.ZB.progressReport ? await scope.ZB.progressReport.latestReport(settings) : null;
 		// Top concept cards (concepts.js; their frontmatter only, never throws)
 		let concepts = scope.ZB && scope.ZB.concepts ? await scope.ZB.concepts.dashboardSection(settings) : "";
-		let section = buildDashboardSection(stats, { now, reviews, drafts, usage: report, baseLink, latestReport, concepts });
+		let layout = pref("obsidian.layout") === "classic" ? "classic" : "board";
+		let section = buildDashboardSection(stats, { now, reviews, drafts, usage: report, baseLink, latestReport, concepts, layout });
 		let path = PathUtils.join(dir, NOTE_NAME + ".md");
 		let existing = (await IOUtils.exists(path)) ? await IOUtils.readUTF8(path) : null;
 		let text = buildDashboardNote(existing, section, { updated: now.toISOString() });
@@ -787,7 +826,7 @@
 	return {
 		NOTE_NAME, BASE_NAME, ISSUE_LABELS,
 		parseFrontmatter, suspectChineseNames, noteRecord, projectRecord, aggregate, usageReport,
-		buildStatusPie, buildDashboardSection, buildDashboardNote, buildDashboardBase,
+		buildStatusPie, share, overviewBoard, buildDashboardSection, buildDashboardNote, buildDashboardBase,
 		update, afterSync, runFromMenu,
 	};
 });

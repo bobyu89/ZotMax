@@ -47,7 +47,7 @@
 	<vbox id="zb-panel-sync" class="zb-panel" role="tabpanel" data-zb-tab="sync" aria-labelledby="zb-tab-sync">
 		<html:p class="zb-panel-title" no-highlight="true" data-l10n-id="zotero-bridge-prefs-tab-sync">同步</html:p>
 		<groupbox data-zb-section="obsidian">
-			<label data-search-strings-raw="Obsidian, vault, folder, file name, citekey, Base, dashboard, child notes, sync, 資料夾, 檔名, 研究儀表板, 子筆記, 同步"><html:h2>Obsidian</html:h2></label>
+			<label data-search-strings-raw="Obsidian, vault, folder, file name, citekey, Base, dashboard, child notes, sync, layout, board, CSS, snippet, 資料夾, 檔名, 研究儀表板, 子筆記, 同步, 看板, 版面, 樣式, 卡片"><html:h2>Obsidian</html:h2></label>
 			<label value="Vault 資料夾路徑："/>
 			<hbox align="center">
 				<html:input id="zb-vault-path" type="text" preference="extensions.zotero-bridge.obsidian.vaultPath" style="flex: 1"/>
@@ -71,6 +71,20 @@
 					</menupopup>
 				</menulist>
 			</hbox>
+			<hbox align="center">
+				<label value="文獻筆記最上面的「重點」："/>
+				<menulist id="zb-note-layout" preference="extensions.zotero-bridge.obsidian.layout" native="true">
+					<menupopup>
+						<menuitem label="看板（卡片：一句話、PICO、主要發現、評讀、我的劃線、下一步）" value="board"/>
+						<menuitem label="精簡（一個區塊，舊版）" value="classic"/>
+					</menupopup>
+				</menulist>
+			</hbox>
+			<html:p class="zb-hint">下次同步時套用。看板搭配 ZotMax 的 CSS 片段，卡片會排成格狀、研究儀表板最上面多一排數字卡；沒有片段也能正常閱讀，只是卡片上下排。第一次同步時會自動安裝並啟用片段，之後在 Obsidian 關掉它就不會再被打開。</html:p>
+			<hbox align="center">
+				<button id="zb-style-install" label="安裝看板樣式到 Obsidian" oncommand="ZoteroBridgePrefs.installObsidianStyle()"/>
+			</hbox>
+			<html:p id="zb-style-status" class="zb-hint" role="status"></html:p>
 			<vbox data-zb-feature="sync">
 				<checkbox label="一併同步 Zotero 子筆記" preference="extensions.zotero-bridge.includeNotes"/>
 				<checkbox label="建立「Zotero 文獻庫.base」總表（表格 + 閱讀進度看板，需要 Obsidian 1.14 以上）" preference="extensions.zotero-bridge.obsidian.createBase"/>

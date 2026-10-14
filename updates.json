@@ -254,6 +254,17 @@
               "strict_max_version": "10.*"
             }
           }
+        },
+        {
+          "version": "0.20.0",
+          "update_link": "https://github.com/bobyu89/ZotMax/releases/download/v0.20.0/zotero-bridge-0.20.0.xpi",
+          "update_hash": "sha256:45f5549bacca1524d94dcf776b73c37a93171d4dc223f003578a470f20fdefb4",
+          "applications": {
+            "zotero": {
+              "strict_min_version": "10.0",
+              "strict_max_version": "10.*"
+            }
+          }
         }
       ]
     }

@@ -652,14 +652,156 @@
 		return `> [!${type}]${folded ? "-" : ""} ${title}` + (body ? "\n" + body : "");
 	}
 
+	// ---------- the 看板 layout (obsidian.layout = "board") ----------
+
 	/**
-	 * The managed block of an Obsidian literature note: 「重點」 open at the top, everything long folded below.
+	 * A text bar that reads anywhere (Obsidian, Notion, plain Markdown): "▰▰▰▱▱▱▱▱▱▱".
+	 * n of total, `width` cells; an empty total gives an empty bar.
+	 */
+	function bar(n, total, width = 10) {
+		let t = Number(total) || 0;
+		let filled = t > 0 ? Math.round(Math.min(Math.max(Number(n) || 0, 0), t) / t * width) : 0;
+		return "▰".repeat(filled) + "▱".repeat(width - filled);
+	}
+
+	/** Inline code chips for the board's first line (they look like pills with or without the CSS snippet). */
+	function chip(text) {
+		let t = oneLine(text).replace(/`/g, "'");
+		return t ? `\`${t}\`` : "";
+	}
+
+	/** A card inside the board: a nested callout ("> > [!zm-x] title"); `wide` spans the whole row. */
+	function card(type, title, md, wide) {
+		let body = String(md || "").trim().split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
+		return `> [!${type}${wide ? "|wide" : ""}] ${title}` + (body ? "\n" + body : "");
+	}
+
+	const PICO_ROWS = [["P", "population"], ["I", "intervention"], ["C", "comparison"], ["O", "outcomes"]];
+	const NOT_REPORTED_RE = /^(?:n\/?a|null|none|未報告|未提及|不適用|無)$/i;
+
+	/** The study's P, I, C, O lines ("" when the AI note has none of them). */
+	function picoCard(study) {
+		let s = study || {};
+		let rows = PICO_ROWS.map(([k, f]) => [k, oneLine(s[f])]).filter(([, v]) => v && !NOT_REPORTED_RE.test(v));
+		return rows.map(([k, v]) => `**${k}** ${v}`).join("  \n");
+	}
+
+	/**
+	 * The 評讀 card. board: { toolName, lights ("✅✅❓…"), counts {是,否,不清楚,不適用}, answered, total,
+	 * percentYes, status ("verified" | "human" | "ai"), overall } from appraisal-form.js boardInfo(); without
+	 * it, the AI note's own verdict.
+	 */
+	function appraisalCard(board, study) {
+		let s = study || {};
+		if (board && board.toolName) {
+			let state = board.status === "verified" ? "已核對" : board.status === "human" ? "評讀中" : "AI 初評，待核對";
+			let lines = [`${board.toolName}・${state}`];
+			if (board.lights) lines.push(board.lights);
+			if (board.answered) {
+				let c = board.counts || {};
+				let applicable = (c.是 || 0) + (c.否 || 0) + (c.不清楚 || 0);
+				lines.push(`${bar(c.是 || 0, applicable)} 是 ${c.是 || 0}／${applicable}` + (board.answered < board.total ? `（已答 ${board.answered}／${board.total} 題）` : ""));
+			}
+			lines.push(`**整體**：${board.overall || "（未判定）"}`);
+			return lines.join("  \n");
+		}
+		if (s.appraisal_overall) {
+			return [`${oneLine(s.appraisal_tool) || "AI 筆記的評讀"}・AI 初評，待核對`, `**整體**：${oneLine(s.appraisal_overall)}`].join("  \n");
+		}
+		return "";
+	}
+
+	/** The 我的劃線 card: a bar per colour meaning, then the top quotes. */
+	function highlightsCard(data, groups, top) {
+		if (!groups.length) return "";
+		let total = groups.reduce((n, g) => n + g.items.length, 0);
+		let lines = groups.map(g => `${g.info.emoji} ${g.meaning} ${bar(g.items.length, total, 6)} ${g.items.length}`);
+		let quotes = top.slice(0, 2).map(({ att, ann, group }) => {
+			let text = shorten(ann.text, 90);
+			let mark = ann.type === "underline" ? `${group.info.emoji} <u>${text}</u>` : highlightMark(colorInfo(ann.color), text);
+			return `- ${mark} · ${pageLink(data, att, ann)}`;
+		});
+		return lines.join("  \n") + (quotes.length ? "\n\n" + quotes.join("\n") : "");
+	}
+
+	/**
+	 * What to do next for this paper, from what the note has and lacks: [string]. Plain rules; the
+	 * empty list means everything the plugin can check is there.
+	 */
+	function nextSteps(data, opts, parts) {
+		let out = [];
+		let ft = String(data.fullTextStatus || "");
+		if (ft === "no_pdf") out.push("附上全文 PDF：沒有全文，AI 筆記和全文筆記只能用摘要");
+		else if (ft === "none" || ft === "partial") out.push("PDF 是掃描檔：先 OCR 加上文字層，AI 和全文筆記才讀得到內容");
+		if (!parts.ai) out.push("產生 AI 筆記：Zotero 右鍵 → ZotMax → 同步（沒有 AI 筆記才產生）");
+		if (!parts.groups.length && ft !== "no_pdf") out.push("讀的時候劃線：顏色代表的意義在 設定 → 劃線顏色與意義");
+		let board = opts.appraisalBoard;
+		if (board && board.toolName) {
+			if (board.status === "ai") out.push("核對評讀：表上是 AI 初評，在 ZotMax 面板開啟文獻評讀表逐題確認");
+			else if (board.status === "human" && board.answered < board.total) out.push(`評讀還有 ${board.total - board.answered} 題沒答`);
+			else if (board.status === "human") out.push("評讀答完了：勾「我已核對」，評讀結果才會取代 AI 的值");
+		}
+		else if (parts.ai) {
+			out.push("評讀：在 ZotMax 面板開啟文獻評讀表（CASP／JBI）");
+		}
+		return out;
+	}
+
+	/**
+	 * 「重點」 as a board of cards (the 看板 layout): the facts as chips, then 一句話, PICO, 主要發現, 評讀, 我的劃線
+	 * and 下一步 as nested callouts, then the links. Reads as stacked callouts in plain Obsidian; the ZotMax CSS
+	 * snippet (obsidian-style.js) lays the cards out as a grid. opts: as buildNoteSections, plus appraisalBoard.
+	 */
+	function buildBoard(data, opts = {}) {
+		let parts = keyPoints(data, opts);
+		let { ai, groups, sentence, findings, top } = parts;
+		let s = opts.study || {};
+		let chips = [
+			s.study_design,
+			Number.isFinite(s.sample_size) ? `N = ${s.sample_size}` : "",
+			oneLine(s.setting),
+			oneLine(s.country),
+			s.evidence_level ? `CEBM ${s.evidence_level}` : "",
+			s.jbi_level ? `JBI ${s.jbi_level}` : "",
+		].map(chip).filter(Boolean);
+		let cards = [];
+		if (sentence) cards.push(card("zm-summary", "一句話", sentence, true));
+		let pico = picoCard(opts.study);
+		if (pico) cards.push(card("zm-pico", "PICO", pico));
+		if (findings.length) cards.push(card("zm-findings", "主要發現", findings.map(f => `- ${f}`).join("\n")));
+		let appraisal = appraisalCard(opts.appraisalBoard, opts.study);
+		if (appraisal) cards.push(card("zm-appraisal", "評讀", appraisal));
+		let highlights = highlightsCard(data, groups, top);
+		// Wide: the quotes need the room, and the three cards above fill a row of their own
+		if (highlights) cards.push(card("zm-highlights", `我的劃線（${groups.reduce((n, g) => n + g.items.length, 0)}）`, highlights, true));
+		let steps = nextSteps(data, opts, { ai, groups });
+		cards.push(card("zm-next", "下一步", steps.length ? steps.map(x => `- ${x}`).join("\n") : "✅ 這篇的資料都齊了。想法寫在下面的「✍️ 我的筆記」。", true));
+
+		let links = [];
+		if (opts.fullTextLink) links.push(`[[${opts.fullTextLink}|全文與劃線]]`);
+		links.push(`[Zotero](${zoteroSelectURI(data)})`);
+		if (opts.notionUrl) links.push(`[Notion](${opts.notionUrl})`);
+		if (data.doi) links.push(`[DOI](https://doi.org/${encodeURI(data.doi)})`);
+
+		let blocks = [];
+		if (chips.length) blocks.push(chips.join(" "));
+		blocks.push(...cards);
+		blocks.push(links.join(" · "));
+		let body = blocks.join("\n\n").split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
+		return `> [!zm-board] 重點\n${body}`;
+	}
+
+	/**
+	 * The managed block of an Obsidian literature note: 「重點」 open at the top (a board of cards with
+	 * opts.layout "board", else one callout), everything long folded below.
 	 * @param {object} data item data from the Zotero adapter
-	 * @param {object} opts see buildNoteSections
+	 * @param {object} opts see buildNoteSections; layout, appraisalBoard (buildBoard)
 	 */
 	function buildManagedSection(data, opts = {}) {
 		let { keyPoints, sections } = buildNoteSections(data, Object.assign({}, opts, { target: "obsidian" }));
-		let parts = [MARK_START, callout("abstract", "重點", keyPoints, false)];
+		// opts.layout: "board" (看板, the default the sync passes) or anything else for the classic 「重點」 callout
+		let top = opts.layout === "board" ? buildBoard(data, opts) : callout("abstract", "重點", keyPoints, false);
+		let parts = [MARK_START, top];
 		for (let s of sections) parts.push(callout(s.type, s.title, s.md, true));
 		parts.push(MARK_END);
 		return parts.join("\n\n");
@@ -835,7 +977,7 @@
 		colorInfo, sanitizeFilename, creatorName, authorNames, firstAuthorLastName,
 		noteBasename, splitFolder, demoteHeadings, zoteroSelectURI, annotationURI, obsidianURI, tagToObsidian,
 		yamlScalar, splitFrontmatter, parseFrontmatterBlocks, buildFrontmatter, managedFrontmatter, studyFrontmatter, appraisalFrontmatter,
-		annotationsMarkdown, buildManagedSection, buildObsidianNote, buildNoteSections, callout,
+		annotationsMarkdown, buildManagedSection, buildObsidianNote, buildNoteSections, callout, bar, buildBoard, nextSteps,
 		DEFAULT_COLOR_MEANINGS, colorMeanings, annotationGroups, topHighlights, keyPoints, shorten, oneLine, oneSentence, keyFindings, aiNoteBody, factsLine,
 		resolveRoute, parseRules, truncate, buildBaseFile, STATUSES, DELETED_STATUS,
 		frontmatterScalar, setFrontmatterValue, zoteroKeyFromHead, markObsidianNoteDeleted,

@@ -174,7 +174,9 @@ test("buildDashboardSection: every section, links and tables", () => {
 	let headings = md.split("\n").filter(l => /^## /.test(l));
 	assert.deepEqual(headings, ["## 📖 閱讀進度", "## 🔬 證據概況", "## 📝 待處理清單", "## 🗂️ 回顧專案", "## 🤖 AI 用量", "## 🆕 本週新增"]);
 	assert.match(md, /共 \*\*7\*\* 篇文獻，已讀完成率 \*\*29%\*\*（已讀 \+ 已引用 2 篇）。 另有 1 篇已從 Zotero 刪除/);
-	assert.match(md, /\| 待讀 \| 2 \| 29% \|/);
+	assert.match(md, /\| 待讀 \| 2 \| ▰▰▰▱▱▱▱▱▱▱ 29% \|/, "a bar in the 比例 column");
+	assert.match(md, /\| 研究設計 \| 篇數 \| 比例 \|/);
+	assert.doesNotMatch(md, /\[!zm-board\]/, "no 總覽 cards without the 看板 layout");
 	assert.match(md, /```mermaid\npie showData\n/);
 	assert.match(md, /\| 分類 \| 篇數 \| 待讀 \| 閱讀中 \| 已讀 \| 已引用 \| 完成率 \|\n\| --- \| ---: \|/);
 	assert.match(md, /\| 碩論\/跌倒 \| 3 \| 1 \| 1 \| 1 \| 0 \| 33% \|/);
@@ -254,4 +256,28 @@ test("buildDashboardBase: three views in Bases syntax", () => {
 	}
 	// Different from the main base file
 	assert.notEqual(base, core.buildBaseFile());
+});
+
+test("overviewBoard: number cards for the vault (literature, reading, AI notes, appraisal, to-dos, review projects), only with the 看板 layout", () => {
+	let stats = d.aggregate(sample(), { now: NOW });
+	let reviews = [{ prisma: { included: 4 } }, { prisma: { included: null } }];
+	let board = d.overviewBoard(stats, { reviews });
+	assert.ok(board.startsWith("> [!zm-board] 總覽\n> > [!zm-kpi] 文獻\n> > **7 篇**  \n> > 本週新增 2 篇\n>\n"), board);
+	let titles = [...board.matchAll(/^> > \[!zm-kpi\] (.+)$/gm)].map(m => m[1]);
+	assert.deepEqual(titles, ["文獻", "已讀完成率", "AI 筆記", "評讀已核對", "待讀", "回顧專案"]);
+	assert.match(board, /> > \[!zm-kpi\] 已讀完成率\n> > \*\*29%\*\* {2}\n> > ▰▰▰▱▱▱▱▱▱▱ {2}\n> > 已讀＋已引用 2／7\n/, "hard line breaks between the rows");
+	assert.match(board, /> > \[!zm-kpi\] AI 筆記\n> > \*\*5／7\*\* {2}\n> > ▰▰▰▰▰▰▰▱▱▱ {2}\n> > 還有 2 篇沒有/);
+	assert.match(board, /> > \[!zm-kpi\] 評讀已核對\n> > \*\*0／7\*\* {2}\n> > ▱▱▱▱▱▱▱▱▱▱ {2}\n> > 有評讀結果 3 篇（含 AI 初評）/);
+	assert.match(board, /> > \[!zm-kpi\] 待讀\n> > \*\*2 篇\*\* {2}\n> > ⚠️ \d+ 篇資料要補/);
+	assert.match(board, /> > \[!zm-kpi\] 回顧專案\n> > \*\*2 個\*\* {2}\n> > 納入 4 篇$/);
+	assert.equal(d.overviewBoard(d.aggregate([], { now: NOW })), "", "nothing to show without notes");
+	// In the section: right after the info callout, only with layout "board"
+	let md = d.buildDashboardSection(stats, { now: NOW, layout: "board", reviews });
+	assert.ok(md.indexOf("> [!zm-board] 總覽") < md.indexOf("## 📖 閱讀進度"));
+	assert.doesNotMatch(d.buildDashboardSection(stats, { now: NOW, layout: "classic" }), /zm-board/);
+	assert.equal(d.share(1, 4), "▰▰▰▱▱▱▱▱▱▱ 25%");
+	// A verified appraisal is counted from the frontmatter
+	let verified = d.noteRecord(noteFM({ title: "V" }, Object.assign({ appraisal: { verified: true, tool: "CASP", overall: "納入" } }, AI), "已讀"), "Zotero/v.md");
+	assert.equal(verified.appraisalVerified, true);
+	assert.equal(d.aggregate([verified], { now: NOW }).verified, 1);
 });

@@ -54,6 +54,8 @@
 	const AI_HEADING = "AI 綜整（草稿）";
 	const KEY_CONCEPTS_RE = /^(#{1,6})[ \t]*(?:🔑[ \t]*)?(?:關鍵概念|key concepts?)(?![A-Za-z]).*$/imu;
 	const SUMMARY_RE = /^(#{1,6})[ \t]*一句話摘要[ \t]*$/m;
+	// The 看板's card title (core.js buildBoard)
+	const BOARD_SUMMARY_RE = /^(#{1,6})[ \t]*一句話[ \t]*$/m;
 	const NOT_REPORTED_RE = /^(?:n\/?a|null|none|無|不適用|未報告|文中未報告|not reported)$/i;
 
 	const DEFAULT_CONCEPT_PROMPT = `你是護理與醫學領域的研究助理，負責針對一個「概念」整合多篇文獻中與它有關的內容，寫成概念綜整草稿，放在研究生 Obsidian 的概念卡片中，供撰寫概念定義與文獻探討時參考。
@@ -134,10 +136,11 @@
 		let start = MARK_START_RE.exec(body);
 		let end = MARK_END_RE.exec(body);
 		if (!start || !end || end.index < start.index) return "";
+		// Callouts at any depth (the 看板's cards are nested, with metadata like [!zm-summary|wide]) become headings
 		return body.slice(start.index + start[0].length, end.index).split("\n").map((line) => {
-			let m = /^>[ \t]?\[![\w-]+\][+-]?[ \t]*(.*)$/.exec(line);
+			let m = /^(?:>[ \t]?)+\[![\w-]+(?:\|[^\]]*)?\][+-]?[ \t]*(.*)$/.exec(line);
 			if (m) return `# ${m[1]}`;
-			return line.replace(/^>[ \t]?/, "");
+			return line.replace(/^(?:>[ \t]?)+/, "");
 		}).join("\n");
 	}
 
@@ -173,12 +176,16 @@
 		return section === null ? [] : [...new Set(wikilinkTargets(section))];
 	}
 
-	/** The AI note's 「一句話摘要」 ("" without one): the 「重點」 block's 一句話, or the heading in older notes. */
+	/**
+	 * The AI note's 「一句話摘要」 ("" without one): the 看板's 一句話 card, the classic 「重點」 block's **一句話**, or
+	 * the heading in older notes.
+	 */
 	function oneLineSummary(text) {
 		let region = managedRegion(text);
 		let line = /^\*\*一句話\*\*[：:][ \t]*(.+)$/m.exec(region);
 		if (line) return line[1].replace(/\s+/g, " ").trim();
-		let section = headingSection(region, SUMMARY_RE);
+		let section = headingSection(region, BOARD_SUMMARY_RE);
+		if (section === null) section = headingSection(region, SUMMARY_RE);
 		if (section === null) return "";
 		let first = section.trim().split(/\n\s*\n/)[0] || "";
 		return first.replace(/\s+/g, " ").trim();

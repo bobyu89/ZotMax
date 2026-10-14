@@ -25,6 +25,11 @@
 		return Zotero.Prefs.get(PREF + key, true);
 	}
 
+	/** The literature note's 「重點」: "board" (看板, the default) or "classic" (one callout). */
+	function noteLayout() {
+		return pref("obsidian.layout") === "classic" ? "classic" : "board";
+	}
+
 	/** A feature switch (features.js), checked live: turning a feature off needs no restart. */
 	function featureOn(id) {
 		return ZB.features.isEnabled(id);
@@ -657,6 +662,9 @@
 			searchCallout: ZB.searchLinks.calloutFor(data, opts.ai && opts.ai.data),
 			appraisalMarkdown: opts.appraisal && opts.appraisal.markdown,
 			appraisal: opts.appraisal && opts.appraisal.values,
+			// 看板 (the default) or the classic 「重點」 callout; the 評讀 card reads the form itself
+			layout: noteLayout(),
+			appraisalBoard: opts.appraisal ? ZB.appraisalForm.boardInfo(opts.appraisal) : null,
 			colorMeanings: pref("annotations.colorMeanings") || "",
 			aiHighlights: opts.aiHighlights,
 			fullTextLink,
@@ -1092,6 +1100,8 @@
 				Zotero.logError(e);
 			}
 		}
+		// The 看板 CSS snippet in the vault (obsidian-style.js): installed once, refreshed when outdated; never throws
+		if (ok && settings.vaultPath && ZB.obsidianStyle) await ZB.obsidianStyle.afterSync(settings);
 		// 研究儀表板 after manual runs (dashboard.js); must never fail the sync
 		if (ok && !action.silent) {
 			try {
