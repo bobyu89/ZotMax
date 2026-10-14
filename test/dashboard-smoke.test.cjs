@@ -270,6 +270,10 @@ test("a manual sync writes the dashboard and its .base; 快速指令 or the tool
 	assert.match(text, /\| （未分類） \| 1 \|/);
 	assert.match(text, /\| RCT \| 1 \|/);
 	assert.match(text, /有 AI 文獻筆記：\*\*1\*\* 篇；沒有：\*\*2\*\* 篇/);
+	// The 圖表 board (看板 layout, the default) and the gap map, which needs two AI notes with I and O
+	assert.match(text, /\n> \[!zm-board\] 圖表\n> > \[!zm-chart\] 研究設計\n/);
+	assert.match(text, /> > \[!zm-chart\] 出版年份\n> > 2024 ▰▰▰▰▰▰▰▰▰▰ 3/);
+	assert.match(text, /## 🗺️ 證據缺口地圖\n\n還畫不出來/);
 	// Oldest unread first, with links to the notes
 	let unread = text.slice(text.indexOf("### 待讀最久"), text.indexOf("### ⚠️ 資料品質"));
 	assert.deepEqual([...unread.matchAll(/\[\[([^|\]]+)\|/g)].map(m => m[1]), [
@@ -289,6 +293,28 @@ test("a manual sync writes the dashboard and its .base; 快速指令 or the tool
 	let basePath = path.join(env.vault, "Zotero", "研究儀表板.base");
 	assert.equal(fs.readFileSync(basePath, "utf8"), ZB.dashboard.buildDashboardBase());
 	assert.ok(fs.existsSync(path.join(env.vault, "Zotero", "Zotero 文獻庫.base")));
+
+	// 首頁 and one 主題頁 per collection with notes; the notes stay where they are
+	let home = fs.readFileSync(path.join(env.vault, "Zotero", "首頁.md"), "utf8");
+	assert.match(home, /^---\ntype: "home"\nupdated: "[^"]+"\n---\n\n# 首頁\n\n%% zotero-bridge:start/);
+	assert.match(home, /> \[!zm-board\] 總覽\n/);
+	assert.match(home, /> \[!zm-board\] 主題（1）\n> > \[!zm-topic\] \[\[Zotero\/主題\/碩論／跌倒\|跌倒\]\]\n> > \*\*2 篇\*\* · 已讀 0%/);
+	assert.match(home, /另有 1 篇沒有放進任何 Zotero 分類/);
+	assert.match(home, /- 📊 \[\[Zotero\/研究儀表板\|研究儀表板\]\]/);
+	assert.match(home, /- 📚 \[\[Zotero\/Zotero 文獻庫\.base\|文獻總表\]\]/);
+	let topicPath = path.join(env.vault, "Zotero", "主題", "碩論／跌倒.md");
+	let topic = fs.readFileSync(topicPath, "utf8");
+	assert.match(topic, /^---\ntype: "topic"\nzotero_collection: "碩論\/跌倒"\nstudies: 2\n/);
+	assert.match(topic, /\n# 跌倒\n\n%% zotero-bridge:start/);
+	assert.match(topic, /依 Zotero 分類「碩論\/跌倒」的 2 篇文獻筆記/);
+	assert.match(topic, /> \[!zm-board\] 主題總覽\n/);
+	for (let h of ["## 🧭 證據說什麼", "## 📈 趨勢", "## 🕳️ 研究缺口與下一步", "### 🗺️ 證據缺口地圖", "## 📚 文獻（2 篇）"]) assert.ok(topic.includes(h), h);
+	assert.match(topic, /\| \[\[Zotero\/Author1 2024 - Study 1 of fall prevention in hospitals\\\|Study 1 of fall prevention in hospitals\]\] \| 2024 \| RCT \| L2 \|/);
+	assert.match(topic, /\*\*1 篇還沒有 AI 筆記\*\*/);
+	for (let [, target] of (home + topic).matchAll(/\[\[([^|\]\\]+)(?:\\?\||\]\])/g)) {
+		assert.ok(fs.existsSync(path.join(env.vault, target.endsWith(".base") ? target : target + ".md")), target);
+	}
+	fs.writeFileSync(topicPath, topic + "主題心得。\n");
 
 	// The user writes in the note and edits the .base; a review, a draft and AI usage appear
 	fs.writeFileSync(dashboardPath(env), text.replace("# 研究儀表板\n", "# 研究儀表板\n\n我的目標：12 月前讀完。\n") + "今天的心得。\n");
@@ -311,7 +337,11 @@ test("a manual sync writes the dashboard and its .base; 快速指令 or the tool
 	let before = env.descriptions.length;
 	toolsEntry(env).onCommand();
 	await settle(() => env.descriptions.length > before);
-	assert.match(env.descriptions.at(-1), /^已更新 Zotero\/研究儀表板\.md：3 篇文獻，已讀完成率 33%，待讀 2 篇，2 篇有資料品質問題。$/);
+	assert.match(env.descriptions.at(-1), /^已更新 Zotero\/研究儀表板\.md：3 篇文獻，已讀完成率 33%，待讀 2 篇，2 篇有資料品質問題。也更新了 Zotero\/首頁\.md 和 1 個主題頁。$/);
+	let topicAgain = fs.readFileSync(topicPath, "utf8");
+	assert.match(topicAgain, /## ✍️ 我的筆記\n\n主題心得。\n$/, "the user's part of a topic page stays");
+	assert.match(topicAgain, /\*\*2 篇\*\* {2}\n/);
+	assert.match(fs.readFileSync(path.join(env.vault, "Zotero", "首頁.md"), "utf8"), /- 🗂️ 回顧專案：\[\[Zotero\/Reviews\/跌倒\|跌倒：篩選與 PRISMA 2020\]\]/);
 	let again = fs.readFileSync(dashboardPath(env), "utf8");
 	assert.match(again, /# 研究儀表板\n\n我的目標：12 月前讀完。\n/);
 	assert.match(again, /## ✍️ 我的筆記\n\n今天的心得。\n$/);
@@ -341,8 +371,12 @@ test("only manual runs with the setting on rebuild it, and a failing dashboard n
 	// The Bases setting off: the note but no .base files
 	env.prefStore["extensions.zotero-bridge.dashboard.autoUpdate"] = true;
 	env.prefStore["extensions.zotero-bridge.obsidian.createBase"] = false;
+	// 首頁 and 主題頁 off: the dashboard only
+	env.prefStore["extensions.zotero-bridge.dashboard.topicPages"] = false;
 	await ZB.main.run([a], { targets: ["obsidian"], ai: "reuse" });
 	assert.ok(fs.existsSync(dashboardPath(env)));
+	assert.ok(!fs.existsSync(path.join(env.vault, "Zotero", "首頁.md")));
+	assert.ok(!fs.existsSync(path.join(env.vault, "Zotero", "主題")));
 	assert.ok(!fs.existsSync(path.join(env.vault, "Zotero", "研究儀表板.base")));
 	assert.ok(!/Bases 檢視/.test(fs.readFileSync(dashboardPath(env), "utf8")));
 	assert.deepEqual(env.errors, []);

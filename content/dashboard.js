@@ -136,6 +136,13 @@
 			evidenceLevel: asText(f.evidence_level),
 			jbiLevel: asText(f.jbi_level),
 			appraisal: asText(f.appraisal_overall),
+			appraisalVerified: asText(f.appraisal_verified) === "true",
+			// The AI note's I and O (the evidence gap map)
+			intervention: asText(f.intervention),
+			outcomes: asText(f.outcomes),
+			// 主題頁 (topics.js): the primary outcome's direction, the sample size, the setting
+			direction: asText(f.effect_direction),
+			sampleSize: Number.isFinite(Number(asText(f.sample_size))) && asText(f.sample_size) !== "" ? Number(asText(f.sample_size)) : null,
 			hasAI: !!(asText(f.ai_model) || asText(f.ai_generated)),
 			hasStudyData: ["study_design", "evidence_level", "jbi_level", "sample_size", "appraisal_overall"].some(k => asText(f[k])),
 			dateAdded: asText(f.date_added),
@@ -212,6 +219,39 @@
 		return issues;
 	}
 
+	/** Publication years, oldest first; more than YEAR_ROWS years fold the oldest into 「≤ year」. */
+	function yearRows(notes) {
+		let counts = new Map();
+		for (let r of notes) {
+			let y = Number.parseInt(String(r.year || "").slice(0, 4), 10);
+			if (Number.isFinite(y) && y > 1800) counts.set(y, (counts.get(y) || 0) + 1);
+		}
+		let years = [...counts.entries()].sort((a, b) => a[0] - b[0]);
+		if (years.length <= YEAR_ROWS) return years.map(([y, n]) => [String(y), n]);
+		let cut = years.length - (YEAR_ROWS - 1);
+		let older = years.slice(0, cut);
+		return [[`≤ ${older[older.length - 1][0]}`, older.reduce((s, [, n]) => s + n, 0)], ...years.slice(cut).map(([y, n]) => [String(y), n])];
+	}
+
+	/** Notes added in each of the last 12 months (oldest first), by date_added. */
+	function monthRows(notes, now) {
+		let d = new Date(now);
+		let keys = [];
+		for (let i = 11; i >= 0; i--) {
+			let m = new Date(d.getFullYear(), d.getMonth() - i, 1);
+			keys.push(`${m.getFullYear()}-${String(m.getMonth() + 1).padStart(2, "0")}`);
+		}
+		let counts = new Map(keys.map(k => [k, 0]));
+		for (let r of notes) {
+			let t = dateOf(r.dateAdded);
+			if (t === null) continue;
+			let a = new Date(t);
+			let k = `${a.getFullYear()}-${String(a.getMonth() + 1).padStart(2, "0")}`;
+			if (counts.has(k)) counts.set(k, counts.get(k) + 1);
+		}
+		return keys.map(k => [k, counts.get(k)]);
+	}
+
 	/**
 	 * Everything the dashboard shows about the literature notes.
 	 * @param {object[]} records noteRecord()s
@@ -277,6 +317,10 @@
 			jbiLevels: sortedCounts(countBy(notes, r => r.jbiLevel || NO_VALUE), NO_VALUE, levelOrder),
 			appraisals: sortedCounts(countBy(notes, r => r.appraisal || NO_VALUE)),
 			withAI: notes.filter(r => r.hasAI).length,
+			years: yearRows(notes),
+			months: monthRows(notes, now),
+			appraised: notes.filter(r => r.appraisal).length,
+			verified: notes.filter(r => r.appraisalVerified).length,
 			withStudyData: notes.filter(r => r.hasStudyData).length,
 			fullText: [...fullText],
 			unread,
@@ -334,6 +378,206 @@
 		return String(s).replace(/"/g, "'").replace(/[\r\n]+/g, " ");
 	}
 
+	/** "▰▰▱▱▱▱▱▱▱▱ 20%": a bar and the percentage, for the tables' 比例 column. */
+	function share(n, total) {
+		return `${core.bar(n, total)} ${percent(n, total)}%`;
+	}
+
+	/** A number card of the 總覽 board: the title, the number in bold, then up to two short lines (hard breaks). */
+	function kpi(title, value, ...lines) {
+		let rows = [`**${value}**`, ...lines.filter(Boolean)];
+		return [`> [!zm-kpi] ${title}`, ...rows.map((l, k) => `> ${l}${k < rows.length - 1 ? "  " : ""}`)].join("\n");
+	}
+
+	/**
+	 * 「總覽」 at the top of the dashboard: number cards for the vault at a glance (literature, reading, AI notes,
+	 * appraisal, to-dos, review projects) as a [!zm-board] of [!zm-kpi] callouts; the ZotMax CSS snippet sets them
+	 * out as tiles with large numbers, plain Obsidian shows them stacked.
+	 */
+	function overviewBoard(stats, meta = {}) {
+		if (!stats.total) return "";
+		let reviews = meta.reviews || [];
+		let included = reviews.reduce((n, r) => n + (r.prisma && Number.isFinite(r.prisma.included) ? r.prisma.included : 0), 0);
+		let cards = [
+			kpi("文獻", `${stats.total} 篇`, stats.added.length ? `本週新增 ${stats.added.length} 篇` : "本週沒有新增"),
+			kpi("已讀完成率", `${stats.readPercent}%`, core.bar(stats.read, stats.total), `已讀＋已引用 ${stats.read}／${stats.total}`),
+			kpi("AI 筆記", `${stats.withAI}／${stats.total}`, core.bar(stats.withAI, stats.total), stats.total - stats.withAI ? `還有 ${stats.total - stats.withAI} 篇沒有` : "每篇都有"),
+			kpi("評讀已核對", `${stats.verified}／${stats.total}`, core.bar(stats.verified, stats.total), `有評讀結果 ${stats.appraised} 篇（含 AI 初評）`),
+			kpi("待讀", `${stats.unread.length} 篇`, stats.issues.length ? `⚠️ ${stats.issues.length} 篇資料要補` : "資料都齊了"),
+			kpi("回顧專案", `${reviews.length} 個`, reviews.length ? `納入 ${included} 篇` : "還沒有 PRISMA 筆記"),
+		];
+		let body = cards.join("\n\n").split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
+		return `> [!zm-board] 總覽\n${body}`;
+	}
+
+	// ---------- 圖表 and the evidence gap map (pure) ----------
+
+	const NOT_REPORTED_RE = /^(?:n\/?a|null|none|nil|未報告|未提及|不適用|無)$/i;
+	const GAP_ROWS = 8;
+	const GAP_COLS = 6;
+	const GAP_TOP = 5;
+	const YEAR_ROWS = 12;
+
+	/** "跌倒發生率、跌倒自我效能" → its parts (short ones; "not reported" dropped). */
+	function splitTerms(text) {
+		return [...new Set(String(text || "").split(/\s*[、，,;；\n]\s*/).map(s => s.normalize("NFKC").replace(/\s+/g, " ").trim())
+			.filter(s => s && s.length <= 40 && !NOT_REPORTED_RE.test(s)))];
+	}
+
+	function termKey(s) {
+		return String(s).normalize("NFKC").toLowerCase().replace(/[\s\-‐-―_]+/g, " ").trim();
+	}
+
+	/** One heat square for a cell's paper count. */
+	function heat(n) {
+		return n <= 0 ? "⬜" : n === 1 ? "🟨" : n <= 3 ? "🟧" : "🟥";
+	}
+
+	/** The strongest CEBM level among records ("" when none has one); "1" is the strongest. */
+	function bestLevel(records) {
+		let levels = records.map(r => Number.parseInt(r.evidenceLevel, 10)).filter(n => Number.isFinite(n) && n > 0);
+		return levels.length ? String(Math.min(...levels)) : "";
+	}
+
+	/**
+	 * Interventions × outcomes from the notes' AI data. aliases: concepts.js parseAliases().map (optional), so
+	 * 「跌倒」 and 「Accidental Falls」 share a row once the user grouped them. Returns { rows, cols: [{ key, name,
+	 * count }] (most papers first, at most GAP_ROWS / GAP_COLS), cell(rowKey, colKey) → records, studied (notes with
+	 * both I and O), hiddenRows, hiddenCols }.
+	 */
+	function gapMap(records, opts = {}) {
+		let aliases = opts.aliases || new Map();
+		let name = (raw) => {
+			let k = termKey(raw);
+			let g = aliases.get(k);
+			return g ? { key: g.key, name: g.name } : { key: k, name: raw };
+		};
+		let rows = new Map();
+		let cols = new Map();
+		let cells = new Map();
+		let studied = 0;
+		let add = (map, t, r) => {
+			let e = map.get(t.key) || { key: t.key, name: t.name, records: new Set() };
+			e.records.add(r);
+			map.set(t.key, e);
+		};
+		for (let r of records) {
+			if (r.deleted) continue;
+			let is = splitTerms(r.intervention).map(name);
+			let os = splitTerms(r.outcomes).map(name);
+			if (!is.length || !os.length) continue;
+			studied++;
+			for (let i of is) add(rows, i, r);
+			for (let o of os) add(cols, o, r);
+			for (let i of is) {
+				for (let o of os) {
+					let k = `${i.key}\u0000${o.key}`;
+					let list = cells.get(k) || new Set();
+					list.add(r);
+					cells.set(k, list);
+				}
+			}
+		}
+		let rank = map => [...map.values()].map(e => ({ key: e.key, name: e.name, count: e.records.size }))
+			.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "zh-Hant"));
+		let allRows = rank(rows);
+		let allCols = rank(cols);
+		return {
+			rows: allRows.slice(0, opts.maxRows || GAP_ROWS),
+			cols: allCols.slice(0, opts.maxCols || GAP_COLS),
+			hiddenRows: Math.max(0, allRows.length - (opts.maxRows || GAP_ROWS)),
+			hiddenCols: Math.max(0, allCols.length - (opts.maxCols || GAP_COLS)),
+			cell: (rk, ck) => [...(cells.get(`${rk}\u0000${ck}`) || [])],
+			studied,
+		};
+	}
+
+	/**
+	 * 「🗺️ 證據缺口地圖」: the map as a table of heat squares, the legend, and the best-studied pairs with links.
+	 * opts.level: the heading level (2; a 主題頁 nests it at 3).
+	 */
+	function gapMapSection(map, opts = {}) {
+		let level = opts.level || 2;
+		let parts = [`${"#".repeat(level)} 🗺️ 證據缺口地圖`];
+		if (map.studied < 2 || !map.rows.length || !map.cols.length) {
+			parts.push("還畫不出來：至少要兩篇文獻的 AI 筆記有「介入」和「結果指標」。產生 AI 筆記後再更新儀表板。");
+			return parts.join("\n\n");
+		}
+		parts.push(`列是介入（I）、欄是結果指標（O），取自 ${map.studied} 篇文獻 AI 筆記的 PICO。格子是篇數和最強的證據等級（CEBM，數字越小越強）；⬜ 是還沒有研究的組合，可能就是研究缺口。`
+			+ "名稱只做字面合併，同一件事寫法不同時，到 設定 → 概念卡片 → 別名 把它們合成一組。");
+		let head = ["介入 ＼ 結果", ...map.cols.map(c => `${c.name}（${c.count}）`)];
+		let lines = [`| ${head.map(cell).join(" | ")} |`, `|${head.map((h, i) => (i ? ":---:" : "---")).join("|")}|`];
+		let pairs = [];
+		for (let r of map.rows) {
+			let row = [`${r.name}（${r.count}）`];
+			for (let c of map.cols) {
+				let recs = map.cell(r.key, c.key);
+				let level = bestLevel(recs);
+				row.push(recs.length ? `${heat(recs.length)} ${recs.length}${level ? `・L${level}` : ""}` : heat(0));
+				if (recs.length) pairs.push({ row: r, col: c, recs, level });
+			}
+			lines.push(`| ${row.map(cell).join(" | ")} |`);
+		}
+		parts.push(lines.join("\n"));
+		parts.push("圖例：⬜ 沒有研究　🟨 1 篇　🟧 2–3 篇　🟥 4 篇以上　L1–L5＝最強的 CEBM 證據等級"
+			+ (map.hiddenRows || map.hiddenCols ? `（另有 ${map.hiddenRows} 個介入、${map.hiddenCols} 個結果指標篇數較少，沒有列出）` : ""));
+		pairs.sort((a, b) => b.recs.length - a.recs.length || (a.level || "9").localeCompare(b.level || "9"));
+		if (pairs.length) {
+			parts.push(`${"#".repeat(level + 1)} 證據最多的組合`);
+			parts.push(pairs.slice(0, GAP_TOP).map(p => `- **${p.row.name} × ${p.col.name}**：${p.recs.length} 篇${p.level ? `（最強 CEBM ${p.level}）` : ""} — `
+				+ p.recs.slice(0, 4).map(r => wikilink(r.link, r.title)).join("、") + (p.recs.length > 4 ? ` 等 ${p.recs.length} 篇` : "")).join("\n"));
+		}
+		parts.push("> [!warning] 這是字詞層級的整理，不是系統性回顧\n> 介入和結果指標是 AI 筆記從各篇摘出來的，寫法不一致時會分成不同列或欄。找缺口時請回到原文確認，也記得這裡只有你收進 Zotero 的文獻。");
+		return parts.join("\n\n");
+	}
+
+	/** A chart card of the 圖表 board (hard breaks between lines; Mermaid code goes in as it is). */
+	function chartCard(title, lines, wide) {
+		let body = lines.map((l, k) => (l.startsWith("```") || l.startsWith("    ") || /^pie\b/.test(l) || k === lines.length - 1 ? l : `${l}  `));
+		return [`> [!zm-chart${wide ? "|wide" : ""}] ${title}`, ...body.map(l => `> ${l}`)].join("\n");
+	}
+
+	/** Labelled bars, scaled to the largest count: ["2023 ▰▰▰▱▱▱▱▱▱▱ 3", …]. */
+	function barRows(entries, width = 10) {
+		let max = Math.max(1, ...entries.map(([, n]) => n));
+		return entries.map(([label, n]) => `${label} ${core.bar(n, max, width)} ${n}`);
+	}
+
+	const SPARK = "▁▂▃▄▅▆▇█";
+
+	/** One block character per count, scaled to the largest (0 is the lowest block). */
+	function sparkline(counts) {
+		let max = Math.max(0, ...counts);
+		return counts.map(n => (n <= 0 || !max ? SPARK[0] : SPARK[Math.max(1, Math.round((n / max) * (SPARK.length - 1)))])).join("");
+	}
+
+	/** The 每月新增 card: the total, a sparkline of the 12 months, the range and the busiest month. */
+	function monthLines(months) {
+		let total = months.reduce((s, [, n]) => s + n, 0);
+		let top = months.reduce((a, b) => (b[1] > a[1] ? b : a));
+		return [`**${total} 篇**`, `\`${sparkline(months.map(([, n]) => n))}\``, `${months[0][0]} → ${months[months.length - 1][0]}；最多 ${top[0]}（${top[1]} 篇）`];
+	}
+
+	/**
+	 * 「圖表」: a board of chart cards — research designs as a Mermaid pie, evidence levels as bars (CEBM 1 on top,
+	 * like the pyramid), publication years as bars, the last 12 months' additions as a sparkline. "" without notes.
+	 */
+	function chartsBoard(stats) {
+		if (!stats.total) return "";
+		let cards = [];
+		let designs = stats.designs.filter(([k]) => k !== NO_VALUE);
+		if (designs.length) {
+			cards.push(chartCard("研究設計", ["```mermaid", "pie showData", ...designs.map(([k, n]) => `    "${mermaidText(k)}" : ${n}`), "```"]));
+		}
+		let levels = stats.levels.filter(([k]) => k !== NO_VALUE);
+		if (levels.length) cards.push(chartCard("證據等級（CEBM，1 最強）", barRows(levels.map(([k, n]) => [`L${k}`, n]))));
+		if (stats.years.length) cards.push(chartCard("出版年份", barRows(stats.years)));
+		if (stats.months.some(([, n]) => n)) cards.push(chartCard("每月新增（近 12 個月）", monthLines(stats.months)));
+		if (!cards.length) return "";
+		let body = cards.join("\n\n").split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
+		return `> [!zm-board] 圖表\n${body}`;
+	}
+
 	/** Mermaid pie chart of the reading statuses ("" when there is nothing to draw). */
 	function buildStatusPie(statuses) {
 		let slices = statuses.filter(([, n]) => n > 0);
@@ -352,7 +596,7 @@
 		let parts = ["## 📖 閱讀進度"];
 		parts.push(`共 **${stats.total}** 篇文獻，已讀完成率 **${stats.readPercent}%**（已讀 + 已引用 ${stats.read} 篇）。`
 			+ (stats.deleted ? ` 另有 ${stats.deleted} 篇已從 Zotero 刪除，不列入計算。` : ""));
-		parts.push(table(["狀態", "篇數", "比例"], stats.statuses.map(([s, n]) => [s, n, `${percent(n, stats.total)}%`])));
+		parts.push(table(["狀態", "篇數", "比例"], stats.statuses.map(([s, n]) => [s, n, share(n, stats.total)])));
 		let pie = buildStatusPie(stats.statuses);
 		if (pie) parts.push(pie);
 		parts.push("### 各分類進度");
@@ -376,15 +620,16 @@
 			`- 掃描檔（全文 none／partial，建議先 OCR 再產生 AI 筆記）：**${scannedCount}** 篇`,
 		].join("\n"));
 		parts.push("### 研究設計");
-		parts.push(table(["研究設計", "篇數"], stats.designs));
+		let withShare = rows => rows.map(([k, n]) => [k, n, share(n, stats.total)]);
+		parts.push(table(["研究設計", "篇數", "比例"], withShare(stats.designs)));
 		parts.push("### 證據等級（Oxford CEBM 2011）");
-		parts.push(table(["證據等級", "篇數"], stats.levels));
+		parts.push(table(["證據等級", "篇數", "比例"], withShare(stats.levels)));
 		if (stats.jbiLevels.some(([k]) => k !== NO_VALUE)) {
 			parts.push("### JBI 證據等級");
-			parts.push(table(["JBI 等級", "篇數"], stats.jbiLevels));
+			parts.push(table(["JBI 等級", "篇數", "比例"], withShare(stats.jbiLevels)));
 		}
 		parts.push("### 嚴格評讀整體結果");
-		parts.push(table(["評讀結果", "篇數"], stats.appraisals));
+		parts.push(table(["評讀結果", "篇數", "比例"], withShare(stats.appraisals)));
 		parts.push("### 全文狀態");
 		parts.push(table(["全文", "篇數"], stats.fullText.map(([k, n]) => [fullTextLabel(k), n])));
 		return parts.join("\n\n");
@@ -496,7 +741,8 @@
 	/**
 	 * The managed region's content.
 	 * meta: { now: Date, reviews, drafts, usage: usageReport(), baseLink: "Zotero/研究儀表板.base" | "", latestReport: { date, link } | null,
-	 *   concepts: the 「🧠 熱門概念」 section (concepts.js) | "" }
+	 *   concepts: the 「🧠 熱門概念」 section (concepts.js) | "", layout: "board" (the 總覽 and 圖表 boards) | anything else (none),
+	 *   gapMap: gapMap() for 「🗺️ 證據缺口地圖」 | absent }
 	 */
 	function buildDashboardSection(stats, meta = {}) {
 		let info = [
@@ -507,8 +753,13 @@
 		if (meta.latestReport) info.push(`> 最新進度報告（給指導教授）：[[${meta.latestReport.link}|${meta.latestReport.date}]]`);
 		return [
 			info.join("\n"),
+			// The number cards first with the 看板 layout (the sync passes the pref)
+			...(meta.layout === "board" && overviewBoard(stats, meta) ? [overviewBoard(stats, meta)] : []),
+			...(meta.layout === "board" && chartsBoard(stats) ? [chartsBoard(stats)] : []),
 			progressSection(stats),
 			evidenceSection(stats),
+			// The evidence gap map, when the caller built one (records with I and O)
+			...(meta.gapMap ? [gapMapSection(meta.gapMap)] : []),
 			todoSection(stats),
 			projectsSection(meta.reviews || [], meta.drafts || []),
 			// 「🧠 熱門概念」 (concepts.js), when given
@@ -711,7 +962,8 @@
 		let folderParts = core.splitFolder(settings.defaults.obsidianFolder);
 		let dir = PathUtils.join(settings.vaultPath, ...folderParts);
 		await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
-		let stats = aggregate(await literatureRecords(settings), { now });
+		let records = await literatureRecords(settings);
+		let stats = aggregate(records, { now });
 		let reviews = await projectRecords(settings, REVIEW_FOLDER);
 		let drafts = await projectRecords(settings, DRAFTS_FOLDER);
 		let report = usageReport(usage.parseLedger(pref("usage.ledger")), usage.parsePrices(pref("usage.prices")).prices, { now });
@@ -726,12 +978,25 @@
 		let latestReport = scope.ZB && scope.ZB.progressReport ? await scope.ZB.progressReport.latestReport(settings) : null;
 		// Top concept cards (concepts.js; their frontmatter only, never throws)
 		let concepts = scope.ZB && scope.ZB.concepts ? await scope.ZB.concepts.dashboardSection(settings) : "";
-		let section = buildDashboardSection(stats, { now, reviews, drafts, usage: report, baseLink, latestReport, concepts });
+		let layout = pref("obsidian.layout") === "classic" ? "classic" : "board";
+		// The concept cards' alias groups also merge the gap map's rows and columns
+		let aliases = null;
+		try {
+			aliases = scope.ZB.concepts ? scope.ZB.concepts.parseAliases(pref("concepts.aliases")).map : null;
+		}
+		catch (e) {
+			Zotero.logError(e);
+		}
+		let gap = gapMap(records, { aliases });
+		let section = buildDashboardSection(stats, { now, reviews, drafts, usage: report, baseLink, latestReport, concepts, layout, gapMap: gap });
 		let path = PathUtils.join(dir, NOTE_NAME + ".md");
 		let existing = (await IOUtils.exists(path)) ? await IOUtils.readUTF8(path) : null;
 		let text = buildDashboardNote(existing, section, { updated: now.toISOString() });
 		if (text !== existing) await IOUtils.writeUTF8(path, text);
-		return { relPath: [...folderParts, NOTE_NAME + ".md"].join("/"), stats, written: text !== existing };
+		// 首頁 and 主題頁 (topics.js) from the same records; never throws
+		let topics = scope.ZB && scope.ZB.topics
+			? await scope.ZB.topics.afterDashboard(settings, { records, stats, reviews, latestReport, layout, aliases, now }) : null;
+		return { relPath: [...folderParts, NOTE_NAME + ".md"].join("/"), stats, written: text !== existing, topics };
 	}
 
 	/** After a manual sync run (main.js): rebuild when 「同步後更新研究儀表板」 is on. Never throws. */
@@ -767,7 +1032,8 @@
 				let result = await update(settings);
 				let s = result.stats;
 				ZB.main.notify(headline, `已更新 ${result.relPath}：${s.total} 篇文獻，已讀完成率 ${s.readPercent}%`
-					+ `，待讀 ${s.unread.length} 篇${s.issues.length ? `，${s.issues.length} 篇有資料品質問題` : ""}。`);
+					+ `，待讀 ${s.unread.length} 篇${s.issues.length ? `，${s.issues.length} 篇有資料品質問題` : ""}。`
+					+ (result.topics ? `也更新了 ${result.topics.home} 和 ${result.topics.topics} 個主題頁。` : ""));
 				return result;
 			}
 			catch (e) {
@@ -787,7 +1053,7 @@
 	return {
 		NOTE_NAME, BASE_NAME, ISSUE_LABELS,
 		parseFrontmatter, suspectChineseNames, noteRecord, projectRecord, aggregate, usageReport,
-		buildStatusPie, buildDashboardSection, buildDashboardNote, buildDashboardBase,
-		update, afterSync, runFromMenu,
+		buildStatusPie, share, kpi, wikilink, cell, bestLevel, termKey, overviewBoard, splitTerms, gapMap, gapMapSection, chartsBoard, yearRows, monthRows, sparkline, buildDashboardSection, buildDashboardNote, buildDashboardBase,
+		literatureRecords, projectRecords, update, afterSync, runFromMenu,
 	};
 });

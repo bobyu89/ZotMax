@@ -3,8 +3,14 @@ pref("extensions.zotero-bridge.obsidian.vaultName", "");
 pref("extensions.zotero-bridge.obsidian.folder", "Zotero");
 pref("extensions.zotero-bridge.obsidian.filenameFormat", "citekey");
 pref("extensions.zotero-bridge.obsidian.createBase", true);
+// The literature note's 「重點」 (core.js buildBoard): "board" = 看板 of cards, "classic" = one callout
+pref("extensions.zotero-bridge.obsidian.layout", "board");
+// The 看板 CSS snippet (content/obsidian-style.js) was installed once; a snippet the user turned off stays off
+pref("extensions.zotero-bridge.obsidian.styleInstalled", false);
 // Rebuild <folder>/研究儀表板.md after each manual sync (content/dashboard.js)
 pref("extensions.zotero-bridge.dashboard.autoUpdate", true);
+// With the dashboard: <folder>/首頁.md and one page per Zotero collection in <folder>/主題/ (content/topics.js)
+pref("extensions.zotero-bridge.dashboard.topicPages", true);
 // Concept hub notes (content/concepts.js): rebuild <folder>/<concepts.folder>/*.md after each manual sync;
 // measures (and outcomes) from the structured data as concepts; alias groups, one per line: 跌倒 = Accidental Falls = falls;
 // a custom prompt for 「為概念卡片產生 AI 綜整」 (empty = built-in)

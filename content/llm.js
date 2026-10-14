@@ -26,10 +26,12 @@
 		"mixed methods", "systematic review", "meta-analysis", "scoping review", "guideline", "other",
 	];
 	const APPRAISAL_VERDICTS = ["納入", "排除", "需更多資訊"];
+	// Values allowed for effect_direction: the primary outcome's overall direction (the 主題頁's 證據說什麼)
+	const EFFECT_DIRECTIONS = ["有效", "無差異", "有害", "不一致"];
 	// Field order of the structured data (also the order of the stored JSON)
 	const STUDY_FIELDS = [
 		"study_design", "sample_size", "setting", "population", "intervention", "comparison", "outcomes",
-		"measures", "evidence_level", "jbi_level", "appraisal_tool", "appraisal_overall", "country",
+		"measures", "evidence_level", "jbi_level", "appraisal_tool", "appraisal_overall", "country", "effect_direction",
 	];
 	// Heading above the JSON kept in the Zotero AI note; removed again when the note is read back
 	const STUDY_DATA_HEADING = "📋 結構化資料（ZotMax）";
@@ -51,7 +53,8 @@
   "jbi_level": "1.c",
   "appraisal_tool": "JBI Checklist for Randomized Controlled Trials",
   "appraisal_overall": "納入",
-  "country": "Taiwan"
+  "country": "Taiwan",
+  "effect_direction": "有效"
 }
 \`\`\`
 欄位規則：
@@ -64,6 +67,7 @@
 - appraisal_tool：「${APPRAISAL_HEADING}」使用的清單英文官方名稱；沒有評讀填 null。
 - appraisal_overall：只能是 ${APPRAISAL_VERDICTS.map(v => `"${v}"`).join("、")} 其中之一，與「${APPRAISAL_HEADING}」的整體評價一致；沒有評讀填 null。
 - country：研究執行的國家（英文國名，例如 "Taiwan"、"United States"）；多國研究填 "Multinational"；未報告填 null。
+- effect_direction：比較介入（或暴露）與對照的研究，主要結果的整體方向，只能是 ${EFFECT_DIRECTIONS.map(v => `"${v}"`).join("、")} 其中之一："有效"＝介入組在主要結果顯著較好；"無差異"＝沒有統計上顯著的差異；"有害"＝介入組顯著較差或有明顯傷害；"不一致"＝幾個主要結果方向不同。系統性回顧依合併結果判斷。沒有比較組的研究（描述性、質性、單純相關）或無法判斷填 null。
 - 使用標準 JSON：雙引號、不加註解、不要尾隨逗號。`;
 
 	// 「AI 標重點」 (feature aiHighlights): asked for in the same call as the note, so it costs no extra
@@ -614,6 +618,16 @@
 		return s;
 	}
 
+	function normalizeDirection(v) {
+		let s = cleanString(v, 100);
+		if (!s) return "";
+		if (/不一致|混合|mixed|inconsistent|conflict/i.test(s)) return "不一致";
+		if (/無差異|無顯著|沒有差異|no (?:significant )?difference|not significant|neutral/i.test(s)) return "無差異";
+		if (/有害|變差|較差|harm|worse|negative|adverse/i.test(s)) return "有害";
+		if (/有效|改善|正向|較好|benefit|positive|effective|better|favou?rs? intervention|improve/i.test(s)) return "有效";
+		return "";
+	}
+
 	function normalizeMeasures(v) {
 		let list = Array.isArray(v) ? v : (typeof v === "string" ? v.split(/[;；、\n]/) : []);
 		let seen = new Set();
@@ -662,6 +676,7 @@
 			appraisal_tool: cleanString(obj.appraisal_tool, 100),
 			appraisal_overall: normalizeVerdict(obj.appraisal_overall),
 			country: cleanString(obj.country, 100),
+			effect_direction: normalizeDirection(obj.effect_direction),
 		}, highlights.length ? { highlights } : {});
 	}
 
@@ -791,7 +806,7 @@
 		anthropicContent, openaiInput, callAnthropic, callOpenAI, generateText, generateNote, imageContent, extractSummary,
 		anthropicSystem, anthropicBody, anthropicHeaders, readAnthropicMessage, notePrompt, noteRequestBody,
 		RETRY_STATUSES, MAX_RETRIES, postWithRetry, retryAfterMs, backoffDelay, parseUsage, httpError,
-		STUDY_FIELDS, STUDY_DESIGNS, APPRAISAL_VERDICTS, STUDY_DATA_HEADING, STUDY_DATA_PROMPT, APPRAISAL_HEADING,
+		STUDY_FIELDS, STUDY_DESIGNS, APPRAISAL_VERDICTS, EFFECT_DIRECTIONS, STUDY_DATA_HEADING, STUDY_DATA_PROMPT, APPRAISAL_HEADING,
 		normalizeStudyData, extractStudyData, hasStudyData, studyDataBlock,
 		AI_HIGHLIGHTS_PROMPT, MAX_AI_HIGHLIGHTS, normalizeHighlights,
 	};

@@ -359,6 +359,8 @@ const TESTS = [
 				concepts: ["update", "afterSync", "dashboardSection", "runFromMenu", "synthesizeFromMenu"],
 				classify: ["parseRules", "evaluate", "parseTopics", "suggest", "defaultPicks", "planApply", "apply", "undoLast", "readLastRun", "review", "renderReview", "run"],
 				zhMeta: ["analyze", "itemData", "findingsFor", "paneCount", "buildPlan", "defaultPicks", "review", "renderReview", "apply", "undoLast", "readLastRun", "run"],
+				obsidianStyle: ["css", "versionOf", "enableIn", "install", "afterSync", "describe"],
+				topics: ["groupTopics", "topicStats", "topicSection", "homeSection", "buildPage", "writeAll", "afterDashboard"],
 				geminiExport: ["folderName", "baseName", "capCheck", "itemMarkdown", "referencesMarkdown", "readmeText", "renderDialog", "exportTo", "dialog", "noticeInfo", "run",
 					"findGoogleDrive", "chooseDestination", "destination"],
 				pico: ["normalizeCard", "composeQuestion", "checkCard", "matchCard", "cardMarkdown", "tableRow", "tableMarkdown", "tableCSV", "tableHTML", "noteSection", "renderCard", "renderTable",
@@ -896,6 +898,9 @@ const TESTS = [
 		async fn(d) {
 			let vault = PathUtils.join(workDir, "vault");
 			await IOUtils.makeDirectory(vault, { createAncestors: true, ignoreExisting: true });
+			// A vault Obsidian has opened: .obsidian with an appearance.json, so the 看板 CSS snippet is installed
+			await IOUtils.makeDirectory(PathUtils.join(vault, ".obsidian"), { ignoreExisting: true });
+			await IOUtils.writeUTF8(PathUtils.join(vault, ".obsidian", "appearance.json"), JSON.stringify({ theme: "obsidian" }));
 			ctx.vault = vault;
 			ctx.noteDir = PathUtils.join(vault, "Zotero");
 			setPref("obsidian.vaultPath", vault);
@@ -951,8 +956,17 @@ const TESTS = [
 				problems.push(`English APA line (Zotero citeproc) wrong: ${(/^.*APA 7.*$/m.exec(en) || ["(no APA line)"])[0]}`);
 			}
 			if (!en.includes("E2E child note")) problems.push("English note does not contain the child note text");
-			// The compact layout: 「重點」 first in the managed block, the highlight under its colour's meaning
-			if (!/%% zotero-bridge:start[^\n]*%%\n\n> \[!abstract\] 重點\n/.test(en)) problems.push("English note has no 「重點」 block at the top of the managed region");
+			// The 看板 layout (the default): 「重點」 as a board of cards first in the managed block, the highlight under its colour's meaning
+			if (!/%% zotero-bridge:start[^\n]*%%\n\n> \[!zm-board\] 重點\n/.test(en)) problems.push("English note has no 「重點」 board at the top of the managed region");
+			if (!/^> > \[!zm-highlights\|wide\] 我的劃線（1）$/m.test(en)) problems.push("the board has no 我的劃線 card");
+			if (!/^> > \[!zm-next\|wide\] 下一步$/m.test(en)) problems.push("the board has no 下一步 card");
+			// The CSS snippet was written into the vault and turned on
+			let snippet = PathUtils.join(vault, ".obsidian", "snippets", "zotmax.css");
+			if (!(await IOUtils.exists(snippet))) problems.push(`no CSS snippet ${snippet}`);
+			else if (!(await IOUtils.readUTF8(snippet)).startsWith("/* ZotMax 看板樣式 v")) problems.push("the snippet lacks ZotMax's header");
+			let appearance = JSON.parse(await IOUtils.readUTF8(PathUtils.join(vault, ".obsidian", "appearance.json")));
+			d.appearance = appearance;
+			if (!(appearance.enabledCssSnippets || []).includes("zotmax") || appearance.theme !== "obsidian") problems.push(`appearance.json not updated as expected: ${JSON.stringify(appearance)}`);
 			if (!/^> \[!quote\]- 🔴 限制／疑問（1）\n> - ==🔴The intervention reduced the rate of falls by thirty percent compared with usual care\.== · \[p\. 1\]/m.test(en)) {
 				problems.push("English note does not list the red highlight under 限制／疑問");
 			}

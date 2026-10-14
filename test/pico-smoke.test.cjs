@@ -372,6 +372,31 @@ test("card window without 醫學資料庫搜尋連結: no links, a hint where th
 	assert.deepEqual(env.errors, []);
 });
 
+test("card window: the collection's common subject terms the card lacks, as copy buttons (from the papers' Zotero tags)", async () => {
+	let env = await setup();
+	let { ZB } = env;
+	env.lee.tags = ["*Accidental Falls/prevention & control", "Exercise Therapy", "Humans", "狀態/已讀"];
+	env.chen.tags = ["Accidental Falls", "Patient Education as Topic"];
+	env.selection.collection = env.collection;
+	let running = ZB.commands.execute("pico-card", ZB.commands.fromWindow(null, "toolbar"));
+	let root = await openedDialog(env, "zb-pico-card");
+	let doc = root.ownerDocument;
+	let terms = () => [...root.querySelectorAll("[data-zb-keywords] button")].map(b => b.textContent);
+	assert.deepEqual(terms(), ["Accidental Falls（2）", "Exercise Therapy（1）", "Patient Education as Topic（1）"], "workflow and check tags are not terms");
+	assert.equal(doc.getElementById("zb-pc-kw-h").textContent, "這個分類的文獻常用、但問題卡還沒有的詞（3）");
+	// A term written into the card leaves the list
+	type(doc.getElementById("zb-pc-o"), "跌倒 accidental falls");
+	assert.deepEqual(terms(), ["Exercise Therapy（1）", "Patient Education as Topic（1）"]);
+	root.querySelector("[data-zb-keywords] button").click();
+	assert.equal(env.copied.pop().text, "Exercise Therapy");
+	type(doc.getElementById("zb-pc-i"), "exercise therapy, patient education as topic");
+	assert.deepEqual(terms(), []);
+	assert.equal(doc.getElementById("zb-pc-kw-h").hidden, true, "nothing left to suggest: the list hides");
+	root.querySelector(".zb-cl-cancel").click();
+	assert.equal(JSON.stringify(await running), '{"cancelled":true}');
+	assert.deepEqual(env.errors, []);
+});
+
 const DL_NOTE = path.join(DOWNLOADS, "跌倒預防 PICO 表.md");
 
 test("table window and export: the collection, its card, Downloads without a vault; 匯出 writes the note, the CSV and the HTML; 複製成表格 puts the table on the clipboard", async () => {

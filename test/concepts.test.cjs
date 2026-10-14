@@ -23,7 +23,7 @@ function literatureNote(key, opts = {}) {
 	let text = core.buildObsidianNote(null, {
 		title, year: opts.year || "2024", key, libraryPath: "library",
 		creators: [{ lastName: "Chen", firstName: "Mei", creatorType: "author" }],
-	}, { aiMarkdown: ai, study: opts.study || null, aiModel: "test-model", aiGeneratedAt: NOW, now: NOW });
+	}, { aiMarkdown: ai, study: opts.study || null, aiModel: "test-model", aiGeneratedAt: NOW, now: NOW, layout: opts.layout });
 	// The user's own links below the managed region are not concepts
 	return text + (opts.user || "");
 }
@@ -78,6 +78,17 @@ test("keyConcepts: only the 關鍵概念 links of the managed region; labels, an
 	assert.deepEqual(c.keyConcepts(literatureNote("C", { heading: "其他" , concepts: ["X"] })), []);
 	// Inside a code fence the heading of the next section doesn't end the section early
 	assert.deepEqual(c.wikilinkTargets("[[A|a]] [[B\\|b]] ![[C]] [[ ]]"), ["A", "B"]);
+});
+
+test("the 看板 layout: the summary comes from the 一句話 card, 關鍵概念 still from the folded AI note", () => {
+	let board = literatureNote("B", { layout: "board", summary: "看板裡的一句話。", concepts: ["Self-efficacy"], study: { study_design: "RCT", population: "住院長者" } });
+	assert.match(board, /\[!zm-summary\|wide\] 一句話/);
+	let r = c.paperRecord(board, "Zotero/B.md");
+	assert.equal(r.summary, "看板裡的一句話。");
+	assert.deepEqual(c.keyConcepts(board), ["Self-efficacy"]);
+	// Same answers as the classic layout
+	let classic = c.paperRecord(literatureNote("B", { summary: "看板裡的一句話。", concepts: ["Self-efficacy"] }), "Zotero/B.md");
+	assert.equal(classic.summary, r.summary);
 });
 
 test("paperRecord: frontmatter fields, summary, measures and outcomes as typed mentions, deleted notes", () => {

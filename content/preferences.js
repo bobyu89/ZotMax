@@ -1275,6 +1275,27 @@
 			input.dispatchEvent(new Event("input"));
 		},
 
+		/** 「安裝看板樣式到 Obsidian」: write the CSS snippet into the vault and turn it on (obsidian-style.js). */
+		async installObsidianStyle() {
+			let status = document.getElementById("zb-style-status");
+			let vault = String(Zotero.Prefs.get(ZB_PREF + "obsidian.vaultPath", true) || "").trim();
+			if (!vault) {
+				status.textContent = "請先在上面填 Vault 資料夾路徑。";
+				return;
+			}
+			try {
+				let S = Zotero.ZoteroBridge.obsidianStyle;
+				// The button is an explicit choice: it also replaces a copy the user edited
+				let r = await S.install(vault, { enable: true, force: true });
+				if (r.status !== "noConfig") Zotero.Prefs.set(ZB_PREF + "obsidian.styleInstalled", true, true);
+				status.textContent = S.describe(r);
+			}
+			catch (e) {
+				Zotero.logError(e);
+				status.textContent = `安裝失敗：${e.message || e}`;
+			}
+		},
+
 		/** PICO 表: where it goes without an Obsidian vault. */
 		async pickPicoFolder() {
 			const { FilePicker } = ChromeUtils.importESModule("chrome://zotero/content/modules/filePicker.mjs");

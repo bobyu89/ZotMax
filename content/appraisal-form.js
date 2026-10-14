@@ -226,6 +226,33 @@
 		};
 	}
 
+	/**
+	 * The 評讀 card of the literature note's board (core.js buildBoard), from syncInfo(): the tool (its Chinese
+	 * name), one light per scored item in the tool's order (✅ ❌ ❓ ➖, ⬜ unanswered; a space after every five),
+	 * the counts, how far the form is and the verdict.
+	 * Null without a form.
+	 */
+	function boardInfo(info) {
+		if (!info || !info.record || !info.tool) return null;
+		let tool = info.tool;
+		let answers = tools.normalizeAnswers(info.record.answers);
+		let scored = tool.items.filter(i => !i.open);
+		let s = tools.summarize(tool, info.record.answers);
+		let lights = scored.map(i => (answers[i.id] && answers[i.id].answer ? tools.ICONS[answers[i.id].answer] : tools.MISSING_ICON));
+		return {
+			// The Chinese name is the shorter one, so it fits a card
+			toolName: tool.nameZh || tool.name,
+			// Groups of five, so the row wraps in a narrow card and the item numbers are easy to count
+			lights: lights.map((l, k) => (k && k % 5 === 0 ? " " : "") + l).join(""),
+			counts: s.counts,
+			answered: s.answered,
+			total: s.total,
+			percentYes: s.percentYes,
+			status: statusOf(info.record),
+			overall: info.record.overall || "",
+		};
+	}
+
 	/** Structured data with the verified form's tool and verdict (unchanged when not verified or no data). */
 	function overrideStudy(study, record) {
 		if (!study || !record || !record.verified) return study;
@@ -1028,7 +1055,7 @@
 	return {
 		NOTE_TAG, NOTE_TITLE, DATA_HEADING, SECTION_HEADING, KAPPA_FORMULA, REVIEW_FOLDER,
 		// pure
-		hasContent, statusOf, statusText, prefill, mergeAI, noteHTML, readNoteHTML, sectionMarkdown, recordFor, syncInfo,
+		hasContent, statusOf, statusText, prefill, mergeAI, noteHTML, readNoteHTML, sectionMarkdown, recordFor, syncInfo, boardInfo,
 		overrideStudy,
 		summaryPaths, counts, agreement, summaryBody, summaryCSV, summaryFrontmatter, buildSummaryNote, wordDocument,
 		// Zotero

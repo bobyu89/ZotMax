@@ -402,9 +402,32 @@ A part of the ZotMax panel, right after 重點, that exists only while the switc
 
 The synced literature note is a **Read** surface: the reader came back to a paper to find its point. The column is the user's vault theme; the plugin only decides structure, order and what is said once.
 
-**North star: the ten-second glance.** Everything needed to remember a paper sits in one open callout at the top; everything long is folded below in a fixed, predictable order, so the eye learns where things are.
+**North star: the ten-second glance.** Everything needed to remember a paper sits open at the top (a board of cards by default, one callout in the classic layout); everything long is folded below in a fixed, predictable order, so the eye learns where things are.
 
-### Structure (inside `%% zotero-bridge:start/end %%`)
+### 看板 (the default, `obsidian.layout` = `board`)
+`> [!zm-board] 重點` (open) holds, in this order, each only when it has data:
+- **Chips**: one line of inline code — design, `N = …`, setting, country, `CEBM …`, `JBI …`. Inline code reads as a pill even without the snippet.
+- **Cards** as nested callouts with ZotMax's own types (unknown to Obsidian, so they fall back to the default callout look): `[!zm-summary|wide] 一句話`, `[!zm-pico] PICO` (bold P/I/C/O letters, not-reported values dropped), `[!zm-findings] 主要發現` (≤3), `[!zm-appraisal] 評讀` (the tool's Chinese name and state 已核對／評讀中／AI 初評，待核對; one light per scored item ✅❌❓➖⬜ in groups of five; a ▰▱ bar of 是 over the applicable answers; **整體**), `[!zm-highlights|wide] 我的劃線（n）` (one ▰▱ bar per colour meaning, then two shortened quotes with page links), `[!zm-next|wide] 下一步` (always: what this paper still lacks — PDF, OCR, AI note, highlights, appraisal, verification — or 「這篇的資料都齊了」).
+- **Links line**: full-text note, Zotero, Notion, DOI.
+- Bars are text (`▰▱`), so they read the same in Obsidian, Notion, plain Markdown and any theme. Lines inside a card end with two spaces (hard breaks), so Obsidian's 「Strict line breaks」 setting doesn't change them.
+
+**The snippet** (`.obsidian/snippets/zotmax.css`, `content/obsidian-style.js`): the board on `--background-secondary` with a Hairline border and a 14px radius; its content a CSS grid (`auto-fit, minmax(min(100%, 230px), 1fr)`, 10px gap; one column on a phone); non-card content (chips, links) spans the row; cards flat on `--background-primary`, Hairline border, 10px radius, a 3px top rule in the card's colour; `|wide` cards span the row; chips as pills; `[!zm-kpi]` bold numbers at 1.9em with tabular figures; `[!zm-chart]` Mermaid SVGs shrink to the card, bars use tabular figures, and the sparkline (inline code) is set at 1.6em in the card colour without the code background. Each card type has its own `--callout-color` and Lucide `--callout-icon` (summary blue/quote, PICO green/target, findings amber/sparkles, appraisal violet/clipboard-check, highlights gold/highlighter, next rose/list-todo, KPI indigo/activity, chart teal/chart-column; the board slate/layout-dashboard). Only Obsidian's variables and these callout colours; no shadows. Installed and enabled once (`obsidian.styleInstalled`), refreshed while the file still starts with ZotMax's header; a copy the user edited or turned off is left alone.
+
+**研究儀表板** (dashboard.js), same layout switch: a `[!zm-board] 總覽` right under the info callout with six `[!zm-kpi]` cards — 文獻 (n 篇, this week's additions), 已讀完成率 (%, bar, read／total), AI 筆記 (with／total, bar), 評讀已核對 (verified／total, bar, how many have any verdict), 待讀 (n 篇, data issues), 回顧專案 (n 個, included). Each card: the number in bold, then at most two short lines. The tables' 比例 column carries a ▰▱ bar before the percentage.
+
+Then `[!zm-board] 圖表` with `[!zm-chart]` cards, each only when it has data: 研究設計 (a Mermaid `pie showData`), 證據等級（CEBM，1 最強） (bars, L1 on top like the pyramid), 出版年份 (bars, at most 12 rows, older years folded into 「≤ year」), 每月新增（近 12 個月） (the total, a one-line `▁▂▃▄▅▆▇█` sparkline in inline code, the range and the busiest month). Bars are scaled to the largest row and labelled with the count.
+
+**🗺️ 證據缺口地圖** (both layouts, after 證據概況): a plain table, interventions (rows, ≤8) × outcomes (columns, ≤6) from the notes' `intervention`／`outcomes` frontmatter, split at 、，,;； and merged by the concept-card aliases. A cell is a heat square (⬜ 0, 🟨 1, 🟧 2–3, 🟥 ≥4), the count and the best CEBM level (`🟧 3・L1`); ⬜ marks a possible gap. Below: the legend, 「證據最多的組合」 (top 5 pairs with links), and a `[!warning]` that this is word-level grouping, not a systematic review. Fewer than two notes with I and O: one sentence on what is missing instead of a table.
+
+**PICO 表 → 🔎 檢索詞建議** (pico.js): after the word-match legend, a table 詞 | 篇數 (▰▱ bar over the papers) | 已在問題卡 (✓) of the subject terms the papers carry as Zotero tags (MeSH qualifiers and `*` dropped; workflow tags `狀態/`, `篩選/`…, `_…` and MeSH check tags skipped), at most 15, terms on one paper only with fewer than four papers. The card window lists up to 8 terms the card lacks as copy buttons under the search links.
+
+**首頁 and 主題頁** (topics.js, with the dashboard; pref `dashboard.topicPages`). Notes never move: a topic is a Zotero collection path from the notes' `collections` frontmatter, so a note in two collections is on two pages.
+- `首頁.md` (`type: home`): info callout (Bookmarks／Homepage hint), the dashboard's `[!zm-board] 總覽`, `[!zm-board] 主題（n）` with one `[!zm-topic]` card per topic (title = wikilink to the page; rows: **n 篇** · 已讀 %, bar, 🧭 verdict (top／judged) · CEBM best, 📈 近 5 年 n 篇 ↑→↓, ➡️ the first next step, 📁 parent path), at most 12 cards then one line of links; the unfiled count; `## 🚀 快速入口`. Classic: `## 🗂️ 主題` as a table with the same columns.
+- `主題/<path with ／>.md` (`type: topic`, `zotero_collection`, `studies`): info with ← 首頁 · 研究儀表板, `[!zm-board] 主題總覽` (文獻, 已讀, 最強證據, 證據說什麼; classic: one line), `## 🧭 證據說什麼` (verdict sentence, a 結論方向 table with bars, `### 依介入` table, `[!warning]` AI 初判 ≠ GRADE), `## 📈 趨勢` (last five years vs the five before, a bar per year with the year in inline code, common interventions and outcomes), `## 🕳️ 研究缺口與下一步` (≤6 rule-based steps in a fixed priority, then `### 🗺️ 證據缺口地圖`), `## 📚 文獻` (strongest level, then newest). A page whose collection lost its notes gets a `[!warning]` block instead; the user's part stays.
+- The verdict: none judged → 尚無判斷; one → 僅 1 篇：<direction>; ≥⅔ one direction → 多數<direction>; else 結論分歧. Directions come from the AI note's `effect_direction` (有效／無差異／有害／不一致; null without a comparison group).
+- `[!zm-topic]`: cyan, Lucide folder-open.
+
+### Classic layout (`obsidian.layout` = `classic`)
 1. **`> [!abstract] 重點`** (open). In this order, each part only when it exists:
    - **一句話**：the AI note's one-sentence summary.
    - One facts line: `design · N = … · CEBM … · JBI … · 評讀：… （已核對／待核對／AI 初評）` (a verified appraisal form wins over the AI's verdict).
@@ -412,7 +435,7 @@ The synced literature note is a **Read** surface: the reader came back to a pape
    - **我的劃線**：up to three of the user's highlights, one per colour meaning first, in the meanings' order, each shortened to 140 characters with its meaning and page link.
    - A links line: full-text note, Zotero, Notion, DOI.
    - Empty state: one sentence saying what will appear here and how (highlight in Zotero, or generate the AI note).
-2. **Folded callouts** (`> [!type]- title`), fixed order, own words before the AI's, reference material last:
+2. **Folded callouts** (`> [!type]- title`, the same in both layouts), fixed order, own words before the AI's, reference material last:
    1. one `[!quote]-` per colour meaning with annotations, titled `🟡 重要發現（n）` (list items: highlight, page link; comment, image and tags indented under it)
    2. `[!note]- 我的 Zotero 筆記（n）`
    3. `[!example]- 文獻評讀表`
@@ -432,6 +455,8 @@ The managed container keeps the same order: 重點 as open blocks at its top, ea
 
 ### Named Rules
 **The Ten-Second Rule.** If a reader needs to unfold anything to learn what the paper found and whether it is any good, 重點 is missing something.
+
+**The Plain-Markdown Rule.** The board is built from callouts, inline code, bold and text bars only; the snippet arranges and colours it but never carries meaning, so a vault without the snippet, Obsidian Publish or a Markdown viewer still shows every fact in order.
 
 **The Own-Words-First Rule.** The user's highlights, notes and appraisal come before anything the AI wrote; AI content is labelled as such and folded.
 

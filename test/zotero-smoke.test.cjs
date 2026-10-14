@@ -443,7 +443,9 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.match(text, /\[\[Fall prevention\]\]/);
 	assert.match(text, /My \*\*own\*\* note/);
 	assert.match(text, /^> - ==🟡Falls decreased== · \[p\. 5\]/m, "the highlight under its colour's meaning");
-	assert.match(text, /^> \[!abstract\] 重點\n> \*\*一句話\*\*：護理師主導衛教/m, "重點 at the top");
+	assert.match(text, /^> \[!zm-board\] 重點\n> `RCT` `N = 120`/m, "重點 at the top, as the 看板 (the default layout)");
+	assert.match(text, /^> > \[!zm-summary\|wide\] 一句話\n> > 護理師主導衛教/m, "the 一句話 card");
+	assert.match(text, /^> > \[!zm-next\|wide\] 下一步\n/m, "the 下一步 card");
 	assert.match(text, /^study_design: "RCT"$/m);
 	assert.match(text, /^sample_size: 120$/m);
 	assert.match(text, /^measures:\n {2}- "Morse Fall Scale"$/m);
@@ -454,8 +456,9 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.match(fs.readFileSync(base, "utf8"), /type: kanban/);
 	fs.writeFileSync(base, "user edited");
 
-	// User writes in their section, then a sync without AI reuses the stored note
+	// User writes in their section, then a sync without AI reuses the stored note (now in the classic layout)
 	fs.appendFileSync(file, "\n我的心得：值得引用。\n");
+	env.prefStore["extensions.zotero-bridge.obsidian.layout"] = "classic";
 	log.length = 0;
 	let noAI = itemMenu.menus.find(m => m.l10nID === "zotero-bridge-menu-no-ai");
 	noAI.onCommand({}, { items: [item] });
@@ -467,6 +470,8 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.ok(!log.some(l => l.path === "pages" && l.method === "POST"));
 	let text2 = fs.readFileSync(file, "utf8");
 	assert.match(text2, /我的心得：值得引用。/);
+	assert.match(text2, /^> \[!abstract\] 重點\n> \*\*一句話\*\*：護理師主導衛教/m, "the classic 「重點」 when the setting says so");
+	assert.doesNotMatch(text2, /zm-board/);
 	assert.match(text2, /\[\[Fall prevention\]\]/, "AI note read back from Zotero");
 	assert.match(text2, /^ai_model: "claude-opus-5-5"$/m);
 	// Structured data read back from the Zotero note (no AI call)

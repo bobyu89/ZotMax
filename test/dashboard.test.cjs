@@ -174,7 +174,9 @@ test("buildDashboardSection: every section, links and tables", () => {
 	let headings = md.split("\n").filter(l => /^## /.test(l));
 	assert.deepEqual(headings, ["## 📖 閱讀進度", "## 🔬 證據概況", "## 📝 待處理清單", "## 🗂️ 回顧專案", "## 🤖 AI 用量", "## 🆕 本週新增"]);
 	assert.match(md, /共 \*\*7\*\* 篇文獻，已讀完成率 \*\*29%\*\*（已讀 \+ 已引用 2 篇）。 另有 1 篇已從 Zotero 刪除/);
-	assert.match(md, /\| 待讀 \| 2 \| 29% \|/);
+	assert.match(md, /\| 待讀 \| 2 \| ▰▰▰▱▱▱▱▱▱▱ 29% \|/, "a bar in the 比例 column");
+	assert.match(md, /\| 研究設計 \| 篇數 \| 比例 \|/);
+	assert.doesNotMatch(md, /\[!zm-board\]/, "no 總覽 cards without the 看板 layout");
 	assert.match(md, /```mermaid\npie showData\n/);
 	assert.match(md, /\| 分類 \| 篇數 \| 待讀 \| 閱讀中 \| 已讀 \| 已引用 \| 完成率 \|\n\| --- \| ---: \|/);
 	assert.match(md, /\| 碩論\/跌倒 \| 3 \| 1 \| 1 \| 1 \| 0 \| 33% \|/);
@@ -254,4 +256,97 @@ test("buildDashboardBase: three views in Bases syntax", () => {
 	}
 	// Different from the main base file
 	assert.notEqual(base, core.buildBaseFile());
+});
+
+test("overviewBoard: number cards for the vault (literature, reading, AI notes, appraisal, to-dos, review projects), only with the 看板 layout", () => {
+	let stats = d.aggregate(sample(), { now: NOW });
+	let reviews = [{ prisma: { included: 4 } }, { prisma: { included: null } }];
+	let board = d.overviewBoard(stats, { reviews });
+	assert.ok(board.startsWith("> [!zm-board] 總覽\n> > [!zm-kpi] 文獻\n> > **7 篇**  \n> > 本週新增 2 篇\n>\n"), board);
+	let titles = [...board.matchAll(/^> > \[!zm-kpi\] (.+)$/gm)].map(m => m[1]);
+	assert.deepEqual(titles, ["文獻", "已讀完成率", "AI 筆記", "評讀已核對", "待讀", "回顧專案"]);
+	assert.match(board, /> > \[!zm-kpi\] 已讀完成率\n> > \*\*29%\*\* {2}\n> > ▰▰▰▱▱▱▱▱▱▱ {2}\n> > 已讀＋已引用 2／7\n/, "hard line breaks between the rows");
+	assert.match(board, /> > \[!zm-kpi\] AI 筆記\n> > \*\*5／7\*\* {2}\n> > ▰▰▰▰▰▰▰▱▱▱ {2}\n> > 還有 2 篇沒有/);
+	assert.match(board, /> > \[!zm-kpi\] 評讀已核對\n> > \*\*0／7\*\* {2}\n> > ▱▱▱▱▱▱▱▱▱▱ {2}\n> > 有評讀結果 3 篇（含 AI 初評）/);
+	assert.match(board, /> > \[!zm-kpi\] 待讀\n> > \*\*2 篇\*\* {2}\n> > ⚠️ \d+ 篇資料要補/);
+	assert.match(board, /> > \[!zm-kpi\] 回顧專案\n> > \*\*2 個\*\* {2}\n> > 納入 4 篇$/);
+	assert.equal(d.overviewBoard(d.aggregate([], { now: NOW })), "", "nothing to show without notes");
+	// In the section: right after the info callout, only with layout "board"
+	let md = d.buildDashboardSection(stats, { now: NOW, layout: "board", reviews });
+	assert.ok(md.indexOf("> [!zm-board] 總覽") < md.indexOf("## 📖 閱讀進度"));
+	assert.doesNotMatch(d.buildDashboardSection(stats, { now: NOW, layout: "classic" }), /zm-board/);
+	assert.equal(d.share(1, 4), "▰▰▰▱▱▱▱▱▱▱ 25%");
+	// A verified appraisal is counted from the frontmatter
+	let verified = d.noteRecord(noteFM({ title: "V" }, Object.assign({ appraisal: { verified: true, tool: "CASP", overall: "納入" } }, AI), "已讀"), "Zotero/v.md");
+	assert.equal(verified.appraisalVerified, true);
+	assert.equal(d.aggregate([verified], { now: NOW }).verified, 1);
+});
+
+test("gapMap and gapMapSection: interventions × outcomes from the AI notes, merged by alias, heat squares with the best CEBM level, the best-studied pairs", () => {
+	let rec = (title, intervention, outcomes, level) => d.noteRecord(noteFM({ title },
+		Object.assign({ study: { intervention, outcomes, evidence_level: level, study_design: "RCT" } }, AI), "已讀"), `Zotero/${title}.md`);
+	assert.deepEqual(d.splitTerms("跌倒發生率、跌倒自我效能; 未報告 ,Falls"), ["跌倒發生率", "跌倒自我效能", "Falls"]);
+	assert.equal(rec("x", "運動", "跌倒", "2").intervention, "運動", "noteRecord reads I and O from the frontmatter");
+	let records = [
+		rec("A", "運動、衛教", "跌倒發生率、跌倒自我效能", "2"),
+		rec("B", "運動", "跌倒發生率", "1"),
+		rec("C", "Exercise", "跌倒發生率", "3"),
+		rec("D", "衛教", "", "2"),
+	];
+	let plain = d.gapMap(records);
+	assert.equal(plain.studied, 3, "a note without outcomes is not on the map");
+	assert.deepEqual(plain.rows.map(r => [r.name, r.count]), [["運動", 2], ["衛教", 1], ["Exercise", 1]]);
+	let aliases = new Map([["運動", { key: "運動", name: "運動" }], ["exercise", { key: "運動", name: "運動" }]]);
+	let map = d.gapMap(records, { aliases });
+	assert.deepEqual(map.rows.map(r => [r.name, r.count]), [["運動", 3], ["衛教", 1]]);
+	assert.deepEqual(map.cols.map(c => [c.name, c.count]), [["跌倒發生率", 3], ["跌倒自我效能", 1]]);
+	assert.equal(map.cell("運動", "跌倒發生率").length, 3);
+	assert.deepEqual(map.cell("衛教", "跌倒發生率").map(r => r.title), ["A"]);
+	assert.equal(map.cell("衛教", "nothing").length, 0);
+	let md = d.gapMapSection(map);
+	assert.match(md, /^## 🗺️ 證據缺口地圖\n\n列是介入（I）、欄是結果指標（O），取自 3 篇文獻/);
+	assert.match(md, /\| 介入 ＼ 結果 \| 跌倒發生率（3） \| 跌倒自我效能（1） \|\n\|---\|:---:\|:---:\|\n\| 運動（3） \| 🟧 3・L1 \| 🟨 1・L2 \|\n\| 衛教（1） \| 🟨 1・L2 \| 🟨 1・L2 \|/);
+	assert.match(md, /### 證據最多的組合\n\n- \*\*運動 × 跌倒發生率\*\*：3 篇（最強 CEBM 1） — \[\[Zotero\/A\|A\]\]/);
+	assert.match(md, /> \[!warning\] 這是字詞層級的整理，不是系統性回顧/);
+	let small = d.gapMap(records, { aliases, maxRows: 1, maxCols: 1 });
+	assert.equal(small.hiddenRows, 1);
+	assert.match(d.gapMapSection(small), /另有 1 個介入、1 個結果指標/);
+	let hole = d.gapMapSection(d.gapMap([rec("E", "運動", "跌倒", "2"), rec("F", "衛教", "住院天數", "")]));
+	assert.match(hole, /\| ⬜ \|/, "an empty pair is a gap");
+	assert.match(d.gapMapSection(d.gapMap(records.slice(0, 1))), /還畫不出來/);
+	// In the dashboard: after 證據概況, only when given
+	let stats = d.aggregate(records, { now: NOW });
+	let section = d.buildDashboardSection(stats, { now: NOW, gapMap: map });
+	assert.ok(section.indexOf("## 🗺️ 證據缺口地圖") > section.indexOf("## 🔬 證據概況") && section.indexOf("## 🔬 證據概況") > 0);
+	assert.doesNotMatch(d.buildDashboardSection(stats, { now: NOW }), /證據缺口地圖/);
+});
+
+test("chartsBoard, yearRows and monthRows: a board of chart cards (designs pie, evidence levels, years, the last 12 months), only with the 看板 layout", () => {
+	assert.deepEqual(d.yearRows([{ year: "2021" }, { year: "2021-05" }, { year: "2023" }, { year: "" }, { year: "n.d." }]), [["2021", 2], ["2023", 1]]);
+	let many = Array.from({ length: 15 }, (_, k) => ({ year: String(2010 + k) }));
+	let years = d.yearRows(many);
+	assert.equal(years.length, 12);
+	assert.deepEqual(years[0], ["≤ 2013", 4]);
+	assert.deepEqual(years[11], ["2024", 1]);
+	let months = d.monthRows([{ dateAdded: "2026-10-06T08:00:00Z" }, { dateAdded: "2026-09-01T00:00:00Z" }, { dateAdded: "2024-01-01T00:00:00Z" }, { dateAdded: "" }], NOW);
+	assert.equal(months.length, 12);
+	assert.deepEqual(months[11], ["2026-10", 1]);
+	assert.deepEqual(months[10], ["2026-09", 1]);
+	assert.deepEqual(months[0], ["2025-11", 0]);
+	let stats = d.aggregate(sample(), { now: NOW });
+	let board = d.chartsBoard(stats);
+	assert.ok(board.startsWith("> [!zm-board] 圖表\n> > [!zm-chart] 研究設計\n> > ```mermaid\n> > pie showData\n"), board);
+	assert.match(board, /> > {5}"RCT" : 2\n/);
+	assert.match(board, /> > \[!zm-chart\] 證據等級（CEBM，1 最強）\n> > L2 ▰▰▰▰▰▰▰▰▰▰ 1 {2}\n/);
+	assert.match(board, /> > \[!zm-chart\] 出版年份\n> > 2024 ▰▰▰▰▰▰▰▰▰▰ 7$/m);
+	assert.match(board, /> > \[!zm-chart\] 每月新增（近 12 個月）\n> > \*\*\d+ 篇\*\* {2}\n> > `[▁-█]{12}` {2}\n> > 2025-11 → 2026-10；最多 /);
+	assert.equal(d.sparkline([0, 1, 2, 4, 0]), "▁▃▅█▁");
+	assert.equal(d.sparkline([0, 0]), "▁▁");
+	let titles = [...board.matchAll(/^> > \[!zm-chart\] (.+)$/gm)].map(m => m[1]);
+	assert.deepEqual(titles, ["研究設計", "證據等級（CEBM，1 最強）", "出版年份", "每月新增（近 12 個月）"]);
+	assert.equal(d.chartsBoard(d.aggregate([], { now: NOW })), "");
+	let md = d.buildDashboardSection(stats, { now: NOW, layout: "board" });
+	assert.ok(md.indexOf("> [!zm-board] 總覽") < md.indexOf("> [!zm-board] 圖表"));
+	assert.ok(md.indexOf("> [!zm-board] 圖表") < md.indexOf("## 📖 閱讀進度"));
+	assert.doesNotMatch(d.buildDashboardSection(stats, { now: NOW, layout: "classic" }), /zm-chart/);
 });
