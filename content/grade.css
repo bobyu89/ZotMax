@@ -1,0 +1,98 @@
+@namespace html url("http://www.w3.org/1999/xhtml");
+
+/*
+ * GRADE 證據確定性: the outcome rows. Tokens, head, list, foot and focus come from classify-review.css, the fields,
+ * checks and chips from pico.css; the root carries all three classes (.zb-classify .zb-pico .zb-grade).
+ * DESIGN.md (GRADE window).
+ */
+#zotero-bridge-grade-window {
+	background: var(--material-background, Canvas);
+	color: var(--fill-primary, CanvasText);
+}
+
+/* one outcome: a Hairline card; the title, its live rating, 刪除 at the end */
+.zb-gr-outcome {
+	border: 1px solid var(--zb-line);
+	border-radius: var(--zb-radius-sm);
+	padding: var(--zb-space-3);
+	margin-top: var(--zb-space-3);
+}
+.zb-gr-title-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--zb-space-2) var(--zb-space-3);
+}
+.zb-gr-title-row > html|h2 {
+	margin: 0;
+}
+.zb-gr-rating {
+	margin: 0;
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+.zb-gr-remove {
+	margin-left: auto;
+}
+
+/* label · field pairs */
+.zb-gr-grid {
+	display: grid;
+	grid-template-columns: max-content minmax(0, 1fr);
+	align-items: center;
+	gap: var(--zb-space-1) var(--zb-space-3);
+	margin-top: var(--zb-space-2);
+	max-width: var(--zb-measure);
+}
+.zb-gr-grid > html|input,
+.zb-gr-domain > html|input {
+	box-sizing: border-box;
+	width: 100%;
+	margin: 0;
+	padding: var(--zb-space-1) var(--zb-space-2);
+	border: 1px solid var(--zb-line);
+	border-radius: var(--zb-radius-sm);
+	background: var(--material-background, Canvas);
+	color: inherit;
+	font: inherit;
+}
+
+/* the studies: one checkbox per line, the facts in Pencil */
+.zb-gr-studies {
+	margin: var(--zb-space-3) 0 0;
+	padding: var(--zb-space-2) var(--zb-space-3);
+	border: 1px solid var(--zb-line);
+	border-radius: var(--zb-radius-sm);
+	max-height: 12em;
+	overflow-y: auto;
+}
+.zb-gr-study {
+	display: block;
+	margin: var(--zb-space-1) 0;
+}
+
+/* a domain: label · level · reason on one row, the GRADE question and the hint under it */
+.zb-gr-domains {
+	margin-top: var(--zb-space-3);
+}
+.zb-gr-domain {
+	display: grid;
+	/* fixed first two columns, so the five rows line up */
+	grid-template-columns: 13em 10em minmax(0, 1fr);
+	align-items: center;
+	gap: var(--zb-space-1) var(--zb-space-2);
+	margin-top: var(--zb-space-2);
+}
+.zb-gr-domain > html|select {
+	width: 100%;
+}
+.zb-gr-domain > html|p {
+	grid-column: 1 / -1;
+	margin: 0;
+}
+.zb-gr-hint:empty {
+	display: none;
+}
+.zb-gr-upgrades[hidden] {
+	display: none;
+}

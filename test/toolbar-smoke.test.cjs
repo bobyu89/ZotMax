@@ -225,7 +225,7 @@ const GUIDED = {
 	sync: ["sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status"],
 	organize: ["classify", "dashboard", "word-style", "concepts", "bibliography", "export-collection", "zh-meta"],
 	search: ["quick-search", "search-item"],
-	appraise: ["screen", "dedup", "prisma", "appraisal-summary", "pico-card", "pico-table"],
+	appraise: ["screen", "dedup", "prisma", "appraisal-summary", "pico-card", "pico-table", "grade"],
 	ai: ["regenerate"],
 };
 
@@ -349,6 +349,7 @@ test("menu: 快速指令… first, groups in workflow order with labels, setting
 	F.setEnabled("screening", false);
 	F.setEnabled("appraisalForm", false);
 	F.setEnabled("pico", false);
+	F.setEnabled("grade", false);
 	F.setEnabled("sync", false);
 	F.setEnabled("status", false);
 	({ groups, entries, separators } = openMenu(env));

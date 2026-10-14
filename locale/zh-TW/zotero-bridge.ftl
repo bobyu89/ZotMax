@@ -580,8 +580,12 @@ zotero-bridge-pane-zh-meta-review = 檢查並修正…
 
 zotero-bridge-feature-pico = PICO 問題卡與 PICO 表
 zotero-bridge-feature-pico-desc = 替每個研究專案（分類）寫一張 PICO 問題卡：引導問題幫你收斂，檢索式帶到資料庫，問題由你寫。再把選取的文獻整理成 PICO 表（P、I、C、O、主要結果、證據等級、評讀；Markdown、CSV、可貼進 Word），AI 初填的值會標明，核對由你做。不連網，也不呼叫 AI。
+zotero-bridge-feature-grade = GRADE 證據確定性
+zotero-bridge-feature-grade-desc = 每個結果指標分開評 GRADE 證據確定性：隨機試驗從「高」、觀察性研究從「低」開始，五個面向的升降級由你選並寫理由；提示取自評讀結果、AI 筆記的結論方向、樣本數和 PICO 問題卡。產出證據摘要表（Summary of Findings）、證據剖面、CSV，可貼進 Word。不連網，也不呼叫 AI。
 zotero-bridge-cmd-word-style =
     .label = 安裝 Word 中文 APA 樣式
+zotero-bridge-cmd-grade =
+    .label = GRADE 證據確定性（目前分類）…
 zotero-bridge-cmd-pico-card =
     .label = PICO 問題卡（目前分類）…
 zotero-bridge-cmd-pico-table =

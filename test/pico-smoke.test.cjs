@@ -4,7 +4,8 @@
 // (pico-table.xhtml) showing the card, the collection's screened studies and the destination; 匯出 writing the
 // note, the CSV and the HTML into Downloads or the vault's Reviews folder (the note's managed block rewritten, the
 // user's part kept), the dialog after it with 複製成表格 putting the table on the clipboard; the PRISMA note carrying
-// 本題 PICO; and the switch hiding both commands.
+// 本題 PICO; the switch hiding both commands; and the GRADE 證據確定性 window (grade.xhtml, grade.js) built on the
+// same collection, its rating, and the Summary of Findings files.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -119,7 +120,7 @@ function makeEnv(prefs = {}) {
 	let prefStore = Object.assign({}, prefs);
 	let mainWindow = {
 		openDialog(url, name, features) {
-			assert.match(url, /^chrome:\/\/zotero-bridge\/content\/pico-(card|table)\.xhtml$/);
+			assert.match(url, /^chrome:\/\/zotero-bridge\/content\/(pico-(card|table)|grade)\.xhtml$/);
 			assert.match(features, /chrome/);
 			let dom = new JSDOM(fs.readFileSync(path.join(ROOT, "content", path.basename(url)), "utf8"), { contentType: "application/xml" });
 			let closed = false;
@@ -564,5 +565,128 @@ test("the switch hides both commands; running them while off says so", async () 
 	assert.match(xhtml, /<groupbox data-zb-section="pico" data-zb-feature="pico">/);
 	assert.match(xhtml, /preference="extensions\.zotero-bridge\.pico\.folder"/);
 	assert.match(fs.readFileSync(path.join(ROOT, "content", "preferences.js"), "utf8"), /async pickPicoFolder\(\)/);
+	assert.deepEqual(env.errors, []);
+});
+
+test("GRADE window: suggested outcomes, the studies that measured one pre-ticked, hints, the live rating; 儲存並匯出 writes the note, CSV and HTML and copies the table", async () => {
+	let env = await setup();
+	let { ZB } = env;
+	let C = ZB.commands;
+	ZB.grade.runtime.now = () => new Date(2026, 9, 14, 9, 0);
+	let notices = [];
+	ZB.grade.runtime.notice = (info) => { notices.push(info); return "copy"; };
+	ZB.grade.runtime.copy = (html, text) => env.copied.push({ html, text });
+	assert.equal(C.isVisible(C.get("grade")), true, "on in 研究生引導");
+	env.selection.collection = env.collection;
+	let running = C.execute("grade", C.fromWindow(null, "toolbar"));
+	let root = await openedDialog(env, "zb-grade");
+	let doc = root.ownerDocument;
+	assert.equal(doc.documentElement.getAttribute("title"), "GRADE 證據確定性");
+	assert.ok(root.classList.contains("zb-classify") && root.classList.contains("zb-pico") && root.classList.contains("zb-grade"));
+	assert.equal(root.querySelector(".zb-cl-title").textContent, "GRADE 證據確定性：跌倒預防");
+	assert.match(root.textContent, /這個分類有 3 篇文獻/);
+	assert.equal(root.querySelector(".zb-cl-apply").disabled, true, "nothing to export without an outcome");
+	let chips = [...root.querySelectorAll("[data-zb-suggestions] button")].map(b => b.textContent);
+	assert.deepEqual(chips, ["跌倒自我效能（1）", "跌倒發生率（1）"], "from the AI note's outcomes (ties by stroke count)");
+	[...root.querySelectorAll("[data-zb-suggestions] button")].find(b => b.textContent.startsWith("跌倒發生率")).click();
+	let sec = root.querySelector("[data-zb-outcome]");
+	assert.ok(sec, "the outcome appears");
+	let id = sec.getAttribute("data-zb-outcome");
+	let ticked = [...sec.querySelectorAll("[data-zb-study]")].filter(b => b.checked).map(b => b.value);
+	assert.deepEqual(ticked, [env.lee.key], "only the paper whose AI note measured it");
+	let rating = () => sec.querySelector("[data-zb-rating]").textContent;
+	assert.equal(rating(), "⊕⊕⊕⊕ 高（從「高」開始（隨機對照試驗），沒有升降級）");
+	assert.match(sec.querySelector('[data-zb-hint="imprecision"]').textContent, /^提示：總樣本數約 120 人，少於 GRADE 的經驗法則/);
+	assert.match(sec.querySelector('[data-zb-hint="rob"]').textContent, /1／1 篇有評讀結果/);
+	assert.match(sec.querySelector('[data-zb-hint="inconsistency"]').textContent, /只有 1 篇研究/);
+	assert.equal(sec.querySelector(".zb-gr-upgrades").hidden, true, "rating up only for observational evidence");
+	// Rate down for imprecision: the rating follows, a reason is asked for
+	let imp = doc.getElementById(`zb-gr-${id}-imprecision`);
+	imp.value = "1";
+	imp.dispatchEvent(new doc.defaultView.Event("change"));
+	assert.equal(rating(), "⊕⊕⊕◯ 中（從「高」開始（隨機對照試驗）；不精確性 −1）");
+	let checks = () => [...sec.querySelectorAll("[data-zb-checks] li")].map(li => li.textContent);
+	assert.ok(checks().includes("不精確性降級了，寫一句理由（會成為表下的註腳）。"), JSON.stringify(checks()));
+	type(doc.getElementById(`zb-gr-${id}-imprecision-reason`), "只有 1 篇、120 人");
+	type(doc.getElementById(`zb-gr-${id}-effect`), "RR 0.70（95% CI 0.55–0.89）");
+	assert.deepEqual(checks(), []);
+	assert.equal(root.querySelector(".zb-cl-summary").textContent, "1 個結果指標都評好了。");
+	// Observational start shows rating up
+	let design = doc.getElementById(`zb-gr-${id}-design`);
+	design.value = "obs";
+	design.dispatchEvent(new doc.defaultView.Event("change"));
+	assert.equal(sec.querySelector(".zb-gr-upgrades").hidden, false);
+	assert.match(rating(), /^⊕◯◯◯ 極低/);
+	design.value = "rct";
+	design.dispatchEvent(new doc.defaultView.Event("change"));
+	assert.deepEqual([...root.querySelectorAll("[data-zb-suggestions] button")].map(b => b.textContent), ["跌倒自我效能（1）"], "the added one leaves the suggestions");
+	root.querySelector(".zb-cl-apply").click();
+	let result = await running;
+	assert.equal(result.action, "copy");
+	assert.equal(result.saved.outcomes.length, 1);
+	let stored = JSON.parse(env.prefStore[P + "grade.tables"]);
+	assert.deepEqual(Object.keys(stored), [CARD_KEY], "kept per collection, like the PICO card");
+	assert.equal(stored[CARD_KEY].outcomes[0].domains.imprecision.level, 1);
+	assert.equal(stored[CARD_KEY].outcomes[0].updatedAt, undefined);
+	let base = path.join(DOWNLOADS, "跌倒預防 GRADE 證據摘要");
+	let note = env.mem.files.get(base + ".md");
+	assert.match(note, /^---\ntitle: "跌倒預防：GRADE 證據摘要"\ntype: "grade"\n/);
+	assert.match(note, /\| 跌倒發生率 \| 關鍵 \| 1 篇（1 RCT） \| 120 \| RR 0\.70（95% CI 0\.55–0\.89） \| ⊕⊕⊕◯ 中 a \|/);
+	assert.match(note, /a\. 跌倒發生率：不精確性降 1 級。只有 1 篇、120 人/);
+	assert.match(note, /## 納入研究的評讀/);
+	assert.ok(env.mem.files.get(base + ".csv").startsWith("\ufeff結果指標,"));
+	assert.match(env.mem.files.get(base + ".html"), /<h2>證據摘要表（Summary of Findings）<\/h2>/);
+	assert.match(notices[0].text, /^已把 1 個結果指標的 GRADE 評等整理成證據摘要表，寫到：\n\/home\/student\/Downloads/);
+	assert.match(env.copied.at(-1).html, /<td>⊕⊕⊕◯ 中 a<\/td>/);
+	assert.match(env.copied.at(-1).text, /^結果指標\t重要性/);
+	assert.ok(env.dialogs[0].closed);
+
+	// Reopened: the saved outcome is there; 儲存 alone keeps changes without files; Esc changes nothing
+	running = C.execute("grade", C.fromWindow(null, "toolbar"));
+	root = await openedDialog(env, "zb-grade", 2);
+	doc = root.ownerDocument;
+	sec = root.querySelector("[data-zb-outcome]");
+	assert.equal(doc.getElementById(`zb-gr-${id}-effect`).value, "RR 0.70（95% CI 0.55–0.89）");
+	let imp2 = doc.getElementById(`zb-gr-${id}-imprecision`);
+	assert.equal(imp2.value, "1");
+	let importance = doc.getElementById(`zb-gr-${id}-importance`);
+	importance.value = "important";
+	importance.dispatchEvent(new doc.defaultView.Event("change"));
+	root.querySelector(".zb-gr-save").click();
+	result = await running;
+	assert.equal(result.result, undefined, "儲存 writes no files");
+	assert.equal(JSON.parse(env.prefStore[P + "grade.tables"])[CARD_KEY].outcomes[0].importance, "important");
+	assert.match(env.descriptions.at(-1), /已儲存「跌倒預防」的 GRADE 評等/);
+	running = C.execute("grade", C.fromWindow(null, "toolbar"));
+	root = await openedDialog(env, "zb-grade", 3);
+	root.querySelector(".zb-gr-remove").click();
+	assert.equal(root.querySelector("[data-zb-outcome]"), null);
+	root.dispatchEvent(new root.ownerDocument.defaultView.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+	assert.equal(JSON.stringify(await running), '{"cancelled":true}');
+	assert.equal(JSON.parse(env.prefStore[P + "grade.tables"])[CARD_KEY].outcomes.length, 1, "Esc changed nothing");
+	assert.deepEqual(env.errors, []);
+});
+
+test("GRADE into the vault: the Reviews folder; switched off it says so", async () => {
+	let env = await setup({ [P + "obsidian.vaultPath"]: VAULT });
+	let { ZB } = env;
+	ZB.grade.runtime.notice = () => "close";
+	let out = await ZB.grade.open(env.collection, {
+		dialog: async (info) => {
+			assert.equal(info.scopeName, "跌倒預防");
+			assert.equal(info.studies.length, 3);
+			assert.equal(info.studies.find(s => s.key === env.lee.key).design, "RCT");
+			let o = ZB.grade.newOutcome("跌倒發生率", info.studies);
+			return { table: { outcomes: [o] }, exportNow: true };
+		},
+	});
+	assert.equal(out.action, "close");
+	let note = env.mem.files.get(path.join(VAULT, "Reviews", "跌倒預防 GRADE 證據摘要.md"));
+	assert.ok(note, [...env.mem.files.keys()].join("\n"));
+	assert.match(note, /CSV：`Reviews\/跌倒預防 GRADE 證據摘要\.csv`/);
+	ZB.features.setEnabled("grade", false);
+	assert.equal(ZB.commands.isVisible(ZB.commands.get("grade")), false);
+	assert.equal(await ZB.grade.open(env.collection), null);
+	assert.match(env.descriptions.join("\n"), /「GRADE 證據確定性」目前關閉/);
 	assert.deepEqual(env.errors, []);
 });

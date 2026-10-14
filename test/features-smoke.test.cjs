@@ -277,6 +277,9 @@ test("a fresh profile starts in 研究生引導: the gated commands hide everywh
 	F.setEnabled("appraisalForm", false);
 	F.setEnabled("bibliography", false);
 	F.setEnabled("synthesis", false);
+	// …and GRADE (collections only)
+	assert.equal(visible(collMenu, ctx), true);
+	F.setEnabled("grade", false);
 	assert.equal(visible(collMenu, ctx), false);
 	// Registration never changed
 	assert.deepEqual(env.menus.map(o => o.menuID), registered);

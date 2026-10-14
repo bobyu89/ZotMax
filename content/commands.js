@@ -499,6 +499,13 @@
 				let name = sel.surface === "collection" ? t.scope.label : t.scope.collection ? (t.scope.collection.name || "") : "";
 				return ZB().pico.exportTable(t.items, { name, collection: t.scope.collection || sel.collection || null });
 			} },
+		// GRADE 證據確定性 (grade.js): the rating of the right-clicked collection, else the selected one, else the library
+		{ id: "grade", group: "appraise", l10n: "zotero-bridge-cmd-grade", label: "GRADE 證據確定性（目前分類）…",
+			features: ["grade"], needs: null, menus: ["collection"],
+			keywords: ["grade", "證據確定性", "證據品質", "certainty", "certainty of evidence", "quality of evidence", "summary of findings", "sof",
+				"證據摘要表", "evidence profile", "證據剖面", "系統性回顧", "systematic review", "統合分析", "meta-analysis", "降級", "升級",
+				"偏誤風險", "risk of bias", "不一致", "間接", "不精確", "發表偏誤", "評讀表", "多篇"],
+			run: sel => ZB().grade.open(sel.surface === "collection" ? sel.collections[0] : sel.collection) },
 
 		// ---------- AI 輔助與寫作 ----------
 		{ id: "regenerate", group: "ai", l10n: "zotero-bridge-menu-regenerate", label: "重新產生 AI 筆記並同步",

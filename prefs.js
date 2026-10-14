@@ -144,6 +144,7 @@ pref("extensions.zotero-bridge.feature.statsExplainer", false);
 pref("extensions.zotero-bridge.feature.zhMeta", true);
 pref("extensions.zotero-bridge.feature.geminiExport", false);
 pref("extensions.zotero-bridge.feature.pico", true);
+pref("extensions.zotero-bridge.feature.grade", true);
 // Settings pane (content/preferences.js): the tab chosen last, and a section (data-zb-section ID, e.g.
 // "notion") to open the next time the pane is on screen; the pane clears it once it has opened it
 pref("extensions.zotero-bridge.prefs.lastTab", "features");
@@ -186,3 +187,6 @@ pref("extensions.zotero-bridge.geminiExport.highlights", false);
 // JSON keyed by "library/collections/KEY"; where the PICO 表 goes when there is no Obsidian vault (empty = Downloads)
 pref("extensions.zotero-bridge.pico.cards", "{}");
 pref("extensions.zotero-bridge.pico.folder", "");
+// GRADE 證據確定性 (content/grade.js): the ratings, one per research project, keyed like the PICO cards; the files go
+// where the PICO 表 goes (the vault's Reviews folder, else pico.folder, else Downloads)
+pref("extensions.zotero-bridge.grade.tables", "{}");

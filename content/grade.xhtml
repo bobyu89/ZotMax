@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	GRADE 證據確定性: the rating window (content/grade.js dialog() opens it and renderWindow() fills it). Layout and
+	tokens: DESIGN.md (GRADE window). It borrows the 文獻自動分類 window's stylesheet (classify-review.css), the PICO
+	windows' fields (pico.css) and adds the outcome rows (grade.css).
+-->
+<?xml-stylesheet href="chrome://global/skin/global.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero/skin/zotero.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-bridge/content/classify-review.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-bridge/content/pico.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-bridge/content/grade.css" type="text/css"?>
+<window id="zotero-bridge-grade-window"
+	xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+	xmlns:html="http://www.w3.org/1999/xhtml"
+	title="GRADE 證據確定性"
+	width="760"
+	height="760"
+	persist="width height screenX screenY">
+	<html:div id="zb-grade" class="zb-classify zb-pico zb-grade"/>
+</window>
