@@ -2726,11 +2726,14 @@ const TESTS = [
 					F.setEnabled("appraisalForm", false);
 					F.setEnabled("screening", false);
 					let menu = await openToolbarMenu(button);
-					check(menu.groups.includes("appraise"), `toolbar menu keeps 篩選與評讀 while PICO is on: ${JSON.stringify(menu.groups)}`);
+					check(menu.groups.includes("appraise"), `toolbar menu keeps 篩選與評讀 while PICO and GRADE are on: ${JSON.stringify(menu.groups)}`);
 					F.setEnabled("pico", false);
 					menu = await openToolbarMenu(button);
+					check(menu.groups.includes("appraise"), `toolbar menu keeps 篩選與評讀 while GRADE is on: ${JSON.stringify(menu.groups)}`);
+					F.setEnabled("grade", false);
+					menu = await openToolbarMenu(button);
 					d.toolbar.custom = menu.groups;
-					check(!menu.groups.includes("appraise"), `toolbar menu groups with 篩選, 評讀表 and PICO off: ${JSON.stringify(menu.groups)}`);
+					check(!menu.groups.includes("appraise"), `toolbar menu groups with 篩選, 評讀表, PICO and GRADE off: ${JSON.stringify(menu.groups)}`);
 				}
 				// The PubMed watch timer only runs while the feature is on (no watches are saved: nothing is fetched)
 				setPref("pubmedWatch.autoCheck", true);
