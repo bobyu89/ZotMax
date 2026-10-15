@@ -89,12 +89,15 @@ Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bob
 |---|---|---|
 | Anthropic（Claude） | <https://console.anthropic.com> | 可調思考深度（effort：low～max）；批次 API、圖片劃線只支援 Claude |
 | OpenAI | <https://platform.openai.com> | 可填相容服務的 API base URL |
-| OpenRouter | <https://openrouter.ai>（Google 帳號即可註冊 → Keys） | 一個 key 用 Claude、GPT、Gemini、DeepSeek 等數百個模型。預設 `openrouter/free` 自動挑免費模型：不用錢，但每天有次數限制、品質較不穩定；按「載入模型清單」可以選付費模型（費用從 OpenRouter 儲值扣，用量表直接記 OpenRouter 回報的金額）。只送文字，掃描版 PDF 不送檔案 |
+| OpenRouter | <https://openrouter.ai>（Google 帳號即可註冊 → Keys） | 一個 key 用 Claude、GPT、Gemini、DeepSeek 等數百個模型。預設 `openrouter/free` 自動挑免費模型：不用錢、不用綁信用卡，品質較不穩定；次數限制見下方「OpenRouter 免費額度」；按「載入模型清單」可以選付費模型（費用從 OpenRouter 儲值扣，用量表直接記 OpenRouter 回報的金額）。只送文字，掃描版 PDF 不送檔案 |
 | 網頁版 AI（免 API key） | 不需要 | 不呼叫 API：用複製貼上的方式產生 AI 文獻筆記，見下方[網頁版 AI](#網頁版-ai免-api-key)。其他 AI 功能（比較表、文獻探討草稿、評讀陪練、讀懂統計、AI 主題分類）仍需要 API key |
 
 - 預設模型可以在設定頁改。
 - **全文最多送出字元數**：預設 150,000。超過會截斷，frontmatter 標 `fulltext_truncated: true`，也會告訴 AI 後段沒有提供。設成 0 表示只送摘要與註記，最省錢。
 - **自動重試**：API 暫時忙碌或網路中斷（HTTP 408／409／429／500／502／503／504、Claude 的 529）最多重試 4 次，間隔以指數退避並遵守 `retry-after`；金鑰錯誤（401）、請求錯誤（400）或模型拒絕處理不重試。
+- **OpenRouter 免費額度**：免費模型不用綁信用卡。沒有儲值時每天約 50 次、每分鐘 20 次；帳戶累計儲值滿 US$10 後提高到每天約 1000 次（儲值有手續費，以 [OpenRouter 公告](https://openrouter.ai/docs/api-reference/limits)為準）。一篇文獻的 AI 筆記算一次。
+  - 當天額度用完時（HTTP 429 `free-models-per-day`），外掛不再重試，直接說「OpenRouter 今天的免費額度用完了」和重置時間（免費次數以 UTC 日計算，台灣時間每天早上 8 點重置）；同一批後面的文獻照常同步、先不產生 AI 筆記，額度重置後再同步一次就會補上。急的話改用[網頁版 AI](#網頁版-ai免-api-key)。
+  - 免費模型太多人用（429）會照常重試，最後請你過幾分鐘再試或換模型；付費模型餘額不足（402）會請你儲值或改回 `openrouter/free`。
 - **筆記模板**：「AI 文獻筆記 → 筆記模板（system prompt）」可以照課程或指導教授的要求改；按「載入內建模板來修改」從內建版開始。改了模板，外掛仍會要求 AI 附上結構化資料。
 
 </details>
@@ -1222,7 +1225,7 @@ pandoc 論文.md --citeproc --bibliography "Zotero/90 系統/references.json" --
 
 ## 常見問題與疑難排解
 
-**沒有 API key 可以用嗎？** 可以。同步、閱讀狀態、評讀表、篩選與 PRISMA、儀表板、搜尋連結都不需要 AI。AI 文獻筆記也可以不用 key：設定 → AI → 服務商選「網頁版 AI（複製貼上）」，用[網頁版 AI](#網頁版-ai免-api-key) 產生。想自動批次又不想花錢：OpenRouter 有免費模型。
+**沒有 API key 可以用嗎？** 可以。同步、閱讀狀態、評讀表、篩選與 PRISMA、儀表板、搜尋連結都不需要 AI。AI 文獻筆記也可以不用 key：設定 → AI → 服務商選「網頁版 AI（複製貼上）」，用[網頁版 AI](#網頁版-ai免-api-key) 產生。想自動批次又不想花錢：OpenRouter 有免費模型（不用信用卡，沒儲值時每天約 50 次）。
 
 **我有 ChatGPT Plus／Claude Pro，可以直接用嗎？** 訂閱不能當 API key，但可以用[網頁版 AI](#網頁版-ai免-api-key)：把提示詞貼到 ChatGPT／Claude 網頁，再把回答貼回來，AI 文獻筆記一樣完整。
 

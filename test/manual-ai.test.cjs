@@ -70,6 +70,53 @@ test("OpenRouter: a cut-off answer is marked, an empty one, a refusal and an err
 	assert.deepEqual(msgs[1].content[0], { type: "file", file: { filename: "a.pdf", file_data: "data:application/pdf;base64,QUJD" } });
 });
 
+test("OpenRouter limits: the daily free limit says so plainly, is not retried and stops the batch's AI; a busy model is retried; 402 asks for credits", async () => {
+	let withHeaders = (status, json, headers) => Object.assign(response(status, json), { headers: { get: n => headers[n.toLowerCase()] ?? null } });
+	let calls = 0;
+	let tomorrow = Date.now() + 8 * 3600 * 1000;
+	let daily = async () => {
+		calls++;
+		return withHeaders(429, { error: { code: 429, message: "Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day" } },
+			{ "x-ratelimit-limit": "50", "x-ratelimit-remaining": "0", "x-ratelimit-reset": String(tomorrow) });
+	};
+	let err = await llm.callChat({ apiKey: "k", provider: "openrouter", system: "s", user: "u", fetch: daily, retry: { sleep: async () => assert.fail("no retry") } }).catch(e => e);
+	assert.equal(calls, 1);
+	assert.equal(err.code, "daily-limit");
+	assert.equal(err.status, 429);
+	assert.match(err.message, /^OpenRouter 今天的免費額度用完了，(今天|明天) \d\d:\d\d 會重置；/);
+	assert.match(err.message, /網頁版 AI（複製貼上）/);
+	assert.match(err.message, /不用綁信用卡；沒有儲值時每天約 50 次.*US\$10 後提高到每天約 1000 次/);
+	// Only the copy in error.metadata.headers, inside a 200 → still the daily limit
+	let inBody = await llm.callChat({ apiKey: "k", provider: "openrouter", system: "s", user: "u",
+		fetch: async () => response(200, { error: { code: 429, message: "Rate limit exceeded", metadata: { headers: { "X-RateLimit-Remaining": "0", "X-RateLimit-Reset": String(tomorrow) } } } }) }).catch(e => e);
+	assert.equal(inBody.code, "daily-limit");
+	assert.equal(llm.isDailyLimit({ status: 429 }, { error: { message: "free-models-per-day" } }), true);
+	// No reset header: the next UTC midnight (free-model requests are counted per UTC day)
+	let midnight = new Date();
+	midnight.setUTCHours(24, 0, 0, 0);
+	let hm = `${String(midnight.getHours()).padStart(2, "0")}:${String(midnight.getMinutes()).padStart(2, "0")}`;
+	assert.match(llm.openRouterError({ status: 429 }, { error: { message: "free-models-per-day" } }, 0).message, new RegExp(`(今天|明天) ${hm} 會重置`));
+	// A reset in seconds counts too
+	let inSeconds = { "x-ratelimit-remaining": "0", "x-ratelimit-reset": String(Math.round(tomorrow / 1000)) };
+	assert.equal(llm.isDailyLimit({ status: 429, headers: { get: n => inSeconds[n] ?? null } }, {}), true);
+	// Per-minute limit / busy upstream: retried, then a plain "try later"
+	calls = 0;
+	let busy = async () => {
+		calls++;
+		return withHeaders(429, { error: { code: 429, message: "openrouter/free is temporarily rate-limited upstream" } }, { "x-ratelimit-remaining": "0", "x-ratelimit-reset": String(Date.now() + 30000) });
+	};
+	let busyErr = await llm.callChat({ apiKey: "k", provider: "openrouter", model: "openrouter/free", system: "s", user: "u", fetch: busy, retry: { sleep: async () => {}, maxRetries: 2 } }).catch(e => e);
+	assert.equal(calls, 3);
+	assert.equal(busyErr.code, undefined);
+	assert.match(busyErr.message, /^OpenRouter 的免費模型現在太多人在用（429），已重試 2 次。請過幾分鐘再試/);
+	let paid = await llm.callChat({ apiKey: "k", provider: "openrouter", model: "anthropic/claude-sonnet-5.5", system: "s", user: "u",
+		fetch: async () => response(402, { error: { code: 402, message: "Insufficient credits" } }) }).catch(e => e);
+	assert.equal(paid.status, 402);
+	assert.match(paid.message, /餘額不足（402）.*openrouter\/free/);
+	// A reset already past: no time to show
+	assert.equal(llm.resetTime(Date.now() - 1), "");
+});
+
 test("OpenRouter's model list: text models without batch copies, free first, a label with the price", () => {
 	let list = llm.parseOpenRouterModels({ data: [
 		{ id: "anthropic/claude-sonnet-5.5", name: "Claude Sonnet 5.5", pricing: { prompt: "0.000002", completion: "0.00001" }, architecture: { output_modalities: ["text"] } },

@@ -312,6 +312,9 @@
 			let existing = ZB.adapter.getAINote(item);
 			needAI = action.ai === "regenerate" || (action.ai === "missing" && !existing);
 		}
+		// OpenRouter's daily free limit hit earlier in this run: the rest sync without a new AI note
+		let limitSkipped = needAI && !!ctx.aiLimit;
+		if (limitSkipped) needAI = false;
 		let data = await ZB.adapter.extractItemData(item, {
 			fullTextLimit: needAI ? settings.llm.fullTextLimit : 0,
 			// Always judged, for the frontmatter full_text and the Notion "Full Text" column
@@ -353,9 +356,11 @@
 				await saveGeneratedNote(item, ai, processed);
 			}
 			catch (e) {
+				if (e && e.code === "daily-limit") ctx.aiLimit = e.message;
 				errors.push(`AI 筆記：${e.message || e}`);
 			}
 		}
+		if (limitSkipped) messages.push("今天的 AI 免費額度已用完，這篇先不產生 AI 筆記");
 		if (!ai && data.aiNote && action.ai !== "none") {
 			ai = readAINote(data.aiNote.html);
 			if (ai.dataError) messages.push(`⚠️ AI 子筆記的結構化資料無法讀取：${ai.dataError}`);
@@ -1164,6 +1169,7 @@
 			}
 			let trimLine = fullTextLine(trimmed);
 			if (trimLine) pw.addDescription(trimLine);
+			if (ctx.aiLimit) pw.addDescription("⚠️ OpenRouter 今天的免費額度用完了，後面的文獻只同步、沒有產生 AI 筆記。額度重置後再同步一次就會補上；急的話改用「網頁版 AI（複製貼上）」。");
 			let usageLine = runUsageLine(ctx.usage);
 			if (usageLine) pw.addDescription(usageLine);
 			pw.startCloseTimer(failures.length || cancelled ? 15000 : 5000);

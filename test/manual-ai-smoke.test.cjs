@@ -321,6 +321,7 @@ function apiMock(log, opts = {}) {
 		let body = init.body ? JSON.parse(init.body) : undefined;
 		if (url.startsWith("https://openrouter.ai/")) {
 			log.push({ api: "openrouter", url, headers: init.headers, body });
+			if (opts.openrouter) return opts.openrouter(body);
 			return ok({ model: "google/gemma-4-31b-it:free", choices: [{ finish_reason: "stop", message: { content: opts.aiText || AI_TEXT } }],
 				usage: { prompt_tokens: 900, completion_tokens: 300 } });
 		}
@@ -420,7 +421,7 @@ async function start(env) {
 /** A paper with a PDF (Zotero's text above) and the user's highlights. */
 function paper(env, opts = {}) {
 	let item = new env.MockItem("journalArticle", {
-		title: "Nurse-led exercise and falls", year: "2024", citationKey: "lee2024", DOI: "10.1/falls",
+		title: opts.title || "Nurse-led exercise and falls", year: "2024", citationKey: opts.key || "lee2024", DOI: "10.1/falls",
 		creators: [{ firstName: "Anna", lastName: "Lee", creatorType: "author" }], abstractNote: "Falls are common.",
 	});
 	let pdf = new env.MockItem("attachment", { title: "Full Text PDF", fulltext: opts.fulltext || FULL_TEXT });
@@ -577,5 +578,26 @@ test("OpenRouter: the key from the login manager, a sync's AI note through Chat 
 	let ledger = JSON.parse(env.prefStore[P + "usage.ledger"]);
 	let month = Object.values(ledger)[0];
 	assert.equal(month.byModel["google/gemma-4-31b-it:free"].calls, 1);
+	await vm.runInContext("shutdown()", env.context);
+});
+
+test("OpenRouter's daily free limit: said once in plain words; the rest of the batch syncs without calling the AI again", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-ma-"));
+	let log = [];
+	let limited = () => ({ status: 429, ok: false, statusText: "Too Many Requests", headers: { get: () => null },
+		text: async () => JSON.stringify({ error: { code: 429, message: "Rate limit exceeded: free-models-per-day. Add 10 credits to unlock 1000 free model requests per day" } }) });
+	let env = makeEnv({ fetch: apiMock(log, { openrouter: limited }).fetch, prefs: noKeys(vault, { [P + "llm.provider"]: "openrouter", [P + "llm.openrouterKey"]: "sk-or-v1-abcdefghijklmnop" }) });
+	let ZB = await start(env);
+	let a = paper(env).item;
+	let b = paper(env, { key: "chen2025", title: "Second paper" }).item;
+	let c = paper(env, { key: "wu2026", title: "Third paper" }).item;
+	await ZB.main.run([a, b, c], { targets: ["obsidian"], ai: "missing" });
+	assert.equal(log.filter(l => l.api === "openrouter").length, 1, "one call, no retries, none for the next papers");
+	// Every paper is still written to Obsidian
+	for (let key of ["lee2024", "chen2025", "wu2026"]) assert.ok(fs.existsSync(path.join(vault, "Zotero", `${key}.md`)), key);
+	let lines = env.progressLines.map(l => l.text).join("\n");
+	assert.match(lines, /OpenRouter 今天的免費額度用完了，(今天|明天) \d\d:\d\d 會重置/);
+	assert.equal((lines.match(/今天的 AI 免費額度已用完，這篇先不產生 AI 筆記/g) || []).length, 2);
+	assert.ok(env.descriptions.some(d => /^⚠️ OpenRouter 今天的免費額度用完了，後面的文獻只同步/.test(d)), env.descriptions.join("\n"));
 	await vm.runInContext("shutdown()", env.context);
 });

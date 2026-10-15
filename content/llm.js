@@ -65,6 +65,9 @@
 	// Told to the user when a feature needs an API call and there is no key
 	const NO_KEY_MESSAGE = "還沒有設定 AI 的 API key：到 設定 → ZotMax → AI 選服務商並貼上 key（OpenRouter 有免費模型）；"
 		+ "AI 文獻筆記也可以不用 key，選「網頁版 AI（複製貼上）」。";
+	// OpenRouter's free-model limits (openrouter.ai/docs/api-reference/limits), shown in the settings and the errors
+	const OPENROUTER_FREE_LIMITS = "免費模型不用綁信用卡；沒有儲值時每天約 50 次、每分鐘 20 次，"
+		+ "帳戶累計儲值滿 US$10 後提高到每天約 1000 次（以 OpenRouter 公告為準）。";
 
 	const SUMMARY_HEADING = "一句話摘要";
 	const APPRAISAL_HEADING = "嚴格評讀";
@@ -327,7 +330,8 @@
 
 	/**
 	 * POST with retries on transient HTTP statuses and network errors.
-	 * @param {object} opts { sleep, maxRetries, random, onRetry({ attempt, maxRetries, delay, status, error }) }
+	 * @param {object} opts { sleep, maxRetries, random, onRetry({ attempt, maxRetries, delay, status, error }),
+	 *   final(res, json) → true for an error status that retrying cannot fix (OpenRouter's daily limit) }
 	 * @returns {Promise<{ res, json, retries }>} the final response (which may still be an error status)
 	 */
 	async function postWithRetry(fetch, url, init, opts = {}) {
@@ -346,7 +350,7 @@
 				// fetch rejects (TypeError) when the network fails or the connection drops mid-body
 				error = e;
 			}
-			let retryable = error ? true : RETRY_STATUSES.has(res.status);
+			let retryable = error ? true : RETRY_STATUSES.has(res.status) && !(opts.final && opts.final(res, json));
 			if (!retryable || attempt >= maxRetries) {
 				if (error) throw error;
 				return { res, json, retries: attempt };
@@ -561,6 +565,73 @@
 		return [...(sys ? [{ role: "system", content: sys }] : []), { role: "user", content }];
 	}
 
+	/** A rate-limit header from the response, or from the copy OpenRouter puts in error.metadata.headers. */
+	function limitHeader(res, json, name) {
+		let v = header(res, name);
+		let meta = json && json.error && json.error.metadata && json.error.metadata.headers;
+		if ((v === null || v === undefined) && meta) {
+			let key = Object.keys(meta).find(k => k.toLowerCase() === name.toLowerCase());
+			if (key) v = meta[key];
+		}
+		return v === null || v === undefined ? null : String(v);
+	}
+
+	/**
+	 * OpenRouter's daily free-model limit (429 "Rate limit exceeded: free-models-per-day"): retrying won't help
+	 * until it resets. A per-minute limit or a busy upstream model is not this.
+	 */
+	function isDailyLimit(res, json) {
+		if (!res || res.status !== 429) return false;
+		let msg = String((json && json.error && json.error.message) || "");
+		if (/per[- ]day|daily/i.test(msg)) return true;
+		let remaining = limitHeader(res, json, "x-ratelimit-remaining");
+		let reset = Number(limitHeader(res, json, "x-ratelimit-reset"));
+		if (reset > 0 && reset < 1e12) reset *= 1000;
+		// The per-minute window resets within a minute; a reset hours away is the daily one
+		return remaining === "0" && Number.isFinite(reset) && reset - Date.now() > 10 * 60 * 1000;
+	}
+
+	/** 「明天 08:00」-style local time for a reset timestamp (ms), or "" when unknown. */
+	function resetTime(ms, now = Date.now()) {
+		if (!Number.isFinite(ms) || ms <= now) return "";
+		let d = new Date(ms);
+		let today = new Date(now);
+		let hm = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+		let sameDay = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
+		return `${sameDay ? "今天" : "明天"} ${hm}`;
+	}
+
+	/**
+	 * The OpenRouter errors a student hits, said plainly: the daily free limit (err.code "daily-limit"),
+	 * a busy free model, no credits for a paid model. Anything else: the usual httpError.
+	 */
+	function openRouterError(res, json, retries, model) {
+		let err = null;
+		if (isDailyLimit(res, json)) {
+			// Free-model requests are counted per UTC day: without the header, the next UTC midnight
+			let reset = Number(limitHeader(res, json, "x-ratelimit-reset"));
+			if (Number.isFinite(reset) && reset > 0 && reset < 1e12) reset *= 1000;
+			let midnight = new Date();
+			midnight.setUTCHours(24, 0, 0, 0);
+			let when = resetTime(reset) || resetTime(midnight.getTime());
+			err = new Error(`OpenRouter 今天的免費額度用完了，${when} 會重置；`
+				+ "等不及的話，AI 文獻筆記可以先改用「網頁版 AI（複製貼上）」，不受這個限制。"
+				+ OPENROUTER_FREE_LIMITS);
+			err.code = "daily-limit";
+		}
+		else if (res.status === 429) {
+			err = new Error(`OpenRouter 的${/:free$|^openrouter\/free$/.test(model || DEFAULT_MODELS.openrouter) ? "免費" : ""}模型現在太多人在用（429）`
+				+ `${retries ? `，已重試 ${retries} 次` : ""}。請過幾分鐘再試，或到 設定 → ZotMax → AI 換一個模型。`);
+		}
+		else if (res.status === 402) {
+			err = new Error("OpenRouter 帳戶餘額不足（402）：付費模型要先到 openrouter.ai/settings/credits 儲值；"
+				+ "或把模型改回免費的 openrouter/free（名稱有 :free 的都免費）。");
+		}
+		if (!err) return httpError("OpenRouter API", res, json, retries);
+		err.status = res.status;
+		return err;
+	}
+
 	/** An OpenAI-compatible Chat Completions service (OpenRouter). */
 	async function callChat({ apiKey, model, system, user, pdf, fetch, baseURL, provider, retry }) {
 		let base = String(baseURL || PROVIDERS.openrouter.baseURL).replace(/\/+$/, "");
@@ -574,10 +645,11 @@
 				messages: chatMessages(system, user, pdf),
 				...(provider === "openrouter" ? { usage: { include: true } } : {}),
 			}),
-		}, retry);
-		if (!res.ok) throw httpError(`${label} API`, res, json, retries);
+		}, provider === "openrouter" ? Object.assign({}, retry, { final: isDailyLimit }) : retry);
+		let fail = (r) => provider === "openrouter" ? openRouterError(r, json, retries, model) : httpError(`${label} API`, r, json, retries);
+		if (!res.ok) throw fail(res);
 		// OpenRouter can answer 200 with an error from the model's provider
-		if (json.error && !json.choices) throw httpError(`${label} API`, { status: json.error.code || res.status, statusText: "" }, json, retries);
+		if (json.error && !json.choices) throw fail({ status: Number(json.error.code) || res.status, statusText: "", headers: res.headers });
 		let choice = (json.choices || [])[0] || {};
 		let msg = choice.message || {};
 		if (msg.refusal) throw new Error(`${label} 拒絕處理：${msg.refusal}`);
@@ -908,7 +980,7 @@
 	}
 
 	return {
-		DEFAULT_MODELS, PROVIDERS, NO_KEY_MESSAGE, OPENROUTER_HEADERS, normalizeProvider, providerInfo, parseOpenRouterModels, chatMessages, callChat,
+		DEFAULT_MODELS, PROVIDERS, NO_KEY_MESSAGE, OPENROUTER_HEADERS, OPENROUTER_FREE_LIMITS, isDailyLimit, openRouterError, resetTime, normalizeProvider, providerInfo, parseOpenRouterModels, chatMessages, callChat,
 		DEFAULT_SYSTEM_PROMPT, USER_PDF_NOTE, buildPrompt, formatAnnotationsForPrompt, PDF_ATTACHED_NOTE,
 		anthropicContent, openaiInput, callAnthropic, callOpenAI, generateText, generateNote, imageContent, extractSummary,
 		anthropicSystem, anthropicBody, anthropicHeaders, readAnthropicMessage, notePrompt, noteRequestBody,

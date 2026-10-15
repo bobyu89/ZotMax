@@ -530,7 +530,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
           <li><span>到 OpenRouter 用 Google 帳號（或 email）註冊登入。
             <span class="copyline"><a href="https://openrouter.ai/keys" target="_blank" rel="noopener">https://openrouter.ai/keys</a><button type="button" class="btn small ghost" data-copy="https://openrouter.ai/keys" data-what="OpenRouter 金鑰網址">複製</button></span></span></li>
           <li><span>按 <kbd class="long">Create API Key</kbd>，複製 <code>sk-or-</code> 開頭的金鑰。它只會顯示一次，先存在密碼管理程式或記事本。</span></li>
-          <li><span>不儲值也能用：ZotMax 預設用 <code>openrouter/free</code>，自動挑免費模型，但每天有次數限制、品質較不穩定。想要穩定，再到 <b>Credits</b> 儲值、在 ZotMax 設定換成付費模型。免費模型的提供者可能保留送出的內容，含病人資料時請改用付費模型或「網頁版 AI」。</span></li>
+          <li><span>不用綁信用卡、不儲值也能用：ZotMax 預設用 <code>openrouter/free</code>，自動挑免費模型，品質較不穩定。次數限制：沒有儲值時每天約 50 次（一篇的 AI 筆記算一次）；帳戶累計儲值滿 US$10 後提高到每天約 1000 次（以 OpenRouter 公告為準）。當天用完，ZotMax 會直接告訴你，隔天再同步就會補上。想要穩定，再到 <b>Credits</b> 儲值、在 ZotMax 設定換成付費模型。免費模型的提供者可能保留送出的內容，含病人資料時請改用付費模型或「網頁版 AI」。</span></li>
         </ol>
         <ol class="how only-openai">
           <li><span>到 OpenAI 的 API 平台登入，先在 <b>Billing</b> 儲值。
@@ -540,7 +540,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
         <p class="zh">裝好 ZotMax 後，金鑰貼在 設定 › ZotMax ›「AI」分頁的「AI 服務」。它會存進 Zotero 的密碼管理，不寫進一般設定檔。</p>
         <fieldset class="check">
           <legend>打勾確認</legend>
-          <label><input type="checkbox" id="k-billing"><span class="box"></span><span><span class="only-openrouter">我知道免費模型有每日限制，付費模型依用量扣儲值。</span><span class="only-anthropic">我已在 API 平台儲值或綁卡，知道依用量付費。</span><span class="only-openai">我已在 API 平台儲值或綁卡，知道依用量付費。</span></span></label>
+          <label><input type="checkbox" id="k-billing"><span class="box"></span><span><span class="only-openrouter">我知道免費模型每天約 50 次，付費模型依用量扣儲值。</span><span class="only-anthropic">我已在 API 平台儲值或綁卡，知道依用量付費。</span><span class="only-openai">我已在 API 平台儲值或綁卡，知道依用量付費。</span></span></label>
           <label><input type="checkbox" id="k-key"><span class="box"></span><span>我拿到金鑰，也存好了。</span></label>
         </fieldset>
       </section>

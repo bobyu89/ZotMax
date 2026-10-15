@@ -148,7 +148,7 @@
 		aiOpenAI: ["zotero-bridge-setup-ai-openai", "OpenAI"],
 		aiOpenRouter: ["zotero-bridge-setup-ai-openrouter", "OpenRouter（有免費模型）"],
 		aiManual: ["zotero-bridge-setup-ai-manual", "不用 key：網頁版 AI（複製貼上）"],
-		aiKeyWhereOpenRouter: ["zotero-bridge-setup-ai-key-where-openrouter", "到 openrouter.ai 用 Google 帳號註冊，在 Keys 建立，sk-or- 開頭。不想花錢就用免費模型（每天有次數限制）。"],
+		aiKeyWhereOpenRouter: ["zotero-bridge-setup-ai-key-where-openrouter", "到 openrouter.ai 用 Google 帳號註冊，在 Keys 建立，sk-or- 開頭。免費模型不用錢、不用綁信用卡：沒有儲值時每天約 50 次，累計儲值滿 US$10 後約 1000 次。"],
 		aiKeyBadOpenRouter: ["zotero-bridge-setup-ai-key-bad-openrouter", "這不像 OpenRouter 的 API key（應該是 sk-or- 開頭）。請整段複製再貼一次。"],
 		aiManualHint: ["zotero-bridge-setup-ai-manual-hint", "不用填 key。之後在文獻上按右鍵 → ZotMax ▸「AI 筆記（複製貼上，免 API key）…」，把提示詞貼到你在用的 AI 網站，再把回答貼回來；同步不會呼叫 AI。"],
 		aiManualSaved: ["zotero-bridge-setup-ai-manual-saved", "好了：AI 筆記用複製貼上的方式產生，不需要 key，也不會產生 API 費用。"],
