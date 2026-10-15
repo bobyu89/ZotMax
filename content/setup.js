@@ -44,8 +44,8 @@
 	const STEPS = ["welcome", "mode", "notes", "ai", "try", "done"];
 	// Secrets whose presence means the profile is already set up (secrets.js names)
 	const CONFIG_SECRETS = ["notionToken", "anthropicKey", "openaiKey"];
-	const KEY_NAMES = { anthropic: "anthropicKey", openai: "openaiKey" };
-	const PROVIDER_NAMES = { anthropic: "Claude", openai: "OpenAI" };
+	const KEY_NAMES = { anthropic: "anthropicKey", openai: "openaiKey", openrouter: "openrouterKey" };
+	const PROVIDER_NAMES = { anthropic: "Claude", openai: "OpenAI", openrouter: "OpenRouter" };
 
 	// zh-TW text of the wizard's Fluent messages (identical to locale/zh-TW; tests check)
 	const STRINGS = {
@@ -141,11 +141,18 @@
 
 		aiTitle: ["zotero-bridge-setup-ai-title", "AI 文獻筆記（選填）"],
 		aiLead: ["zotero-bridge-setup-ai-lead", "同步時可以請 AI 先替每篇寫一份研讀筆記：研究設計、樣本、PICO、評讀初稿，你再自己核對。"],
-		aiCost: ["zotero-bridge-setup-ai-cost", "要用你自己的 API key，依用量付費，錢直接付給 Anthropic 或 OpenAI；ChatGPT／Claude 的訂閱方案不能用在這裡。"],
+		aiCost: ["zotero-bridge-setup-ai-cost", "可以用自己的 API key（依用量付費），也可以完全不用 key：把提示詞貼到 ChatGPT、Claude、Gemini 等網站，再把回答貼回來。ChatGPT／Claude 的訂閱方案不能當 API key 用，但網頁版可以這樣用。"],
 		aiOptional: ["zotero-bridge-setup-ai-optional", "完全不用 AI 也可以：同步、劃線整理、評讀表都照常運作。不確定就先略過。"],
 		aiProvider: ["zotero-bridge-setup-ai-provider", "服務商"],
 		aiClaude: ["zotero-bridge-setup-ai-claude", "Claude（Anthropic）"],
 		aiOpenAI: ["zotero-bridge-setup-ai-openai", "OpenAI"],
+		aiOpenRouter: ["zotero-bridge-setup-ai-openrouter", "OpenRouter（有免費模型）"],
+		aiManual: ["zotero-bridge-setup-ai-manual", "不用 key：網頁版 AI（複製貼上）"],
+		aiKeyWhereOpenRouter: ["zotero-bridge-setup-ai-key-where-openrouter", "到 openrouter.ai 用 Google 帳號註冊，在 Keys 建立，sk-or- 開頭。不想花錢就用免費模型（每天有次數限制）。"],
+		aiKeyBadOpenRouter: ["zotero-bridge-setup-ai-key-bad-openrouter", "這不像 OpenRouter 的 API key（應該是 sk-or- 開頭）。請整段複製再貼一次。"],
+		aiManualHint: ["zotero-bridge-setup-ai-manual-hint", "不用填 key。之後在文獻上按右鍵 → ZotMax ▸「AI 筆記（複製貼上，免 API key）…」，把提示詞貼到你在用的 AI 網站，再把回答貼回來；同步不會呼叫 AI。"],
+		aiManualSaved: ["zotero-bridge-setup-ai-manual-saved", "好了：AI 筆記用複製貼上的方式產生，不需要 key，也不會產生 API 費用。"],
+		aiManualNext: ["zotero-bridge-setup-ai-manual-next", "用網頁版 AI"],
 		aiKey: ["zotero-bridge-setup-ai-key", "API key"],
 		aiKeyWhereClaude: ["zotero-bridge-setup-ai-key-where-claude", "到 console.anthropic.com 建立，sk-ant- 開頭。"],
 		aiKeyWhereOpenAI: ["zotero-bridge-setup-ai-key-where-openai", "到 platform.openai.com 建立，sk- 開頭。"],
@@ -356,6 +363,10 @@
 	function checkKey(provider, key, opts = {}) {
 		key = String(key || "").trim();
 		if (!key) return { ok: false, error: "empty" };
+		if (provider === "openrouter") {
+			if (/^sk-ant-/.test(key)) return { ok: false, error: "aiKeyWrongProvider" };
+			return /^sk-or-[\w-]{16,}$/.test(key) ? { ok: true, key } : { ok: false, error: "aiKeyBadOpenRouter" };
+		}
 		if (provider === "openai") {
 			if (/^sk-ant-/.test(key)) return { ok: false, error: "aiKeyWrongProvider" };
 			if (opts.baseURL) return /\s/.test(key) ? { ok: false, error: "aiKeyBadOpenAI" } : { ok: true, key };
@@ -535,6 +546,8 @@
 			backButton.disabled = on || state.index === 0;
 			skipButton.disabled = on;
 			nextButton.disabled = on || !!(state.view && state.view.nextDisabled && state.view.nextDisabled());
+			// A step whose main button depends on a choice (the AI step: 儲存並繼續 or 用網頁版 AI)
+			if (state.view && typeof state.view.nextLabel === "function") nextButton.textContent = t(state.view.nextLabel());
 		}
 
 		function heading(id, name) {
@@ -926,28 +939,38 @@
 			},
 
 			ai() {
-				let provider = pref("llm.provider") === "openai" ? "openai" : "anthropic";
-				let claude = h("input", { type: "radio", name: "zb-su-provider", value: "anthropic", id: "zb-su-provider-anthropic" });
-				let openai = h("input", { type: "radio", name: "zb-su-provider", value: "openai", id: "zb-su-provider-openai" });
-				(provider === "openai" ? openai : claude).checked = true;
+				// Claude, OpenAI, OpenRouter (keys) or 網頁版 AI (no key: manual-ai.js)
+				let ORDER = ["anthropic", "openai", "openrouter", "manual"];
+				let LABELS = { anthropic: "aiClaude", openai: "aiOpenAI", openrouter: "aiOpenRouter", manual: "aiManual" };
+				let WHERE = { anthropic: "aiKeyWhereClaude", openai: "aiKeyWhereOpenAI", openrouter: "aiKeyWhereOpenRouter" };
+				let PLACEHOLDER = { anthropic: "sk-ant-…", openai: "sk-…", openrouter: "sk-or-…" };
+				let current = ORDER.includes(pref("llm.provider")) ? pref("llm.provider") : "anthropic";
+				let radios = {};
+				for (let p of ORDER) radios[p] = h("input", { type: "radio", name: "zb-su-provider", value: p, id: `zb-su-provider-${p}` });
+				radios[current].checked = true;
 				let keyInput = h("input", { type: "password", id: "zb-su-ai-key", class: "zb-su-input", autocomplete: "off",
 					"aria-describedby": "zb-su-ai-where zb-su-ai-saved" });
+				let keyLabel = h("label", { class: "zb-su-label", for: "zb-su-ai-key" }, t("aiKey"));
 				let where = h("p", { class: "zb-su-hint", id: "zb-su-ai-where" });
 				let saved = h("p", { class: "zb-su-hint", id: "zb-su-ai-saved" });
-				let chosen = () => (openai.checked ? "openai" : "anthropic");
+				let chosen = () => ORDER.find(p => radios[p].checked) || "anthropic";
 				let refresh = () => {
 					let p = chosen();
-					where.textContent = t(p === "openai" ? "aiKeyWhereOpenAI" : "aiKeyWhereClaude");
-					keyInput.setAttribute("placeholder", p === "openai" ? "sk-…" : "sk-ant-…");
+					let manual = p === "manual";
+					keyLabel.hidden = manual;
+					keyInput.hidden = manual;
+					where.textContent = t(manual ? "aiManualHint" : WHERE[p]);
+					keyInput.setAttribute("placeholder", PLACEHOLDER[p] || "");
 					saved.textContent = "";
-					hasSecret(deps, KEY_NAMES[p]).then((has) => {
-						if (alive() && chosen() === p) saved.textContent = has ? t("aiKeySaved", { name: PROVIDER_NAMES[p] }) : "";
-					});
+					if (!manual) {
+						hasSecret(deps, KEY_NAMES[p]).then((has) => {
+							if (alive() && chosen() === p) saved.textContent = has ? t("aiKeySaved", { name: PROVIDER_NAMES[p] }) : "";
+						});
+					}
 					invalid(keyInput, false);
 					setBusy(state.busy);
 				};
-				onPick(claude, refresh);
-				onPick(openai, refresh);
+				for (let p of ORDER) onPick(radios[p], refresh);
 				listen(keyInput, "input", () => setBusy(state.busy));
 				let el = h("section", { class: "zb-su-step", "data-zb-step": "ai", "aria-labelledby": "zb-su-h-ai" },
 					heading("zb-su-h-ai", "aiTitle"),
@@ -956,20 +979,23 @@
 					h("fieldset", { class: "zb-su-box" },
 						h("legend", {}, t("aiProvider")),
 						h("div", { class: "zb-su-row", role: "radiogroup", "aria-label": t("aiProvider") },
-							h("label", { class: "zb-su-radio", for: "zb-su-provider-anthropic" }, claude, t("aiClaude")),
-							h("label", { class: "zb-su-radio", for: "zb-su-provider-openai" }, openai, t("aiOpenAI"))),
-						h("label", { class: "zb-su-label", for: "zb-su-ai-key" }, t("aiKey")),
-						keyInput, where, saved));
+							...ORDER.map(p => h("label", { class: "zb-su-radio", for: `zb-su-provider-${p}` }, radios[p], t(LABELS[p])))),
+						keyLabel, keyInput, where, saved));
 				refresh();
 				return {
 					el,
-					// 略過 is the prominent way on: 儲存並繼續 waits for a key
+					// 略過 is the prominent way on: 儲存並繼續 waits for a key (網頁版 AI needs none)
 					skipLabel: "aiSkip",
 					skipPrimary: true,
-					nextLabel: "aiSave",
-					nextDisabled: () => !keyInput.value.trim(),
+					nextLabel: () => (chosen() === "manual" ? "aiManualNext" : "aiSave"),
+					nextDisabled: () => chosen() !== "manual" && !keyInput.value.trim(),
 					async next() {
 						let p = chosen();
+						if (p === "manual") {
+							setPref("llm.provider", "manual");
+							say(t("aiManualSaved"));
+							return true;
+						}
 						let check = checkKey(p, keyInput.value, { baseURL: String(pref("llm.openaiBaseURL") || "").trim() });
 						if (check.error === "empty") return true;
 						if (!check.ok) {
@@ -1135,7 +1161,7 @@
 			skipButton.hidden = view.skip === false;
 			skipButton.textContent = t(view.skipLabel || "skip");
 			skipButton.classList.toggle("zb-su-primary", !!view.skipPrimary);
-			nextButton.textContent = t(view.nextLabel || "next");
+			nextButton.textContent = t((typeof view.nextLabel === "function" ? view.nextLabel() : view.nextLabel) || "next");
 			nextButton.classList.toggle("zb-su-primary", !view.skipPrimary);
 			setBusy(false);
 			try {

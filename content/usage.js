@@ -30,7 +30,8 @@
 	const BATCH_SUFFIX = " (batch)";
 	const COUNTERS = ["calls", "input", "output", "cacheRead", "cacheWrite"];
 	// Counters stored only when non-zero (keeps older ledgers and their shape unchanged)
-	const OPTIONAL_COUNTERS = ["cacheWrite1h"];
+	const OPTIONAL_COUNTERS = ["cacheWrite1h", "cost"];
+	const FREE_PRICE = Object.freeze({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cacheWrite1h: 0 });
 	const KEEP_MONTHS = 24;
 
 	function emptyCounters() {
@@ -111,6 +112,8 @@
 			target.cacheWrite += num(u.cacheWrite);
 			let write1h = Math.min(num(u.cacheWrite1h), num(u.cacheWrite));
 			if (write1h) target.cacheWrite1h = num(target.cacheWrite1h) + write1h;
+			// What the service billed, when it says (OpenRouter): counts for models without a price
+			if (num(u.cost)) target.cost = num(target.cost) + num(u.cost);
 		}
 		month.byModel[model] = byModel;
 		out[key] = month;
@@ -154,6 +157,8 @@
 		if (!model || !prices) return null;
 		model = baseModel(model);
 		if (prices[model]) return prices[model];
+		// OpenRouter's free models ("…:free", the openrouter/free router) cost nothing
+		if (/:free$/.test(model) || model === "openrouter/free") return FREE_PRICE;
 		let best = null;
 		for (let key of Object.keys(prices)) {
 			if (model.startsWith(key + "-") && (!best || key.length > best.length)) best = key;
@@ -227,6 +232,9 @@
 				s.cost += costOf(c, price, batch);
 				if (batch) s.batchSavings += costOf(c, price) - costOf(c, price, true);
 				s.cacheSavings += cacheSavings(c, price, batch);
+			}
+			else if (num(c.cost)) {
+				s.cost += num(c.cost);
 			}
 			else {
 				s.unpricedCalls += num(c.calls);

@@ -41,7 +41,7 @@
 	const MAX_ERROR_CHARS = 240;
 	const MAX_SCRUB_INPUT = 4000;
 	const PRESET_LABELS = { guided: "研究生引導", advanced: "進階", custom: "自訂" };
-	const PROVIDER_NAMES = { anthropic: "Claude", openai: "OpenAI" };
+	const PROVIDER_NAMES = { anthropic: "Claude", openai: "OpenAI", openrouter: "OpenRouter", manual: "網頁版 AI（免 key）" };
 
 	// zh-TW text of the dialogs' Fluent messages (identical to locale/zh-TW; tests check)
 	const STRINGS = {
@@ -488,11 +488,13 @@
 	async function gather() {
 		let F = ZB().features;
 		let diff = presetDiff(F.FEATURES, F.snapshot());
-		let provider = pref("llm.provider") === "openai" ? "openai" : "anthropic";
+		let provider = ZB().llm.normalizeProvider(pref("llm.provider"));
+		let secret = ZB().llm.providerInfo(provider).secret;
 		let notionDB = !!String(pref("notion.database") || "").trim();
 		let [notionToken, aiKey, os, items] = await Promise.all([
 			notionDB ? hasSecret("notionToken") : false,
-			hasSecret(provider === "openai" ? "openaiKey" : "anthropicKey"),
+			// 網頁版 AI needs no key: it counts as set up
+			secret ? hasSecret(secret) : true,
 			osName(),
 			itemCount(),
 		]);

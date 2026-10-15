@@ -43,6 +43,11 @@ test("steps follow the chosen note tool and AI provider", () => {
 	assert.deepEqual(railTitles(), ["選擇你的環境", "下載 ZotMax", "準備 Obsidian vault", "申請 API 金鑰", "裝進 Zotero", "首次設定精靈", "開始使用"]);
 	pick("dest", "notion"); pick("ai", "none");
 	assert.deepEqual(railTitles(), ["選擇你的環境", "下載 ZotMax", "準備 Notion", "裝進 Zotero", "首次設定精靈", "開始使用"]);
+	// 網頁版 AI needs no key: no key step either; OpenRouter has one
+	pick("ai", "manual");
+	assert.deepEqual(railTitles(), ["選擇你的環境", "下載 ZotMax", "準備 Notion", "裝進 Zotero", "首次設定精靈", "開始使用"]);
+	pick("ai", "openrouter");
+	assert.deepEqual(railTitles(), ["選擇你的環境", "下載 ZotMax", "準備 Notion", "申請 API 金鑰", "裝進 Zotero", "首次設定精靈", "開始使用"]);
 });
 
 test("install step hands off to the in-Zotero 首次設定精靈; the manual setup stays as a fallback", () => {
@@ -62,7 +67,7 @@ test("install step hands off to the in-Zotero 首次設定精靈; the manual set
 test("every URL the user needs has a copy button; the .xpi comes from the latest release", () => {
 	const { doc } = load();
 	const copies = [...doc.querySelectorAll("[data-copy]")].map(b => b.dataset.copy);
-	for (const url of ["https://github.com/bobyu89/ZotMax/releases/latest", "https://obsidian.md/download", "https://www.notion.so/profile/integrations", "https://console.anthropic.com", "https://platform.openai.com/api-keys"]) assert.ok(copies.includes(url), url);
+	for (const url of ["https://github.com/bobyu89/ZotMax/releases/latest", "https://obsidian.md/download", "https://www.notion.so/profile/integrations", "https://console.anthropic.com", "https://platform.openai.com/api-keys", "https://openrouter.ai/keys"]) assert.ok(copies.includes(url), url);
 	for (const b of doc.querySelectorAll("[data-copy]")) assert.match(b.getAttribute("aria-label"), /^複製/);
 	assert.equal(doc.querySelector('.step[data-id="download"] a.btn.act').getAttribute("href"), "https://github.com/bobyu89/ZotMax/releases/latest");
 });

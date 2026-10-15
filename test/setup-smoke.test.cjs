@@ -411,6 +411,20 @@ test("the whole way: 進階, Obsidian vault, Claude key, 試一次 with sync-no-
 	assert.equal($("zb-su-next").disabled, true);
 	assert.match(doc.querySelector(".zb-su-step").textContent, /依用量付費/);
 	assert.equal($("zb-su-ai-key").getAttribute("type"), "password");
+	assert.match(doc.querySelector(".zb-su-step").textContent, /也可以完全不用 key/);
+	// 網頁版 AI: no key field, the main button says so; OpenRouter: its key format; back to Claude for the rest
+	$("zb-su-provider-manual").click();
+	assert.equal($("zb-su-ai-key").hidden, true);
+	assert.equal($("zb-su-next").disabled, false);
+	assert.equal($("zb-su-next").textContent, "用網頁版 AI");
+	assert.match($("zb-su-ai-where").textContent, /AI 筆記（複製貼上，免 API key）/);
+	$("zb-su-provider-openrouter").click();
+	assert.equal($("zb-su-ai-key").hidden, false);
+	assert.equal($("zb-su-ai-key").getAttribute("placeholder"), "sk-or-…");
+	assert.match($("zb-su-ai-where").textContent, /openrouter\.ai/);
+	assert.equal($("zb-su-next").textContent, "儲存並繼續");
+	assert.equal($("zb-su-next").disabled, true);
+	$("zb-su-provider-anthropic").click();
 	type(doc, "zb-su-ai-key", "hello");
 	assert.equal($("zb-su-next").disabled, false);
 	assert.equal(await view.next(), false);
@@ -917,6 +931,9 @@ test("checks: vault, Notion link, key format (no network)", async () => {
 	assert.equal(S.checkKey("openai", "token-of-a-compatible-service", { baseURL: "http://localhost:8080/v1" }).ok, true);
 	assert.equal(S.checkKey("openai", "nope").error, "aiKeyBadOpenAI");
 	assert.equal(S.checkKey("anthropic", "  ").error, "empty");
+	assert.equal(S.checkKey("openrouter", "sk-or-v1-0123456789abcdef0123").ok, true);
+	assert.equal(S.checkKey("openrouter", "sk-proj-abcdefghijklmnopqrstuvwxyz").error, "aiKeyBadOpenRouter");
+	assert.equal(S.checkKey("openrouter", CLAUDE_KEY).error, "aiKeyWrongProvider");
 	assert.deepEqual(env.errors, []);
 });
 

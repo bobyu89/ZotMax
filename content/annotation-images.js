@@ -385,8 +385,8 @@
 		if (!images || !images.sendToAI) return undefined;
 		let entries = images.entries.filter(e => e.path);
 		if (!entries.length) return undefined;
-		if (llm.provider === "openai") {
-			notifyOnce(ctx, "ai-openai", messages, "圖片劃線只會傳給 Claude，OpenAI 模式下只送評註");
+		if (llm.provider !== "anthropic") {
+			notifyOnce(ctx, "ai-openai", messages, "圖片劃線只會傳給 Claude，其他服務只送評註");
 			return undefined;
 		}
 		let loaded = [];

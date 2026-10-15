@@ -314,6 +314,14 @@ Two more windows of the review kind. The card is a form the user fills, so it is
 - **Files:** `<scope> PICO 表.md` (frontmatter `type: pico-table`, the card's elements, the counts; a managed block with the info callout, 本題 PICO, the table, the word-match legend, the studies without data; 「✍️ 我的筆記」), `.csv` (UTF-8 BOM, every column), `.html` (a plain document Word opens as a table). The PRISMA note of a collection with a card gets a 「本題 PICO」 section ahead of the counts.
 - **Words:** 對照本題 is always called a word match (✓ shared words, ？ none, — no data), never a verdict; every table says the values are the AI's prefill and that the user checks them against the paper.
 
+### 網頁版 AI window (`manual-ai.xhtml`, `manual-ai.css`, `content/manual-ai.js`)
+- **Root:** `.zb-classify .zb-pico .zb-manual`: the 文獻自動分類 window's head, list, foot and focus, the PICO windows' fields, rows and checks; manual-ai.css adds only the title line, the answer box and the caution colour.
+- **Head:** 「AI 筆記（複製貼上，免 API key）」 (with （n／N） for several papers), the paper's title in 600 on one line with an ellipsis, one Pencil sentence on what it does.
+- **Three numbered sections** (`zb-cl-item`), in the order the user acts: 1. 複製提示詞 — the full-text line (含整理過的全文 / 只放前段 / 掃描版 / 沒有全文) in Pencil, two buttons (含全文, 只複製指令（我自己上傳 PDF）), a status line (已複製 n 字; long prompts in the caution colour); 2. 打開 AI 網站 — one button per site (ChatGPT, Claude, Gemini), the copy-button tip, the privacy line in the caution colour; 3. 把回答貼回來 — a 12-row monospace textarea that resizes vertically, the live checks (✓ / ⚠️ / ✗, ✗ in red), 「用的是哪個 AI」 with suggestions.
+- **Foot:** the summary line and 取消 (結束 with several papers) · 跳過這篇 (several papers) · **儲存 AI 筆記並同步** (primary; disabled until the answer can be saved). Esc cancels.
+- **Settings → AI:** the provider menu has four entries (Claude, OpenAI, OpenRouter, 網頁版 AI); one box per provider shows. OpenRouter: key, model field with suggestions from 「載入模型清單」 (free first, 「名稱 · 免費」 or 「名稱 · US$x／百萬 tokens」), a status line, a Pencil note on free models, limits and privacy. 網頁版 AI: one Pencil paragraph, no fields.
+- **Setup wizard, AI step:** four radios in the same order; 網頁版 AI hides the key field, shows the how-to as the hint and turns the main button into 「用網頁版 AI」.
+
 ### GRADE window (`grade.xhtml`, `grade.css`, `content/grade.js`)
 - **Root:** `.zb-classify .zb-pico .zb-grade` — the review window's head, list and foot, the PICO fields, checks and chips; grade.css adds the outcome card.
 - **Head:** 「GRADE 證據確定性：<scope>」, one Pencil sentence: start by design, every step the user's with a reason, hints are reminders, no AI.

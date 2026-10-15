@@ -1,6 +1,6 @@
 # ZotMax
 
-給 Zotero 10 的研究生文獻外掛：把你在 Zotero 收的文獻、PDF 劃線、筆記和評讀，整理成 **Obsidian 筆記**或 **Notion 資料庫**；要的話，也可以請 AI（自備 Claude 或 OpenAI 的 API key）先替每篇寫一份結構化的研讀筆記。
+給 Zotero 10 的研究生文獻外掛：把你在 Zotero 收的文獻、PDF 劃線、筆記和評讀，整理成 **Obsidian 筆記**或 **Notion 資料庫**；要的話，也可以請 AI 先替每篇寫一份結構化的研讀筆記：用自己的 API key（Claude、OpenAI，或有免費模型的 OpenRouter），或**完全不用 key**，把提示詞貼到 ChatGPT、Claude、Gemini 網頁版再貼回來。
 
 **給誰用**：台灣的護理研究生。在 Zotero 收文獻、在 Obsidian 或 Notion 做筆記，要交課堂報告、做系統性／範圍回顧、寫實證健康照護（EBHC）報告或論文第二章文獻探討的人。
 
@@ -21,7 +21,10 @@
 2. **接上筆記工具**（至少一個）：第一次安裝後自動打開的[設定精靈](#首次設定精靈)會一步一步帶你做；要自己來，就到 Zotero → 設定 → **ZotMax** →「同步」分頁。
    - **Obsidian**：「Vault 資料夾路徑」選 vault 的根目錄。筆記預設放在 `Zotero/` 子資料夾，依 Zotero 分類分好資料夾（見 [Obsidian 資料夾結構](#obsidian-資料夾結構)）。
    - **Notion**：建立一個 integration，把資料庫分享給它，貼上 token 和「預設資料庫連結」，按 **測試連線並補齊資料庫欄位**，欄位會自動建好。還沒有資料庫的話，先把一個 Notion 頁面分享給 integration，再按「預設資料庫連結」旁的 **建立新的資料庫…**，ZotMax 會在那個頁面底下建好有全部欄位的資料庫並填好連結。
-3. **AI（選用）**：在「AI 服務」選 Anthropic（Claude）或 OpenAI，貼上 API key。API 另外計費，ChatGPT／Claude 的訂閱方案不能用在這裡。先不想用 AI，就到「功能」關掉「AI 文獻筆記」，或同步時選「同步但不呼叫 AI」。
+3. **AI（選用）**：在「AI 服務」選服務商：
+   - **沒有 API key**：選「網頁版 AI（複製貼上，免 API key）」，在文獻上按右鍵 → ZotMax ▸ **AI 筆記（複製貼上，免 API key）…**，把提示詞貼到你在用的 AI 網站（ChatGPT、Claude、Gemini、學校的 AI，免費或訂閱都行），再把回答貼回來。見[網頁版 AI](#網頁版-ai免-api-key)。
+   - **想自動批次產生**：Claude、OpenAI，或 **OpenRouter**（一個 key 用多家模型，用 Google 帳號就能註冊，有免費模型）。API 依用量計費，ChatGPT／Claude 的訂閱方案不能當 API key 用。
+   - 先不想用 AI，就到「功能」關掉「AI 文獻筆記」，或同步時選「同步但不呼叫 AI」。
 4. **第一次同步**：在文獻清單選幾篇文獻，按文獻清單上方工具列（「新增筆記」右邊）的 **ZotMax** 按鈕 → **同步所選文獻（Notion + Obsidian）**。
 5. **看結果**：Obsidian 的 `Zotero/10 文獻/<分類>/` 裡每篇一份文獻筆記，最上面是導覽列和「重點」；Notion 資料庫每篇一頁，欄位可以排序、篩選。
 
@@ -34,7 +37,7 @@ Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bob
 1. **歡迎**：ZotMax 做什麼、不做什麼（找文獻和寫作留給你；AI 只在你打開後出現；每個功能都能關）。
 2. **選模式**：研究生引導（建議新手）或進階，之後可在 設定 → 功能 改。
 3. **筆記放哪裡**：Obsidian（選 vault 資料夾，精靈會檢查它是不是資料夾、有沒有 `.obsidian`）、Notion（貼 token 和資料庫連結，按「測試連線」；還沒有資料庫，可以按「找可以放資料庫的頁面」→ 選一個已分享給 integration 的頁面 →「在這個頁面建立資料庫」，連結會自動填好並測試連線）、兩個都要，或先不用。
-4. **AI（選填）**：選 Claude 或 OpenAI、貼 API key。key 存在系統的登入管理員，不寫進設定檔；精靈只檢查格式，不會為了測試去呼叫 API 花你的錢。不確定就按「先不用 AI」。
+4. **AI（選填）**：選 Claude、OpenAI、OpenRouter 並貼 API key，或選「不用 key：網頁版 AI（複製貼上）」。key 存在系統的登入管理員，不寫進設定檔；精靈只檢查格式，不會為了測試去呼叫 API 花你的錢。不確定就按「先不用 AI」。
 5. **試一次**：用你選取的文獻（沒選就用清單第一篇）同步一次，不呼叫 AI、不花錢，完成後顯示筆記寫到哪裡，可以直接「在 Obsidian 開啟」。
 6. **完成**：告訴你工具列按鈕、右側面板、快速指令和設定頁在哪。
 
@@ -86,6 +89,8 @@ Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bob
 |---|---|---|
 | Anthropic（Claude） | <https://console.anthropic.com> | 可調思考深度（effort：low～max）；批次 API、圖片劃線只支援 Claude |
 | OpenAI | <https://platform.openai.com> | 可填相容服務的 API base URL |
+| OpenRouter | <https://openrouter.ai>（Google 帳號即可註冊 → Keys） | 一個 key 用 Claude、GPT、Gemini、DeepSeek 等數百個模型。預設 `openrouter/free` 自動挑免費模型：不用錢，但每天有次數限制、品質較不穩定；按「載入模型清單」可以選付費模型（費用從 OpenRouter 儲值扣，用量表直接記 OpenRouter 回報的金額）。只送文字，掃描版 PDF 不送檔案 |
+| 網頁版 AI（免 API key） | 不需要 | 不呼叫 API：用複製貼上的方式產生 AI 文獻筆記，見下方[網頁版 AI](#網頁版-ai免-api-key)。其他 AI 功能（比較表、文獻探討草稿、評讀陪練、讀懂統計、AI 主題分類）仍需要 API key |
 
 - 預設模型可以在設定頁改。
 - **全文最多送出字元數**：預設 150,000。超過會截斷，frontmatter 標 `fulltext_truncated: true`，也會告訴 AI 後段沒有提供。設成 0 表示只送摘要與註記，最省錢。
@@ -974,7 +979,7 @@ GRADE 評的不是單篇文獻，而是**某個結果指標的整體證據**有�
 
 ### AI 輔助與寫作
 
-AI 功能要開關打開、也設定了 API key 才會用到。所有 AI 產出都是**初稿**：每個數字、每個引用都要對照原文。
+AI 功能要開關打開、也設定了 API key 才會用到（AI 文獻筆記也可以用[網頁版 AI](#網頁版-ai免-api-key)，不用 key）。所有 AI 產出都是**初稿**：每個數字、每個引用都要對照原文。
 
 - **AI 文獻筆記**：同步時（沒有 AI 筆記才產生）請 AI 讀書目、摘要、全文和你的劃線與筆記，寫成固定格式的研讀筆記：一句話摘要、背景與目的、設計與方法（樣本、工具信效度、統計）、主要結果、作者結論、研究限制、嚴格評讀（依研究設計選 JBI 或 CASP 清單逐題作答，給整體評價）、證據等級、對我研究的啟發、關鍵概念 `[[ ]]`、可引用句。AI 筆記存回 Zotero 子筆記，之後同步不再花 token，你也可以直接在 Zotero 修改。→ 工具列「AI 輔助與寫作」→ **重新產生 AI 筆記並同步**；右側 ZotMax 面板的「重點」可直接看摘要與主要發現
 - **研讀欄位**：AI 同時輸出研究設計、樣本數、場域、PICO、測量工具、證據等級（Oxford CEBM 2011 與 JBI）、評讀結果、國家，寫進 Notion 欄位與 Obsidian frontmatter，可以篩選「研究設計 = RCT 且樣本數 > 100」。
@@ -988,6 +993,20 @@ AI 功能要開關打開、也設定了 API key 才會用到。所有 AI 產出�
 - **研究大腦**：[`research-brain/`](research-brain/README.md) 是給 Obsidian vault 用的 Claude Code／Codex CLI 設定檔，用斜線指令做跨文獻的工作（`/lit-compare`、`/research-gaps`、`/lit-review-draft`、`/inbox-triage`、`/review-prisma`）。外掛負責每一篇的固定流程，研究大腦負責跨文獻的思考。
 
 > ⚠️ **草稿不是作業。** AI 可能誤解結果、把結論套到錯誤的文獻、漏掉重要研究或寫出過度概括的句子；查核清單只抓得到部分數字問題。每一句、每個數字、每個引用都要對照原文，改寫成你自己的論述，也請遵守學校、課程或期刊對 AI 使用的規定。
+
+#### 網頁版 AI（免 API key）
+
+不會申請 API key、不想綁信用卡，或已經有 ChatGPT、Claude、Gemini（免費版或訂閱）、學校提供的 AI 帳號：用複製貼上的方式產生 AI 文獻筆記，不呼叫任何 API，也不產生 API 費用。
+
+1. 在文獻上按右鍵 → ZotMax ▸ **AI 筆記（複製貼上，免 API key）…**（或快速指令、右側 ZotMax 面板的「產生 AI 筆記」）。選好幾篇時一篇一篇來，可以「跳過這篇」。
+2. **複製提示詞（含全文）**：和 API 送出的完全一樣——筆記模板、結構化資料（JSON）的規則、書目、摘要、你的劃線與 Zotero 筆記、整理過的全文（參考文獻等段落已省略）。太長時視窗會提醒；這時（或 PDF 是掃描版）改按 **只複製指令（我自己上傳 PDF）**，在 AI 網站把 PDF 一起附上。
+3. 按 **開啟 ChatGPT／Claude／Gemini**（或打開學校的 AI），貼上送出。等它寫完，按回答下面的「複製」按鈕（自己反白容易掉格式）。
+4. 貼回視窗。下面會即時檢查：有沒有分段、有沒有最後的 JSON 資料區塊、是不是被截斷。缺 JSON 時可以請 AI「補上最後的 ```json 區塊」再貼一次。填「用的是哪個 AI」（選填）會記在筆記上。
+5. **儲存 AI 筆記並同步**：和 API 產生的走同一條路——存成 Zotero 的 AI 子筆記、取出研讀欄位、可引用句和摘要與劃線比對（✅／⚠️），再同步到 Obsidian／Notion，看板、儀表板、主題頁和 GRADE 提示都用得到。
+
+- **設成預設**：設定 → AI → 服務商選「網頁版 AI（複製貼上，免 API key）」。這時同步不會呼叫 AI，也不會因為沒有 key 卡住；面板的「產生 AI 筆記」會打開這個視窗。有 API key 時也可以隨時用這個指令（例如想用網頁版比較強的模型）。
+- **全文會送到你選的網站**：含病人資料或未發表的資料，請先確認可以分享（醫院或學校的規定），必要時先去識別化；免費方案的內容可能被拿去訓練模型。
+- 其他 AI 功能（比較表、文獻探討草稿、評讀陪練、讀懂統計、AI 主題分類、概念 AI 綜整）目前仍需要 API key；沒有 key 又想用，可以選 OpenRouter 的免費模型。
 
 #### 讀懂統計
 
@@ -1203,9 +1222,9 @@ pandoc 論文.md --citeproc --bibliography "Zotero/90 系統/references.json" --
 
 ## 常見問題與疑難排解
 
-**沒有 API key 可以用嗎？** 可以。同步、閱讀狀態、評讀表、篩選與 PRISMA、儀表板、搜尋連結都不需要 AI。沒有 key 時按一般同步，外掛會提示「AI 筆記需要 API key」；請改用「同步但不呼叫 AI」，或到「功能」關掉「AI 文獻筆記」。
+**沒有 API key 可以用嗎？** 可以。同步、閱讀狀態、評讀表、篩選與 PRISMA、儀表板、搜尋連結都不需要 AI。AI 文獻筆記也可以不用 key：設定 → AI → 服務商選「網頁版 AI（複製貼上）」，用[網頁版 AI](#網頁版-ai免-api-key) 產生。想自動批次又不想花錢：OpenRouter 有免費模型。
 
-**我有 ChatGPT Plus／Claude Pro，可以直接用嗎？** 不行。這裡要的是 API key，API 另外計費。
+**我有 ChatGPT Plus／Claude Pro，可以直接用嗎？** 訂閱不能當 API key，但可以用[網頁版 AI](#網頁版-ai免-api-key)：把提示詞貼到 ChatGPT／Claude 網頁，再把回答貼回來，AI 文獻筆記一樣完整。
 
 **重新同步會蓋掉我寫的東西嗎？** 不會。外掛只改自己的區塊（見[收集與同步](#收集與同步)）。直接改 AI 子筆記也沒問題，下次同步會沿用你改過的內容。
 
@@ -1229,9 +1248,9 @@ pandoc 論文.md --citeproc --bibliography "Zotero/90 系統/references.json" --
 
 ## 隱私與費用
 
-**API key 存在哪裡**：AI 的 API key、Notion token 和 NCBI API key 都存在 Zotero 的密碼管理員（和 Zotero 同步帳號的 key 同一套機制；有作業系統鑰匙圈時會再加密），不會寫進設定檔 `prefs.js`。舊版存在 `prefs.js` 的金鑰會在啟動時自動搬過去並刪除。
+**API key 存在哪裡**：AI 的 API key（Claude、OpenAI、OpenRouter）、Notion token 和 NCBI API key 都存在 Zotero 的密碼管理員（和 Zotero 同步帳號的 key 同一套機制；有作業系統鑰匙圈時會再加密），不會寫進設定檔 `prefs.js`。舊版存在 `prefs.js` 的金鑰會在啟動時自動搬過去並刪除。
 
-**什麼時候送什麼給 AI**：只有你打開對應開關、而且有 API key 時才會送。
+**什麼時候送什麼給 AI**：只有你打開對應開關、而且有 API key 時才會送。用 OpenRouter 時，請求經過 OpenRouter 轉給你選的模型提供者；免費模型的提供者可能保留內容。用[網頁版 AI](#網頁版-ai免-api-key) 時外掛什麼都不送，是你自己貼到網站。
 
 | 什麼時候 | 送出什麼 |
 |---|---|

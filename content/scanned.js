@@ -153,9 +153,13 @@
 			|| hasAnnotationContent(data) || hasNotes(notesMarkdown);
 	}
 
-	/** The provider can read a PDF file part (an OpenAI-compatible server behind a custom base URL may not). */
+	/**
+	 * The provider can read a PDF file part: Claude, and OpenAI at its own address (an OpenAI-compatible server behind
+	 * a custom base URL may not). OpenRouter gets the text only (its PDF parsing of scans costs extra).
+	 */
 	function providerReadsPDF(llm) {
-		return llm.provider !== "openai" || !String(llm.baseURL || "").trim();
+		if (llm.provider === "anthropic" || !llm.provider) return true;
+		return llm.provider === "openai" && !String(llm.baseURL || "").trim();
 	}
 
 	/**
@@ -176,7 +180,7 @@
 		let source = data.fullTextSource;
 		let reason = "";
 		if (wantsFullText && llm.sendScannedPDF && (status === "none" || status === "partial") && source && source.path) {
-			if (!providerReadsPDF(llm)) reason = "（使用自訂 API base URL 時不傳送 PDF）";
+			if (!providerReadsPDF(llm)) reason = llm.provider === "openrouter" ? "（OpenRouter 只送文字，不傳送 PDF）" : "（使用自訂 API base URL 時不傳送 PDF）";
 			else {
 				let read = await readPDF(source, llm, io);
 				pdf = read.pdf;

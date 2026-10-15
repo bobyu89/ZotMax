@@ -10,6 +10,7 @@
 	const SECRET_INPUTS = {
 		"zb-anthropic-key": "anthropicKey",
 		"zb-openai-key": "openaiKey",
+		"zb-openrouter-key": "openrouterKey",
 		"zb-notion-token": "notionToken",
 		"zb-ncbi-key": "ncbiKey",
 	};
@@ -111,12 +112,14 @@
 		container.append(table);
 	}
 
+	/** One box per provider (llm.js PROVIDERS): only the chosen one shows. */
 	function updateProviderBoxes() {
-		let openai = Zotero.Prefs.get(PROVIDER_PREF, true) === "openai";
-		let a = document.getElementById("zb-anthropic-box");
-		let o = document.getElementById("zb-openai-box");
-		if (a) a.hidden = openai;
-		if (o) o.hidden = !openai;
+		let value = Zotero.Prefs.get(PROVIDER_PREF, true);
+		let provider = ["anthropic", "openai", "openrouter", "manual"].includes(value) ? value : "anthropic";
+		for (let id of ["anthropic", "openai", "openrouter", "manual"]) {
+			let box = document.getElementById(`zb-${id}-box`);
+			if (box) box.hidden = id !== provider;
+		}
 	}
 
 	// ---------- secrets (login manager via Zotero.ZoteroBridge.secrets) ----------
@@ -1293,6 +1296,30 @@
 			catch (e) {
 				Zotero.logError(e);
 				status.textContent = `安裝失敗：${e.message || e}`;
+			}
+		},
+
+		/** 「載入模型清單」: OpenRouter's public model list (no key needed) into the model field's suggestions. */
+		async loadOpenRouterModels() {
+			let status = document.getElementById("zb-openrouter-status");
+			let list = document.getElementById("zb-openrouter-models");
+			status.textContent = "載入中…";
+			try {
+				let res = await fetch("https://openrouter.ai/api/v1/models");
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				let models = Zotero.ZoteroBridge.llm.parseOpenRouterModels(await res.json());
+				list.replaceChildren(...models.map((m) => {
+					let o = document.createElementNS(HTML_NS, "option");
+					o.setAttribute("value", m.id);
+					o.setAttribute("label", m.label);
+					return o;
+				}));
+				let free = models.filter(m => m.free).length;
+				status.textContent = `已載入 ${models.length} 個模型（免費 ${free} 個）：在模型欄位輸入名稱就會出現建議，例如 claude、gemini、free。`;
+			}
+			catch (e) {
+				Zotero.logError(e);
+				status.textContent = `載入失敗：${e.message || e}。可以直接在模型欄位輸入 openrouter.ai/models 上的模型名稱。`;
 			}
 		},
 

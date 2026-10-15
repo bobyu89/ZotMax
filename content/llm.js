@@ -15,7 +15,56 @@
 	const DEFAULT_MODELS = {
 		anthropic: "claude-opus-5-5",
 		openai: "gpt-5.5",
+		// OpenRouter's router over its free models: no cost, lower quality and daily limits
+		openrouter: "openrouter/free",
 	};
+
+	/*
+	 * The AI services. api: how it is called (anthropic Messages, OpenAI Responses, OpenAI-compatible Chat
+	 * Completions); secret: the login-manager name of its key (secrets.js); modelPref: the pref of its model.
+	 * "manual" is no service: the user pastes the prompt into a chat website and the answer back (manual-ai.js).
+	 */
+	const PROVIDERS = {
+		anthropic: { id: "anthropic", name: "Claude（Anthropic）", short: "Claude", api: "anthropic", secret: "anthropicKey", modelPref: "llm.anthropicModel", pdf: true, images: true },
+		openai: { id: "openai", name: "OpenAI", short: "OpenAI", api: "responses", secret: "openaiKey", modelPref: "llm.openaiModel", pdf: true, images: false },
+		openrouter: { id: "openrouter", name: "OpenRouter", short: "OpenRouter", api: "chat", secret: "openrouterKey", modelPref: "llm.openrouterModel", pdf: false, images: false,
+			baseURL: "https://openrouter.ai/api/v1" },
+		manual: { id: "manual", name: "網頁版 AI（複製貼上，免 API key）", short: "網頁版 AI", api: "manual", secret: "", modelPref: "", pdf: false, images: false },
+	};
+
+	/**
+	 * OpenRouter's /models list → [{ id, name, free, label }] of the text models (no batch variants), free first.
+	 * label: "名稱 · 免費" or "名稱 · US$x／百萬 tokens" for the model field's suggestions.
+	 */
+	function parseOpenRouterModels(json) {
+		let out = [];
+		for (let m of (json && json.data) || []) {
+			if (!m || typeof m.id !== "string" || /:batch$/.test(m.id)) continue;
+			let outputs = (m.architecture && m.architecture.output_modalities) || ["text"];
+			if (!outputs.includes("text")) continue;
+			let p = Number(m.pricing && m.pricing.prompt);
+			let c = Number(m.pricing && m.pricing.completion);
+			let free = /:free$/.test(m.id) || m.id === "openrouter/free" || (p === 0 && c === 0);
+			let perM = Number.isFinite(p) && p > 0 ? `US$${(p * 1e6).toFixed(p * 1e6 < 1 ? 2 : 1)}／百萬 tokens` : "";
+			out.push({ id: m.id, name: String(m.name || m.id), free, label: `${m.name || m.id} · ${free ? "免費" : perM || "價格見 OpenRouter"}` });
+		}
+		return out.sort((a, b) => (b.free - a.free) || a.id.localeCompare(b.id));
+	}
+
+	/** The provider pref as one of PROVIDERS' ids (anything unknown is Claude, as before). */
+	function normalizeProvider(value) {
+		return Object.prototype.hasOwnProperty.call(PROVIDERS, value) ? value : "anthropic";
+	}
+
+	function providerInfo(id) {
+		return PROVIDERS[normalizeProvider(id)];
+	}
+
+	// Sent to OpenRouter so its dashboard names the app (optional attribution headers)
+	const OPENROUTER_HEADERS = { "HTTP-Referer": "https://bobyu89.github.io/ZotMax/", "X-Title": "ZotMax" };
+	// Told to the user when a feature needs an API call and there is no key
+	const NO_KEY_MESSAGE = "還沒有設定 AI 的 API key：到 設定 → ZotMax → AI 選服務商並貼上 key（OpenRouter 有免費模型）；"
+		+ "AI 文獻筆記也可以不用 key，選「網頁版 AI（複製貼上）」。";
 
 	const SUMMARY_HEADING = "一句話摘要";
 	const APPRAISAL_HEADING = "嚴格評讀";
@@ -159,9 +208,13 @@
 
 	const PDF_ATTACHED_NOTE = "（全文以附件 PDF 提供：這份 PDF 是掃描版或大部分沒有文字層，請直接閱讀附件的每一頁。引用時標示 PDF 上印的頁碼；看不清楚的內容寫「無法辨識」，不要推測。）";
 
+	const USER_PDF_NOTE = "（全文：我會在這則訊息附上這篇文獻的 PDF 檔，請以 PDF 的內容為準，逐頁閱讀。引用時標示 PDF 上印的頁碼；沒有附上 PDF 或讀不到時，請先告訴我，不要只依摘要推測。）";
+
 	// The <fulltext> part of the prompt, depending on the full-text status (scanned.js) and an attached PDF
 	function fullTextSection(data, opts) {
 		if (opts.pdf) return PDF_ATTACHED_NOTE;
+		// 網頁版 AI (manual-ai.js): the user attaches the PDF in the chat themselves
+		if (opts.userPDF) return USER_PDF_NOTE;
 		// A scan's text layer holds at most a download stamp: not worth sending
 		if (data.fullText && data.fullTextStatus !== "none") {
 			let note = opts.fullTextTruncated ? "（全文過長，以下只提供前段內容；後段未提供的部分請勿推測）\n" : "";
@@ -180,7 +233,8 @@
 
 	/**
 	 * @param {object} data - item data from the Zotero adapter (may include fullText, fullTextStatus)
-	 * @param {object} opts - { systemPrompt, notesMarkdown: [{title, md}], fullTextTruncated, pdf, aiHighlights }
+	 * @param {object} opts - { systemPrompt, notesMarkdown: [{title, md}], fullTextTruncated, pdf, userPDF, aiHighlights }
+	 *   userPDF: the 網頁版 AI prompt without the text, the user attaching the PDF in the chat
 	 *   pdf: a scanned PDF sent along as a file ({ data: base64, filename, pages }); replaces <fulltext>
 	 *   aiHighlights: also ask for "highlights" (key sentences quoted verbatim) in the JSON block
 	 * @returns {{ system, user, systemParts }} systemParts = [system, STUDY_DATA_PROMPT]: the same for
@@ -337,6 +391,18 @@
 	}
 
 	function parseUsageCounts(provider, u) {
+		if (provider === "openrouter") {
+			// Chat Completions: prompt_tokens includes cached ones; OpenRouter adds the billed cost in USD
+			let cached = count(u.prompt_tokens_details && u.prompt_tokens_details.cached_tokens);
+			let out = {
+				input: Math.max(0, count(u.prompt_tokens) - cached),
+				output: count(u.completion_tokens),
+				cacheRead: cached,
+				cacheWrite: 0,
+			};
+			if (Number.isFinite(u.cost) && u.cost > 0) out.cost = u.cost;
+			return out;
+		}
 		if (provider === "openai") {
 			let cached = count(u.input_tokens_details && u.input_tokens_details.cached_tokens);
 			return {
@@ -485,6 +551,43 @@
 		return { text, model: json.model || model, provider: "openai", usage: parseUsage("openai", json), retries };
 	}
 
+	/** Chat Completions messages: the system prompt, then the user text (with the PDF as a file part when sent). */
+	function chatMessages(system, user, pdf) {
+		let sys = Array.isArray(system) ? system.filter(Boolean).join("\n\n") : system;
+		let text = typeof user === "string" ? user : (user || []).filter(c => c.type === "text").map(c => c.text).join("\n\n");
+		let content = pdf
+			? [{ type: "file", file: { filename: pdf.filename || "document.pdf", file_data: `data:application/pdf;base64,${pdf.data}` } }, { type: "text", text }]
+			: text;
+		return [...(sys ? [{ role: "system", content: sys }] : []), { role: "user", content }];
+	}
+
+	/** An OpenAI-compatible Chat Completions service (OpenRouter). */
+	async function callChat({ apiKey, model, system, user, pdf, fetch, baseURL, provider, retry }) {
+		let base = String(baseURL || PROVIDERS.openrouter.baseURL).replace(/\/+$/, "");
+		let label = (PROVIDERS[provider] || PROVIDERS.openrouter).short;
+		let { res, json, retries } = await postWithRetry(fetch, `${base}/chat/completions`, {
+			method: "POST",
+			headers: Object.assign({ "content-type": "application/json", "authorization": `Bearer ${apiKey}` },
+				provider === "openrouter" ? OPENROUTER_HEADERS : {}),
+			body: JSON.stringify({
+				model: model || DEFAULT_MODELS[provider] || DEFAULT_MODELS.openrouter,
+				messages: chatMessages(system, user, pdf),
+				...(provider === "openrouter" ? { usage: { include: true } } : {}),
+			}),
+		}, retry);
+		if (!res.ok) throw httpError(`${label} API`, res, json, retries);
+		// OpenRouter can answer 200 with an error from the model's provider
+		if (json.error && !json.choices) throw httpError(`${label} API`, { status: json.error.code || res.status, statusText: "" }, json, retries);
+		let choice = (json.choices || [])[0] || {};
+		let msg = choice.message || {};
+		if (msg.refusal) throw new Error(`${label} 拒絕處理：${msg.refusal}`);
+		let text = typeof msg.content === "string" ? msg.content
+			: Array.isArray(msg.content) ? msg.content.map(c => c.text || "").join("") : "";
+		if (!text.trim()) throw new Error(`${label} 沒有回傳內容`);
+		if (choice.finish_reason === "length") text += "\n\n> ⚠️ 輸出未完成，內容可能不完整。";
+		return { text, model: json.model || model, provider, usage: parseUsage(provider, json), retries };
+	}
+
 	/**
 	 * Run one system + user prompt on the configured provider.
 	 * @param {object} [opts] retry options for postWithRetry: { sleep, maxRetries, random, onRetry },
@@ -492,10 +595,13 @@
 	 * @returns {Promise<{ text, model, provider, usage: { input, output, cacheRead, cacheWrite }, retries }>}
 	 */
 	async function generateText(settings, system, user, fetch, opts = {}) {
-		if (!settings.apiKey) throw new Error("尚未設定 LLM API key");
+		if (!settings.apiKey || settings.provider === "manual") throw new Error(NO_KEY_MESSAGE);
 		let common = { apiKey: settings.apiKey, model: settings.model, system, user, pdf: opts.pdf || null, fetch, retry: opts };
 		if (settings.provider === "openai") {
 			return callOpenAI(Object.assign(common, { baseURL: settings.baseURL }));
+		}
+		if (settings.provider === "openrouter") {
+			return callChat(Object.assign(common, { provider: "openrouter", baseURL: PROVIDERS.openrouter.baseURL }));
 		}
 		return callAnthropic(Object.assign(common, { effort: settings.effort }));
 	}
@@ -518,7 +624,7 @@
 	function notePrompt(settings, data, opts = {}) {
 		let { systemParts, user } = buildPrompt(data, opts);
 		// Image annotations (annotation-images.js; only offered for Claude)
-		if (opts.images && opts.images.length && settings.provider !== "openai") {
+		if (opts.images && opts.images.length && providerInfo(settings.provider).images) {
 			user = imageContent(user, opts.images);
 		}
 		return { system: systemParts, user, pdf: opts.pdf || null };
@@ -802,7 +908,8 @@
 	}
 
 	return {
-		DEFAULT_MODELS, DEFAULT_SYSTEM_PROMPT, buildPrompt, formatAnnotationsForPrompt, PDF_ATTACHED_NOTE,
+		DEFAULT_MODELS, PROVIDERS, NO_KEY_MESSAGE, OPENROUTER_HEADERS, normalizeProvider, providerInfo, parseOpenRouterModels, chatMessages, callChat,
+		DEFAULT_SYSTEM_PROMPT, USER_PDF_NOTE, buildPrompt, formatAnnotationsForPrompt, PDF_ATTACHED_NOTE,
 		anthropicContent, openaiInput, callAnthropic, callOpenAI, generateText, generateNote, imageContent, extractSummary,
 		anthropicSystem, anthropicBody, anthropicHeaders, readAnthropicMessage, notePrompt, noteRequestBody,
 		RETRY_STATUSES, MAX_RETRIES, postWithRetry, retryAfterMs, backoffDelay, parseUsage, httpError,

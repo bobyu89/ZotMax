@@ -61,21 +61,23 @@
 	}
 
 	async function readSettings() {
-		let provider = pref("llm.provider") === "openai" ? "openai" : "anthropic";
+		// anthropic, openai, openrouter or manual (no API: 網頁版 AI, manual-ai.js)
+		let provider = ZB.llm.normalizeProvider(pref("llm.provider"));
+		let info = ZB.llm.providerInfo(provider);
 		let vault = vaultSettings();
 		// First run with a vault: keep a vault that already has the flat layout flat until 整理 vault
 		if (!pref("obsidian.structure") && vault.vaultPath) vault.structure = await ZB.vaultLayout.detect(vault);
 		// Secrets live in the login manager (secrets.js), not in prefs
 		let notionToken = await ZB.secrets.get("notionToken");
-		let apiKey = await ZB.secrets.get(provider === "openai" ? "openaiKey" : "anthropicKey");
+		let apiKey = info.secret ? await ZB.secrets.get(info.secret) : "";
 		return Object.assign(vault, {
 			notionToken: String(notionToken || "").trim(),
 			llm: {
 				enabled: pref("llm.enabled") !== false,
 				provider,
 				apiKey: String(apiKey || "").trim(),
-				model: String(pref(provider === "openai" ? "llm.openaiModel" : "llm.anthropicModel") || "").trim()
-					|| ZB.llm.DEFAULT_MODELS[provider],
+				model: String((info.modelPref && pref(info.modelPref)) || "").trim() || ZB.llm.DEFAULT_MODELS[provider] || "",
+				manual: provider === "manual",
 				effort: pref("llm.effort") || "medium",
 				baseURL: String(pref("llm.openaiBaseURL") || "").trim(),
 				systemPrompt: pref("llm.systemPrompt") || "",
@@ -260,11 +262,53 @@
 		return saved;
 	}
 
+	// ---------- 網頁版 AI (manual-ai.js) ----------
+
+	/**
+	 * The AI-note prompt for one item, as the API path would send it, for the user to paste into a chat website.
+	 * opts.userPDF: without the text (the user attaches the PDF there); opts.limit: the most full-text characters.
+	 * Resolves to { system: [parts], user, data, fullTextStatus, truncated, chars }.
+	 */
+	async function manualPrompt(item, opts = {}) {
+		let settings = await readSettings();
+		let limit = opts.userPDF ? 0 : Math.max(0, Number(opts.limit) || settings.llm.fullTextLimit || 0);
+		let data = await ZB.adapter.extractItemData(item, { fullTextLimit: limit, checkFullText: true });
+		let notesMarkdown = notesFor(settings, data);
+		if (limit > 0) await prepareFullText(data, { fullTextLimit: limit }, []);
+		let o = Object.assign(noteOptions(settings, data, notesMarkdown, [], null), { userPDF: !!opts.userPDF, fullTextTruncated: data.fullTextTruncated });
+		let p = ZB.llm.notePrompt(Object.assign({}, settings.llm, { provider: "manual" }), data, o);
+		let user = typeof p.user === "string" ? p.user : p.user.filter(c => c.type === "text").map(c => c.text).join("\n\n");
+		return { system: p.system, user, data, fullTextStatus: data.fullTextStatus, truncated: !!data.fullTextTruncated };
+	}
+
+	/**
+	 * Save an answer pasted from a chat website as the item's AI note (the same checks as the API path: the JSON
+	 * block, the quotes against the abstract and highlights), then sync the item with it. Resolves to
+	 * { messages, check, synced }.
+	 */
+	async function saveManualNote(item, text, opts = {}) {
+		let data = await ZB.adapter.extractItemData(item, { fullTextLimit: 0, checkFullText: false });
+		let processed = processGeneratedNote(String(text || "").trim(), data);
+		let ai = { md: processed.md, model: opts.model || "網頁版 AI（手動貼上）", at: nowISO(), data: processed.data };
+		await saveGeneratedNote(item, ai, processed);
+		let synced = false;
+		if (opts.sync !== false) {
+			let settings = await readSettings();
+			let targets = [settings.vaultPath ? "obsidian" : "", settings.notionToken ? "notion" : ""].filter(Boolean);
+			if (targets.length) {
+				await run([item], { targets, ai: "missing" });
+				synced = true;
+			}
+		}
+		return { messages: processed.messages, check: processed.check, synced };
+	}
+
 	// ---------- per-item pipeline ----------
 
 	async function syncItem(item, action, settings, ctx) {
 		let needAI = false;
-		if (settings.llm.enabled && action.ai !== "none") {
+		// 網頁版 AI (manual): a sync never calls an AI; the note comes from 「AI 筆記（複製貼上）」 (manual-ai.js)
+		if (settings.llm.enabled && action.ai !== "none" && !settings.llm.manual) {
 			let existing = ZB.adapter.getAINote(item);
 			needAI = action.ai === "regenerate" || (action.ai === "missing" && !existing);
 		}
@@ -965,11 +1009,16 @@
 			return;
 		}
 
-		let willGenerate = settings.llm.enabled && (action.ai === "regenerate"
+		let wantsAI = settings.llm.enabled && (action.ai === "regenerate"
 			|| (action.ai === "missing" && items.some(i => !ZB.adapter.getAINote(i))));
+		let willGenerate = wantsAI && !settings.llm.manual;
 		if (willGenerate && !settings.llm.apiKey) {
-			notify("ZotMax", "AI 筆記需要 API key：請到 設定 → ZotMax 填入，或改用「不呼叫 AI」同步。");
+			notify("ZotMax", "AI 筆記需要 API key：請到 設定 → ZotMax → AI 填入（OpenRouter 有免費模型），"
+				+ "或把服務商改成「網頁版 AI（複製貼上）」，或改用「不呼叫 AI」同步。");
 			return;
+		}
+		if (wantsAI && settings.llm.manual && !action.silent && action.ai === "regenerate") {
+			notify("ZotMax", "目前是「網頁版 AI（複製貼上）」：同步不會產生 AI 筆記。要產生請在文獻上按右鍵 → ZotMax ▸ AI 筆記（複製貼上）。");
 		}
 		// Many AI notes with 「使用批次 API」 on: the user picks the Message Batches API or the normal path;
 		// the batched items are synced when the batch has ended (ai-batch.js), the others below
@@ -983,7 +1032,7 @@
 		}
 		else if (willGenerate && items.length > 5 && !action.silent) {
 			let ok = Services.prompt.confirm(Zotero.getMainWindow(), "ZotMax",
-				`即將為最多 ${items.length} 筆文獻呼叫 ${settings.llm.provider === "openai" ? "OpenAI" : "Claude"}（${settings.llm.model}）產生 AI 筆記，會產生 API 費用。`
+				`即將為最多 ${items.length} 筆文獻呼叫 ${ZB.llm.providerInfo(settings.llm.provider).short}（${settings.llm.model}）產生 AI 筆記，會產生 API 費用。`
 				+ batchEstimate(items, action, settings) + "要繼續嗎？");
 			if (!ok) return;
 		}
@@ -1819,6 +1868,8 @@
 		listNotionPages, createNotionDatabase, createNotionDatabaseFromSettings,
 		// for ai-batch.js: the full text as Markdown for the AI (fulltext.js)
 		prepareFullText,
+		// 網頁版 AI: the prompt to copy, the pasted answer saved as the AI note (manual-ai.js)
+		manualPrompt, saveManualNote,
 		// for status.js
 		enqueue, notify, buildObsidianIndex, saveQuietly,
 		// for sidepanel.js

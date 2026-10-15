@@ -227,7 +227,7 @@ const GUIDED = {
 	organize: ["classify", "dashboard", "vault-layout", "word-style", "concepts", "bibliography", "export-collection", "zh-meta"],
 	search: ["quick-search", "search-item"],
 	appraise: ["screen", "dedup", "prisma", "appraisal-summary", "pico-card", "pico-table", "grade"],
-	ai: ["regenerate"],
+	ai: ["regenerate", "manual-ai"],
 };
 
 test("the button is added to the items toolbar at startup, removed on unload and shutdown, leaving nothing behind", async () => {
@@ -342,7 +342,7 @@ test("menu: 快速指令… first, groups in workflow order with labels, setting
 	({ groups, entries } = openMenu(env));
 	assert.deepEqual(groups, ["sync", "organize", "search", "appraise", "ai"]);
 	assert.deepEqual(entries.search, ["quick-search", "search-item", "pubmed-watch", "chase-items", "chase-included", "chase-import"]);
-	assert.deepEqual(entries.ai, ["regenerate", "synthesis", "review-draft", "progress-report", "concepts-ai", "explain-stats", "gemini-export"]);
+	assert.deepEqual(entries.ai, ["regenerate", "manual-ai", "synthesis", "review-draft", "progress-report", "concepts-ai", "explain-stats", "gemini-export"]);
 	assert.deepEqual(entries.sync, GUIDED.sync, "resume, stop and discard only with a batch");
 	assert.deepEqual(entries.organize, GUIDED.organize, "undo only after a run");
 
@@ -405,10 +405,10 @@ test("conditional entries follow the state: resume or stop a batch, undo a class
 	// AI batches pending: 檢查 AI 批次進度, and 取消 AI 批次 while one has not ended
 	ZB.aiBatch.readState = () => ({ batches: [{ id: "b1", status: "in_progress" }] });
 	({ entries } = openMenu(env));
-	assert.deepEqual(entries.ai, ["regenerate", "ai-batch-check", "ai-batch-cancel"]);
+	assert.deepEqual(entries.ai, ["regenerate", "manual-ai", "ai-batch-check", "ai-batch-cancel"]);
 	ZB.aiBatch.readState = () => ({ batches: [{ id: "b1", status: "ended" }] });
 	({ entries } = openMenu(env));
-	assert.deepEqual(entries.ai, ["regenerate", "ai-batch-check"]);
+	assert.deepEqual(entries.ai, ["regenerate", "manual-ai", "ai-batch-check"]);
 	assert.deepEqual(env.errors, []);
 });
 
