@@ -848,6 +848,17 @@ const TESTS = [
 		name: "create items with PDF attachments in the real library",
 		needs: ["Zotero.ZoteroBridge is set and has every module"],
 		async fn(d) {
+			// Zotero 10 indexes notes and PDFs for search on a background timer that every note save
+			// restarts. With an item it can't index (scan.pdf has no text) the queue stops shrinking, and
+			// a few seconds after the last note save Zotero logs "Full-text index queues aren't draining"
+			// (no source), which lands in whichever test is running then. The plugin doesn't use that
+			// index: keep the timer off for this run
+			let FT = Zotero.FullText;
+			if (typeof FT.registerQueueDrainObserver === "function" && typeof FT.unregisterQueueDrainObserver === "function") {
+				FT.registerQueueDrainObserver = () => {};
+				FT.unregisterQueueDrainObserver();
+				d.searchIndexDrain = "off";
+			}
 			let collection = new Zotero.Collection();
 			collection.libraryID = Zotero.Libraries.userLibraryID;
 			collection.name = "E2E Review";
