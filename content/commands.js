@@ -249,7 +249,7 @@
 	// Keywords shared by commands of one kind
 	const KW = {
 		sync: ["同步", "sync", "notion", "obsidian", "筆記", "note", "匯出"],
-		ai: ["ai", "人工智慧", "claude", "openai", "gpt", "llm"],
+		ai: ["ai", "人工智慧", "claude", "openai", "openrouter", "gpt", "llm"],
 		screening: ["篩選", "screening", "screen", "prisma", "系統性回顧", "範圍回顧", "systematic review", "scoping review", "回顧專案"],
 	};
 
@@ -518,6 +518,12 @@
 			features: ["aiNotes"], needs: "items", menus: ["item", "collection"],
 			keywords: [...KW.ai, "重新產生", "regenerate", "redo", "ai 筆記", "ai note", "文獻筆記", "同步", "sync"],
 			run: sync({ targets: BOTH, ai: "regenerate" }) },
+		// 網頁版 AI (manual-ai.js): no API key; the prompt is copied, the chat's answer pasted back
+		{ id: "manual-ai", group: "ai", l10n: "zotero-bridge-cmd-manual-ai", label: "AI 筆記（複製貼上，免 API key）…",
+			features: ["aiNotes"], needs: "items", menus: ["item"],
+			keywords: [...KW.ai, "免 key", "免費", "free", "no key", "api key", "沒有 key", "複製", "貼上", "copy", "paste", "chatgpt", "gemini",
+				"網頁版", "web", "ai 筆記", "ai note", "文獻筆記", "訂閱", "subscription"],
+			run: sel => ZB().manualAI.run(sel.items) },
 		// The writing commands bring their own messages (「…至少需要 2 篇文獻。」)
 		{ id: "synthesis", group: "ai", l10n: "zotero-bridge-menu-synthesis", label: "產生文獻比較表（AI）",
 			features: ["synthesis"], needs: "itemsOrCollection", menus: ["item", "collection"],

@@ -1,0 +1,43 @@
+@namespace html url("http://www.w3.org/1999/xhtml");
+
+/*
+ * AI 筆記（複製貼上）: the window's own rules. Tokens, head, list, foot and focus come from classify-review.css, the
+ * fields, rows and checks from pico.css; the root carries all three classes (.zb-classify .zb-pico .zb-manual).
+ * DESIGN.md (網頁版 AI window).
+ */
+#zotero-bridge-manual-ai-window {
+	background: var(--material-background, Canvas);
+	color: var(--fill-primary, CanvasText);
+}
+
+/* the paper's title under the heading: one line, ellipsis */
+.zb-manual [data-zb-title] {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	font-weight: 600;
+}
+
+/* the answer: a tall monospace box that keeps the Markdown readable */
+.zb-manual #zb-ma-answer {
+	min-height: 14em;
+	font-family: var(--zb-font-mono, ui-monospace, monospace);
+	font-size: 0.92em;
+	resize: vertical;
+}
+
+/* a long prompt and the privacy line read as cautions */
+.zb-manual [data-zb-copy-status][data-zb-long="true"],
+.zb-manual .zb-ma-privacy {
+	color: var(--accent-orange, #b45309);
+}
+
+.zb-manual [data-zb-checks] > html|li[data-zb-level="error"] {
+	color: var(--accent-red, #b91c1c);
+}
+
+/* the checks read as a list of marks, not bullets */
+.zb-manual [data-zb-checks] {
+	list-style: none;
+	padding-inline-start: 0;
+}

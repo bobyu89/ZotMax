@@ -45,6 +45,8 @@ pref("extensions.zotero-bridge.llm.provider", "anthropic");
 pref("extensions.zotero-bridge.llm.anthropicModel", "claude-opus-5-5");
 pref("extensions.zotero-bridge.llm.effort", "medium");
 pref("extensions.zotero-bridge.llm.openaiModel", "gpt-5.5");
+// OpenRouter (llm.js PROVIDERS); empty = openrouter/free
+pref("extensions.zotero-bridge.llm.openrouterModel", "");
 pref("extensions.zotero-bridge.llm.openaiBaseURL", "");
 pref("extensions.zotero-bridge.llm.fullTextLimit", "150000");
 // Scanned PDFs without a text layer are sent to the AI as a file, up to these limits (content/scanned.js)

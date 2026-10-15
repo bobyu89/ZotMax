@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	AI 筆記（複製貼上，免 API key）: content/manual-ai.js run() opens it and renderWindow() fills it. Layout and tokens:
+	DESIGN.md (網頁版 AI window). It borrows the 文獻自動分類 window's stylesheet (classify-review.css), the PICO
+	windows' fields (pico.css) and adds its own few rules (manual-ai.css).
+-->
+<?xml-stylesheet href="chrome://global/skin/global.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero/skin/zotero.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-bridge/content/classify-review.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-bridge/content/pico.css" type="text/css"?>
+<?xml-stylesheet href="chrome://zotero-bridge/content/manual-ai.css" type="text/css"?>
+<window id="zotero-bridge-manual-ai-window"
+	xmlns="http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul"
+	xmlns:html="http://www.w3.org/1999/xhtml"
+	title="AI 筆記（複製貼上）"
+	width="720"
+	height="780"
+	persist="width height screenX screenY">
+	<html:div id="zb-manual" class="zb-classify zb-pico zb-manual"/>
+</window>

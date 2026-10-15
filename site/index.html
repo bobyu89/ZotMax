@@ -239,7 +239,11 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
 #app[data-dest="notion"] .only-both,
 #app:not([data-ai="anthropic"]) .only-anthropic,
 #app:not([data-ai="openai"]) .only-openai,
+#app:not([data-ai="openrouter"]) .only-openrouter,
+#app:not([data-ai="manual"]) .only-manual,
 #app[data-ai="none"] .only-ai,
+#app[data-ai="manual"] .only-ai,
+#app[data-ai="openrouter"] .not-openrouter,
 #app:not([data-ai="none"]) .only-noai { display: none !important; }
 .stack { display: grid; gap: 14px; }
 
@@ -318,6 +322,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
           <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span>回顧篩選的 PRISMA 2020 計數與流程圖</span></li>
           <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span>PICO 問題卡由你寫、引導問題幫你收斂；選取文獻一鍵整理成 PICO 表，貼進 Word 就是表格；系統性回顧的 GRADE 證據確定性逐個結果評，產出證據摘要表</span></li>
           <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span>Obsidian 文獻筆記最上面是一張看板：PICO、主要發現、評讀燈號、劃線和下一步，研究儀表板有數字卡、圖表和證據缺口地圖；首頁依 Zotero 分類列出每個主題的證據方向、趨勢和下一步</span></li>
+          <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span>沒有 API key 也能用 AI 文獻筆記：把提示詞貼到 ChatGPT、Claude、Gemini 網頁版再貼回來；想自動批次，OpenRouter 一個 key 用多家模型，還有免費模型</span></li>
           <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span>Obsidian 資料夾跟 Zotero 分類一樣：文獻、全文、主題總覽和證據地圖放在同一個資料夾，筆記上方有導覽列；舊的 vault 一鍵整理，連結自動更新</span></li>
           <li><svg class="ico" aria-hidden="true"><use href="#i-check"/></svg><span>APA 7 引文由 Zotero 產生，不讓 AI 編參考文獻；Word 裡的中文文獻用中文 APA（全名、「、」「等」），英文照官方 APA（<a href="styles/apa-7-zh-tw.csl">下載樣式</a>）</span></li>
         </ul>
@@ -364,7 +369,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
           </tbody>
         </table>
       </div>
-      <p class="cap">標「AI・花費」的功能要用你自己的 Claude 或 OpenAI API 金鑰，依用量付費；標「連網」的會連到外部網站。關著的功能不會在背景執行。</p>
+      <p class="cap">標「AI・花費」的功能要用你自己的 Claude、OpenAI 或 OpenRouter API 金鑰，依用量付費（OpenRouter 有免費模型；AI 文獻筆記也能用網頁版 AI 複製貼上，免金鑰）；標「連網」的會連到外部網站。關著的功能不會在背景執行。</p>
     </div>
   </section>
 
@@ -435,6 +440,8 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
           <div class="choices">
             <div class="choice"><input type="radio" name="ai" id="ai-anthropic" value="anthropic"><label for="ai-anthropic"><span class="tag">推薦</span><b>Claude</b><span>Anthropic 的 API，自備金鑰、依用量付費</span></label></div>
             <div class="choice"><input type="radio" name="ai" id="ai-openai" value="openai"><label for="ai-openai"><b>OpenAI</b><span>OpenAI 的 API，自備金鑰、依用量付費</span></label></div>
+            <div class="choice"><input type="radio" name="ai" id="ai-openrouter" value="openrouter"><label for="ai-openrouter"><b>OpenRouter</b><span>一個金鑰用多家模型，Google 帳號就能註冊，有免費模型</span></label></div>
+            <div class="choice"><input type="radio" name="ai" id="ai-manual" value="manual"><label for="ai-manual"><span class="tag">免金鑰</span><b>網頁版 AI（複製貼上）</b><span>不用申請金鑰：把提示詞貼到 ChatGPT、Claude、Gemini 網頁，再把回答貼回來</span></label></div>
             <div class="choice"><input type="radio" name="ai" id="ai-none" value="none"><label for="ai-none"><b>先不用 AI</b><span>只同步書目、劃線與筆記，之後隨時可加</span></label></div>
           </div>
         </fieldset>
@@ -512,12 +519,18 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
       <section class="step only-ai" data-id="ai" data-title="申請 API 金鑰" data-phase="out" data-needs-ai hidden>
         <h2>申請 AI 的 API 金鑰</h2>
         <p class="lead">AI 會讀書目、摘要、全文和你的劃線，寫成固定格式的研讀筆記；每篇只產生一次，之後同步會沿用。筆記是幫你回想，不是替你讀。</p>
-        <div class="note warn"><p><strong>這會花錢：</strong>Claude Pro、ChatGPT Plus 這類訂閱方案不能用在這裡。這裡要的是 <b>API 金鑰</b>，依用量另外計費，要先在平台儲值或綁卡。ZotMax 一次替超過 5 篇產生 AI 筆記前會先問你，花了多少看 設定 › ZotMax › AI ›「本月 AI 用量」（估計值，以平台帳單為準）。</p></div>
+        <div class="note warn not-openrouter"><p><strong>這會花錢：</strong>Claude Pro、ChatGPT Plus 這類訂閱方案不能用在這裡。這裡要的是 <b>API 金鑰</b>，依用量另外計費，要先在平台儲值或綁卡。ZotMax 一次替超過 5 篇產生 AI 筆記前會先問你，花了多少看 設定 › ZotMax › AI ›「本月 AI 用量」（估計值，以平台帳單為準）。</p></div>
 
         <ol class="how only-anthropic">
           <li><span>到 Claude 的 API 平台登入，先在 <b>Billing</b> 儲值。
             <span class="copyline"><a href="https://console.anthropic.com" target="_blank" rel="noopener">https://console.anthropic.com</a><button type="button" class="btn small ghost" data-copy="https://console.anthropic.com" data-what="Claude API 平台網址">複製</button></span></span></li>
           <li><span>到 <b>API Keys</b> › <kbd>Create Key</kbd>，複製 <code>sk-ant-</code> 開頭的金鑰。它只會顯示一次，先存在密碼管理程式或記事本。</span></li>
+        </ol>
+        <ol class="how only-openrouter">
+          <li><span>到 OpenRouter 用 Google 帳號（或 email）註冊登入。
+            <span class="copyline"><a href="https://openrouter.ai/keys" target="_blank" rel="noopener">https://openrouter.ai/keys</a><button type="button" class="btn small ghost" data-copy="https://openrouter.ai/keys" data-what="OpenRouter 金鑰網址">複製</button></span></span></li>
+          <li><span>按 <kbd class="long">Create API Key</kbd>，複製 <code>sk-or-</code> 開頭的金鑰。它只會顯示一次，先存在密碼管理程式或記事本。</span></li>
+          <li><span>不用綁信用卡、不儲值也能用：ZotMax 預設用 <code>openrouter/free</code>，自動挑免費模型，品質較不穩定。次數限制：沒有儲值時每天約 50 次（一篇的 AI 筆記算一次）；帳戶累計儲值滿 US$10 後提高到每天約 1000 次（以 OpenRouter 公告為準）。當天用完，ZotMax 會直接告訴你，隔天再同步就會補上。想要穩定，再到 <b>Credits</b> 儲值、在 ZotMax 設定換成付費模型。免費模型的提供者可能保留送出的內容，含病人資料時請改用付費模型或「網頁版 AI」。</span></li>
         </ol>
         <ol class="how only-openai">
           <li><span>到 OpenAI 的 API 平台登入，先在 <b>Billing</b> 儲值。
@@ -527,7 +540,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
         <p class="zh">裝好 ZotMax 後，金鑰貼在 設定 › ZotMax ›「AI」分頁的「AI 服務」。它會存進 Zotero 的密碼管理，不寫進一般設定檔。</p>
         <fieldset class="check">
           <legend>打勾確認</legend>
-          <label><input type="checkbox" id="k-billing"><span class="box"></span><span>我已在 API 平台儲值或綁卡，知道依用量付費。</span></label>
+          <label><input type="checkbox" id="k-billing"><span class="box"></span><span><span class="only-openrouter">我知道免費模型每天約 50 次，付費模型依用量扣儲值。</span><span class="only-anthropic">我已在 API 平台儲值或綁卡，知道依用量付費。</span><span class="only-openai">我已在 API 平台儲值或綁卡，知道依用量付費。</span></span></label>
           <label><input type="checkbox" id="k-key"><span class="box"></span><span>我拿到金鑰，也存好了。</span></label>
         </fieldset>
       </section>
@@ -554,10 +567,11 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
         <ol class="how">
           <li><span><b>選模式：</b>新使用者建議「研究生引導」：自動找文獻、AI 寫草稿、評讀陪練和讀懂統計先關著，整理、評讀、搜尋照常可用。想全部打開就選「進階」。之後在 設定 › ZotMax ›「功能」隨時改。</span></li>
           <li><span><b>指定筆記位置：</b><span class="only-obsidian">選剛剛那個 Obsidian vault 的資料夾</span><span class="only-both">；</span><span class="only-notion">貼上 Notion 的 token 和資料庫連結</span>。</span></li>
-          <li><span><b>AI（選填）：</b><span class="only-ai">貼上剛剛申請的 API 金鑰，<span class="only-anthropic">服務商選 <b>Claude</b></span><span class="only-openai">服務商選 <b>OpenAI</b></span>；金鑰存進 Zotero 的密碼管理。</span><span class="only-noai">選「先不用 AI」，之後想用再回來。</span></span></li>
+          <li><span><b>AI（選填）：</b><span class="only-ai">貼上剛剛申請的 API 金鑰，<span class="only-anthropic">服務商選 <b>Claude</b></span><span class="only-openai">服務商選 <b>OpenAI</b></span><span class="only-openrouter">服務商選 <b>OpenRouter</b></span>；金鑰存進 Zotero 的密碼管理。</span><span class="only-manual">選「不用 key：網頁版 AI（複製貼上）」，不用填金鑰。</span><span class="only-noai">選「先不用 AI」，之後想用再回來。</span></span></li>
           <li><span><b>試同步一篇：</b>挑一篇有 PDF、最好有劃線的文獻，先試一篇確認都接上了。</span></li>
         </ol>
-        <p class="only-ai">之後想換金鑰或服務商：設定 › ZotMax ›「AI」分頁 › AI 服務，服務商選 <span class="only-anthropic"><b>Anthropic（Claude）</b>，貼到「Claude API key」</span><span class="only-openai"><b>OpenAI（GPT / Codex）</b>，貼到「OpenAI API key」</span>。</p>
+        <p class="only-ai">之後想換金鑰或服務商：設定 › ZotMax ›「AI」分頁 › AI 服務，服務商選 <span class="only-anthropic"><b>Anthropic（Claude）</b>，貼到「Claude API key」</span><span class="only-openai"><b>OpenAI（GPT / Codex）</b>，貼到「OpenAI API key」</span><span class="only-openrouter"><b>OpenRouter</b>，貼到「OpenRouter API key」</span>。</p>
+        <p class="only-manual">產生 AI 筆記：在文獻上按右鍵 › ZotMax › <b>AI 筆記（複製貼上，免 API key）…</b>。按「複製提示詞」貼到 ChatGPT、Claude 或 Gemini 網頁送出，等它寫完按回答下面的「複製」，貼回視窗按「儲存 AI 筆記並同步」。全文會送到你選的網站，含病人資料時請先確認可以分享。</p>
         <p class="only-noai">先不用 AI：同步時選「同步但不呼叫 AI」，或在 設定 › ZotMax ›「功能」關掉「AI 文獻筆記」。</p>
         <p class="zh">想再打開精靈：按 <span class="only-win"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd></span><span class="only-mac"><kbd>⇧⌘P</kbd></span> 開快速指令，輸入「設定精靈」，選 <b>設定精靈…</b>。</p>
 
@@ -583,9 +597,10 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
 
             <h4 class="only-ai">AI（「AI」分頁 › AI 服務）</h4>
             <ol class="how only-ai">
-              <li><span>「服務商」選 <span class="only-anthropic"><b>Anthropic（Claude）</b>，金鑰貼到「Claude API key」。「思考深度（effort）」保持 <b>medium</b> 即可；high 比較仔細，也比較慢、比較貴。</span><span class="only-openai"><b>OpenAI（GPT / Codex）</b>，金鑰貼到「OpenAI API key」。模型保持預設即可；Codex 系列是寫程式用的模型，整理文獻用一般模型效果較好。</span></span></li>
+              <li><span>「服務商」選 <span class="only-anthropic"><b>Anthropic（Claude）</b>，金鑰貼到「Claude API key」。「思考深度（effort）」保持 <b>medium</b> 即可；high 比較仔細，也比較慢、比較貴。</span><span class="only-openai"><b>OpenAI（GPT / Codex）</b>，金鑰貼到「OpenAI API key」。模型保持預設即可；Codex 系列是寫程式用的模型，整理文獻用一般模型效果較好。</span><span class="only-openrouter"><b>OpenRouter</b>，金鑰貼到「OpenRouter API key」。模型留空就是免費的 <code>openrouter/free</code>；按「載入模型清單」可以換別的模型。</span></span></li>
               <li><span>「全文最多送出字元數」預設 150,000；設成 0 就只送摘要與劃線，比較省錢。</span></li>
             </ol>
+            <p class="only-manual">網頁版 AI：「AI」分頁 › AI 服務的「服務商」選 <b>網頁版 AI（複製貼上，免 API key）</b>，不用填金鑰。</p>
             <p class="only-noai">先不用 AI：在「功能」分頁關掉「AI 文獻筆記」。</p>
 
             <h4>分流規則（選用，「同步」分頁）</h4>
@@ -719,7 +734,7 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
   // 進度存在這台裝置的瀏覽器。v2 依步驟 id 記錄目前在哪一步；v1（舊版精靈）只沿用三個選擇，
   // 舊的打勾對不上新的步驟，所以不搬，讀完就刪掉。無痕視窗等不能存的情況照常可用，只是不記住。
   var KEY = 'zotero-bridge-wizard-v2', OLD_KEY = 'zotero-bridge-wizard-v1';
-  var OPTS = { os: ['win', 'mac'], dest: ['both', 'notion', 'obsidian'], ai: ['anthropic', 'openai', 'none'] };
+  var OPTS = { os: ['win', 'mac'], dest: ['both', 'notion', 'obsidian'], ai: ['anthropic', 'openai', 'openrouter', 'manual', 'none'] };
   var store = (function () {
     try { var s = window.localStorage, t = '__zb_test'; s.setItem(t, t); s.removeItem(t); return s; } catch (e) { return null; }
   })();
@@ -763,7 +778,8 @@ nav.pager .hint { font-size: 13px; color: var(--ink-2); }
     return allSteps.filter(function (s) {
       var need = s.dataset.needs;
       if (need && state.dest !== 'both' && state.dest !== need) return false;
-      if ('needsAi' in s.dataset && state.ai === 'none') return false;
+      // 網頁版 AI needs no key either
+      if ('needsAi' in s.dataset && (state.ai === 'none' || state.ai === 'manual')) return false;
       return true;
     });
   }

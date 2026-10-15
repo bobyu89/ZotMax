@@ -380,6 +380,7 @@ const TESTS = [
 				obsidianStyle: ["css", "versionOf", "enableIn", "install", "afterSync", "describe"],
 				topics: ["groupTopics", "topicStats", "topicSection", "homeSection", "buildPage", "writeAll", "afterDashboard"],
 				vaultLayout: ["planMigration", "linkMap", "rewriteLinks", "plan", "apply", "detect", "relocate", "afterMoves", "run"],
+				manualAI: ["promptText", "cleanAnswer", "checkAnswer", "renderWindow", "promptFor", "run"],
 				grade: ["normalizeTable", "certainty", "hints", "summary", "sofMarkdown", "sofCSV", "sofHTML", "renderWindow", "tableFor", "saveTable", "studyRows", "dialog", "writeFiles", "open"],
 				wordStyle: ["styleInfo", "isNewer", "describe", "init", "install", "refreshInstalled", "status", "runFromMenu"],
 				geminiExport: ["folderName", "baseName", "capCheck", "itemMarkdown", "referencesMarkdown", "readmeText", "renderDialog", "exportTo", "dialog", "noticeInfo", "run",
@@ -847,6 +848,17 @@ const TESTS = [
 		name: "create items with PDF attachments in the real library",
 		needs: ["Zotero.ZoteroBridge is set and has every module"],
 		async fn(d) {
+			// Zotero 10 indexes notes and PDFs for search on a background timer that every note save
+			// restarts. With an item it can't index (scan.pdf has no text) the queue stops shrinking, and
+			// a few seconds after the last note save Zotero logs "Full-text index queues aren't draining"
+			// (no source), which lands in whichever test is running then. The plugin doesn't use that
+			// index: keep the timer off for this run
+			let FT = Zotero.FullText;
+			if (typeof FT.registerQueueDrainObserver === "function" && typeof FT.unregisterQueueDrainObserver === "function") {
+				FT.registerQueueDrainObserver = () => {};
+				FT.unregisterQueueDrainObserver();
+				d.searchIndexDrain = "off";
+			}
 			let collection = new Zotero.Collection();
 			collection.libraryID = Zotero.Libraries.userLibraryID;
 			collection.name = "E2E Review";
@@ -2057,6 +2069,70 @@ const TESTS = [
 				if (win && !win.closed) win.close();
 				if (tablesBefore === undefined) Zotero.Prefs.clear(ZB_PREF + "grade.tables", true);
 				else setPref("grade.tables", tablesBefore);
+			}
+		},
+	},
+	{
+		name: "AI 筆記（複製貼上）: the window opens from chrome://zotero-bridge/ with its stylesheets; 複製 gives the paper's prompt; a pasted answer becomes the AI child note and the Obsidian note (ZB.manualAI)",
+		needs: ["sync to Obsidian writes notes, frontmatter, .base and Chinese APA (ZB.main.run, ai: none)"],
+		timeout: 90000,
+		async fn(d) {
+			let MA = zb().manualAI;
+			let item = ctx.extra1;
+			let win = null;
+			let copied = [];
+			let opened = [];
+			MA.runtime.copy = text => copied.push(text);
+			MA.runtime.open = url => opened.push(url);
+			try {
+				let pending = MA.run([item], { onOpen: (w) => {
+					win = w;
+				} });
+				await waitFor(() => win, "the 網頁版 AI window", 30000);
+				let root = await waitFor(() => {
+					let r = win.document.getElementById(MA.ROOT);
+					return r && r.querySelector("#zb-ma-answer") ? r : null;
+				}, "the window's content", 30000);
+				eq(win.document.documentURI, MA.URL, "window URL");
+				d.title = root.querySelector(".zb-cl-title").textContent;
+				d.fieldDisplay = win.getComputedStyle(root.querySelector(".zb-pc-field")).display;
+				eq(d.fieldDisplay, "grid", "display of .zb-pc-field (is pico.css loaded?)");
+				let answer = root.querySelector("#zb-ma-answer");
+				d.answerResize = win.getComputedStyle(answer).resize;
+				eq(d.answerResize, "vertical", "resize of the answer box (is manual-ai.css loaded?)");
+				eq(root.querySelector(".zb-cl-apply").disabled, true, "儲存 before anything is pasted");
+				root.querySelector(".zb-ma-copy").click();
+				d.copyStatus = await waitFor(() => {
+					let t = root.querySelector("[data-zb-copy-status]").textContent;
+					return /^已複製|複製失敗/.test(t) ? t : null;
+				}, "the copied prompt", 30000);
+				check(/^已複製/.test(d.copyStatus), `copy: ${d.copyStatus}`);
+				check(copied.length === 1 && copied[0].includes("# 文獻資料") && copied[0].includes(item.getField("title")), "the prompt names the paper");
+				root.querySelector("[data-zb-site=\"chatgpt\"]").click();
+				eq(opened.join(), "https://chatgpt.com/", "the site opened");
+				answer.value = "好的，以下是筆記。\n\n## 一句話摘要\nE2E 網頁版 AI 的一句話：運動介入降低住院長者跌倒。\n\n## 研究方法\n- 隨機對照試驗，64 位 65 歲以上住院病人\n- 介入組每日平衡與肌力運動 30 分鐘，對照組常規照護\n- 追蹤 12 週，主要結果為跌倒發生率\n\n## 主要結果\n- 跌倒率下降\n- 遵從度高\n\n"
+					+ "```json\n" + JSON.stringify({ study_design: "RCT", sample_size: 64, evidence_level: "2", effect_direction: "有效" }) + "\n```";
+				answer.dispatchEvent(new win.Event("input"));
+				d.checks = [...root.querySelectorAll("[data-zb-checks] li")].map(li => li.getAttribute("data-zb-level"));
+				eq(d.checks.join(), "ok,ok", "the live checks");
+				let model = root.querySelector("#zb-ma-model");
+				model.value = "E2E 網頁版";
+				root.querySelector(".zb-cl-apply").click();
+				let result = await pending;
+				eq(result && result.saved, 1, "saved notes");
+				await waitFor(() => win.closed, "the window to close", 10000);
+				let ai = zb().main.readAINote(zb().adapter.getAINote(item).getNote());
+				eq(ai.model, "E2E 網頁版", "the AI note's model");
+				eq(ai.data && ai.data.study_design, "RCT", "the study data");
+				check(!/好的，以下是筆記/.test(ai.md), "the chat's preamble is dropped");
+				let note = await findNote(ctx.noteDir, item.key);
+				check(note && /AI 文獻筆記（E2E 網頁版/.test(note.text), "the Obsidian note has the pasted AI note");
+				check(/^sample_size: 64$/m.test(frontmatter(note.text)), "the frontmatter has the study data");
+			}
+			finally {
+				delete MA.runtime.copy;
+				delete MA.runtime.open;
+				if (win && !win.closed) win.close();
 			}
 		},
 	},

@@ -353,8 +353,12 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	// The ZotMax submenus (items and collections) end with the AI group: AI notes, then the drafts
 	// (review-draft.js), then 匯出給 Gemini Notebook (gemini-export.js)
 	for (let i of [0, 1]) {
-		assert.deepEqual([...env.menus[i].menus[0].menus.slice(-6).map(m => m.l10nID || m.menuType)],
-			["separator", "zotero-bridge-toolbar-group-ai", "zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-cmd-gemini-export"]);
+		// The item menu also has 「AI 筆記（複製貼上）」 (manual-ai.js) after 重新產生
+		let tail = i === 0
+			? ["zotero-bridge-menu-regenerate", "zotero-bridge-cmd-manual-ai", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-cmd-gemini-export"]
+			: ["zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-cmd-gemini-export"];
+		assert.deepEqual([...env.menus[i].menus[0].menus.slice(-(tail.length + 2)).map(m => m.l10nID || m.menuType)],
+			["separator", "zotero-bridge-toolbar-group-ai", ...tail]);
 	}
 
 	let { MockItem, addChild } = env;
@@ -851,10 +855,10 @@ test("keys come from the login manager; batch confirm shows a cost estimate; 529
 test("settings pane loads and saves secrets through the login manager, never prefs", async () => {
 	let xhtml = fs.readFileSync(path.join(ROOT, "content", "preferences.xhtml"), "utf8");
 	let passwords = [...xhtml.matchAll(/<html:input[^>]*type="password"[^>]*>/g)].map(m => m[0]);
-	// Claude, OpenAI, Notion, NCBI (PubMed watch)
-	assert.equal(passwords.length, 4);
+	// Claude, OpenAI, OpenRouter, Notion, NCBI (PubMed watch)
+	assert.equal(passwords.length, 5);
 	for (let tag of passwords) assert.doesNotMatch(tag, /preference=/, tag);
-	assert.doesNotMatch(xhtml, /llm\.anthropicKey|llm\.openaiKey|notion\.token/);
+	assert.doesNotMatch(xhtml, /llm\.anthropicKey|llm\.openaiKey|llm\.openrouterKey|notion\.token/);
 
 	let env = makeEnv({
 		fetch: async () => { throw new Error("no network in this test"); },

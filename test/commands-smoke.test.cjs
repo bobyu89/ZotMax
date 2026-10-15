@@ -458,7 +458,7 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"—", "# zotero-bridge-toolbar-group-appraise",
 		"zotero-bridge-toolbar-screen ▸", "zotero-bridge-cmd-pico-table",
 		"—", "# zotero-bridge-toolbar-group-ai",
-		"zotero-bridge-menu-regenerate",
+		"zotero-bridge-menu-regenerate", "zotero-bridge-cmd-manual-ai",
 	]);
 	// Captions are never commands and look like the toolbar's
 	let caption = itemMenu.menus.find(m => m.l10nID === "zotero-bridge-toolbar-group-sync");
@@ -483,7 +483,7 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"zotero-bridge-classify-tools", "zotero-bridge-cmd-zh-meta", "zotero-bridge-search-menu ▸", "zotero-bridge-toolbar-chase-items", "zotero-bridge-toolbar-screen ▸",
 		"zotero-bridge-cmd-appraisal-coach", "zotero-bridge-cmd-pico-table",
-		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-cmd-gemini-export",
+		"zotero-bridge-menu-regenerate", "zotero-bridge-cmd-manual-ai", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-cmd-gemini-export",
 	]);
 	same(shown(collMenu, cctx).filter(x => !x.startsWith("#") && x !== "—"), [
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
@@ -710,7 +710,8 @@ test("palette search: Chinese and English keywords, case- and width-insensitive,
 	assert.ok(C.search(entries, "notion").some(e => e.id === "settings:notion"));
 	assert.equal(top("設定 notion"), "settings:notion");
 	assert.equal(top("anthropic"), "settings:ai");
-	same(C.search(entries, "api key").slice(0, 2).map(e => e.id).sort(), ["settings:ai", "settings:ncbi"]);
+	// 「AI 筆記（複製貼上，免 API key）」 is found too: it is the way around a key
+	same(C.search(entries, "api key").slice(0, 3).map(e => e.id).sort(), ["manual-ai", "settings:ai", "settings:ncbi"]);
 	same(C.search(entries, "xyzzy"), []);
 	// An empty query keeps the catalog order: commands in workflow groups, settings last
 	let all = C.search(entries, "  ");

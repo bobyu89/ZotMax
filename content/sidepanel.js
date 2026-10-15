@@ -353,8 +353,8 @@
 		}
 		else if (featureOn("aiNotes")) {
 			body.append(t(doc, "p", "noNote", null, { class: "zb-sp-lead" }), t(doc, "p", "noNoteHint", null, { class: "zb-sp-hint" }));
-			// 「同步」 from the catalog: it generates the note when there is none
-			let cmd = C().get("sync");
+			// 「同步」 from the catalog: it generates the note when there is none; 網頁版 AI: the copy-and-paste window
+			let cmd = C().get(manualAI() ? "manual-ai" : "sync");
 			if (C().isVisible(cmd)) {
 				body.append(h(doc, "div", { class: "zb-sp-actions" }, commandButton(ctx, cmd, "generate")));
 			}
@@ -586,11 +586,27 @@
 			if (!cmd || !C().isVisible(cmd)) continue;
 			// Nothing to regenerate yet: 「同步」 (and 重點's 「產生 AI 筆記」) make the first one
 			if (id === "regenerate" && !ctx.ai) continue;
+			// 網頁版 AI: a sync can't regenerate; the copy-and-paste window replaces it
+			if (id === "regenerate" && manualAI()) {
+				let manual = C().get("manual-ai");
+				if (manual && C().isVisible(manual)) row.append(commandButton(ctx, manual, "cmd-regenerate"));
+				continue;
+			}
 			row.append(commandButton(ctx, cmd, `cmd-${id}`));
 		}
 		row.append(commandButton(ctx, C().PALETTE, "cmd-palette"));
 		body.append(row);
 		panel.append(details);
+	}
+
+	/** The AI service is 網頁版 AI (no key: notes come from manual-ai.js, never from a sync). */
+	function manualAI() {
+		try {
+			return Zotero.Prefs.get("extensions.zotero-bridge.llm.provider", true) === "manual";
+		}
+		catch (e) {
+			return false;
+		}
 	}
 
 	/** A button for a catalog command, run on [this item]; a command with variants opens them as a menu. */

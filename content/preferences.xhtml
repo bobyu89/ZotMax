@@ -418,13 +418,15 @@
 		<html:p class="zb-panel-title" no-highlight="true" data-l10n-id="zotero-bridge-prefs-tab-ai">AI</html:p>
 		<groupbox data-zb-section="ai" data-zb-feature="aiNotes aiBatch synthesis reviewDraft progressReport conceptsAI">
 			<label data-search-strings-raw="AI, API key, Anthropic, OpenAI, provider, model, prompt, template, batch, effort, 服務商, 模型, 筆記模板, 批次, 比較表"><html:h2>AI 服務</html:h2></label>
-			<description class="zb-hint">打開的 AI 功能共用這裡的服務商與 API key。費用由你的帳號支付，用量記在下方「本月 AI 用量」。</description>
+			<description class="zb-hint">打開的 AI 功能共用這裡的服務商與 API key。費用由你的帳號支付，用量記在下方「本月 AI 用量」。沒有 API key 也可以：選「網頁版 AI（複製貼上）」，或用 OpenRouter 的免費模型。</description>
 			<hbox align="center">
 				<label value="服務商："/>
 				<menulist id="zb-provider" preference="extensions.zotero-bridge.llm.provider" native="true">
 					<menupopup>
 						<menuitem label="Anthropic（Claude）" value="anthropic"/>
 						<menuitem label="OpenAI（GPT / Codex）" value="openai"/>
+						<menuitem label="OpenRouter（一個 key 用多家模型，有免費模型）" value="openrouter"/>
+						<menuitem label="網頁版 AI（複製貼上，免 API key）" value="manual"/>
 					</menupopup>
 				</menulist>
 			</hbox>
@@ -455,6 +457,21 @@
 				</hbox>
 				<label value="API base URL（選填，使用相容服務時才需要）："/>
 				<html:input type="text" preference="extensions.zotero-bridge.llm.openaiBaseURL" placeholder="https://api.openai.com/v1"/>
+			</vbox>
+			<vbox id="zb-openrouter-box">
+				<label value="OpenRouter API key（openrouter.ai → Keys；用 Google 帳號就能註冊）："/>
+				<html:input id="zb-openrouter-key" type="password" placeholder="sk-or-..." autocomplete="off"/>
+				<hbox align="center">
+					<label value="模型："/>
+					<html:input id="zb-openrouter-model" type="text" list="zb-openrouter-models" preference="extensions.zotero-bridge.llm.openrouterModel" placeholder="openrouter/free"/>
+					<button id="zb-openrouter-load" label="載入模型清單" oncommand="ZoteroBridgePrefs.loadOpenRouterModels()"/>
+				</hbox>
+				<html:datalist id="zb-openrouter-models"/>
+				<html:p id="zb-openrouter-status" class="zb-hint" role="status"></html:p>
+				<description class="zb-hint">openrouter/free 會自動挑免費模型：不用錢、不用綁信用卡，品質較不穩定。次數限制：沒有儲值時每天約 50 次、每分鐘 20 次；帳戶累計儲值滿 US$10 後提高到每天約 1000 次（以 OpenRouter 公告為準）。當天額度用完時，同步會照常寫筆記、只是先不產生 AI 筆記，隔天再同步就會補上。要穩定可以換付費模型（例如 anthropic/claude-sonnet-5.5），費用從 OpenRouter 的儲值扣。免費模型的提供者可能保留你送出的內容，含病人資料時請改用付費模型或「網頁版 AI」。掃描版 PDF 只送文字。</description>
+			</vbox>
+			<vbox id="zb-manual-box">
+				<description class="zb-hint">不用 API key：在文獻上按右鍵 → ZotMax ▸「AI 筆記（複製貼上，免 API key）…」，把提示詞貼到 ChatGPT、Claude、Gemini 或學校的 AI 網站，再把回答貼回來；ZotMax 一樣核對引文、整理成看板。同步不會自動呼叫 AI；文獻比較表、文獻探討草稿、評讀陪練等其他 AI 功能仍需要 API key（或 OpenRouter）。</description>
 			</vbox>
 			<description class="zb-hint">API key 與 Notion token 存在 Zotero 的密碼管理員（有作業系統鑰匙圈時會再加密），不會寫進設定檔 prefs.js。</description>
 			<html:div id="zb-secrets-status" class="zb-status"/>

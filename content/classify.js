@@ -1084,7 +1084,7 @@
 	}
 
 	function llmSettingsLabel(settings) {
-		return `${settings.llm.provider === "openai" ? "OpenAI" : "Claude"}（${settings.llm.model}）`;
+		return `${scope.ZB.llm.providerInfo(settings.llm.provider).short}（${settings.llm.model}）`;
 	}
 
 	/** Why 「AI 主題分類」 can't run right now, or "" when it can. */
