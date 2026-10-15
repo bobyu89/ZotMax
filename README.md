@@ -1,34 +1,46 @@
 # ZotMax
 
-給 Zotero 10 的研究生文獻外掛：把你在 Zotero 收的文獻、PDF 劃線、筆記和評讀，整理成 **Obsidian 筆記**或 **Notion 資料庫**；要的話，也可以請 AI 先替每篇寫一份結構化的研讀筆記：用自己的 API key（Claude、OpenAI，或有免費模型的 OpenRouter），或**完全不用 key**，把提示詞貼到 ChatGPT、Claude、Gemini 網頁版再貼回來。
+**給護理研究生的 Zotero 10 文獻外掛**：把 Zotero 裡的文獻、PDF 劃線、筆記和評讀，整理成好讀、好找的 **Obsidian 筆記**或 **Notion 資料庫**；要的話，AI 先替每篇寫一份研讀筆記，**沒有 API key 也可以**。
 
-**給誰用**：台灣的護理研究生。在 Zotero 收文獻、在 Obsidian 或 Notion 做筆記，要交課堂報告、做系統性／範圍回顧、寫實證健康照護（EBHC）報告或論文第二章文獻探討的人。
+<p align="center"><img src="docs/images/note.png" width="760" alt="Obsidian 裡的一篇文獻筆記：最上面是導覽列（首頁 › 碩論 › 跌倒，跳到劃線、評讀表、AI 筆記…），接著是「重點」看板：研究設計、樣本數、證據等級標籤，一句話、PICO、評讀燈號和主要發現"></p>
+
+**[⬇️ 下載最新版](https://github.com/bobyu89/ZotMax/releases/latest)** · **[🧭 安裝精靈](https://bobyu89.github.io/ZotMax/)** · [醫學文獻快速搜尋](https://bobyu89.github.io/ZotMax/search.html) · [文獻評讀表](https://bobyu89.github.io/ZotMax/appraisal.html)
+
+需要 Zotero 10；Obsidian 建議 1.14 以上（彩色劃線與 Bases 看板）。裝一次之後，Zotero 會自動更新。快速搜尋和評讀表是網頁，不用安裝，手機也能用。
+
+## 它幫你做什麼
+
+- 📄 **每篇一頁重點**：研究設計、樣本數、證據等級、PICO、評讀燈號、主要發現，10 秒看完；你的劃線依顏色的意義分組，點一下回到 PDF 原位置。重新同步不會蓋掉你寫的東西。
+- 🗂️ **資料夾跟 Zotero 分類一樣**：文獻筆記、全文、圖片放在同一個資料夾。`00 首頁` 告訴你接下來讀哪篇、哪些評讀還沒核對；每個分類有主題頁和證據地圖。
+- 🤖 **AI 研讀筆記（選用）**：沒有 API key 也行，把提示詞貼到 ChatGPT、Claude、Gemini 網頁，再把回答貼回來。也可以用 OpenRouter 的免費模型，或自己的 Claude／OpenAI key 在同步時自動產生。可引用句都回原文核對。
+- ✅ **從篩選、評讀到寫作**：篩選與 PRISMA 2020、CASP／JBI 評讀表、PICO 表、GRADE、中文 APA 7（含 Word 引用樣式）、給 Pandoc 的參考文獻檔、給指導教授的進度報告。
 
 **整理、追蹤、評讀交給它；找文獻和寫作留給你。** 新安裝預設是「研究生引導」模式：自動找文獻和 AI 寫草稿的功能先關著，每個功能都能單獨開關。
 
-- **下載**：[最新版 `.xpi`](https://github.com/bobyu89/ZotMax/releases/latest)。裝一次之後，Zotero 會自動檢查並更新。
-- **[安裝精靈](https://bobyu89.github.io/ZotMax/)**：依你的電腦、AI 服務商和筆記工具，先帶你準備好 Obsidian vault、Notion 和 API 金鑰，再把 `.xpi` 裝進 Zotero，之後交給外掛的首次設定精靈；進度會記住。
-- **[醫學文獻快速搜尋](https://bobyu89.github.io/ZotMax/search.html)**：PubMed、CINAHL、Cochrane、華藝、臺灣博碩士論文一次開，含 PICO 檢索式產生器。不用安裝，手機也能用。
-- **[文獻評讀表](https://bobyu89.github.io/ZotMax/appraisal.html)**：CASP、JBI 逐題評讀，複製成 Word 或 Markdown 表格。不用安裝。
-
-需要 Zotero 10；Obsidian 建議 1.14 以上（彩色劃線與 Bases 看板）。
+<p align="center"><img src="docs/images/home.png" width="680" alt="00 首頁：「從這裡開始」三張卡片（繼續閱讀、待核對的評讀、最近 14 天加入），下面是總覽數字卡：文獻篇數、已讀完成率、AI 筆記、評讀已核對、待讀、回顧專案"></p>
 
 [5 分鐘開始](#5-分鐘開始) · [兩種模式與功能開關](#兩種模式與功能開關) · [功能導覽](#依研究流程的功能導覽) · [常見問題](#常見問題與疑難排解) · [隱私與費用](#隱私與費用) · [給開發者](#給開發者) · [版本紀錄](https://github.com/bobyu89/ZotMax/releases)
 
 ## 5 分鐘開始
 
-1. **安裝**：下載 `zotero-bridge-x.y.z.xpi`（用 Firefox 下載請在連結上按右鍵 →「另存連結」，不然 Firefox 會把它當成自己的擴充功能），然後 Zotero → 工具 → 附加元件（英文介面：Tools → Plugins）→ 右上角齒輪 → **Install Plugin From File…**。
-2. **接上筆記工具**（至少一個）：第一次安裝後自動打開的[設定精靈](#首次設定精靈)會一步一步帶你做；要自己來，就到 Zotero → 設定 → **ZotMax** →「同步」分頁。
-   - **Obsidian**：「Vault 資料夾路徑」選 vault 的根目錄。筆記預設放在 `Zotero/` 子資料夾，依 Zotero 分類分好資料夾（見 [Obsidian 資料夾結構](#obsidian-資料夾結構)）。
-   - **Notion**：建立一個 integration，把資料庫分享給它，貼上 token 和「預設資料庫連結」，按 **測試連線並補齊資料庫欄位**，欄位會自動建好。還沒有資料庫的話，先把一個 Notion 頁面分享給 integration，再按「預設資料庫連結」旁的 **建立新的資料庫…**，ZotMax 會在那個頁面底下建好有全部欄位的資料庫並填好連結。
-3. **AI（選用）**：在「AI 服務」選服務商：
-   - **沒有 API key**：選「網頁版 AI（複製貼上，免 API key）」，在文獻上按右鍵 → ZotMax ▸ **AI 筆記（複製貼上，免 API key）…**，把提示詞貼到你在用的 AI 網站（ChatGPT、Claude、Gemini、學校的 AI，免費或訂閱都行），再把回答貼回來。見[網頁版 AI](#網頁版-ai免-api-key)。
-   - **想自動批次產生**：Claude、OpenAI，或 **OpenRouter**（一個 key 用多家模型，用 Google 帳號就能註冊，有免費模型）。API 依用量計費，ChatGPT／Claude 的訂閱方案不能當 API key 用。
-   - 先不想用 AI，就到「功能」關掉「AI 文獻筆記」，或同步時選「同步但不呼叫 AI」。
-4. **第一次同步**：在文獻清單選幾篇文獻，按文獻清單上方工具列（「新增筆記」右邊）的 **ZotMax** 按鈕 → **同步所選文獻（Notion + Obsidian）**。
-5. **看結果**：Obsidian 的 `Zotero/10 文獻/<分類>/` 裡每篇一份文獻筆記，最上面是導覽列和「重點」；Notion 資料庫每篇一頁，欄位可以排序、篩選。
+1. **下載安裝**：下載[最新版](https://github.com/bobyu89/ZotMax/releases/latest)的 `zotero-bridge-x.y.z.xpi`（用 Firefox 請在連結上按右鍵 →「另存連結」，不然 Firefox 會把它當成自己的擴充功能），然後 Zotero → 工具 → 附加元件（英文介面：Tools → Plugins）→ 右上角齒輪 → **Install Plugin From File…**。
+2. **跟著設定精靈走**：裝好後自動打開，約 3 分鐘。選模式 → 選筆記放哪裡（Obsidian vault、Notion，或兩個都要）→ 選 AI 怎麼用（見下表）→ 用一篇文獻試同步一次（不呼叫 AI、不花錢）。[每一步的細節](#首次設定精靈)。
+3. **同步**：在文獻清單選幾篇文獻，按清單上方工具列（「新增筆記」右邊）的 **ZotMax** 按鈕 → **同步所選文獻（Notion + Obsidian）**。
+4. **看結果**：打開 Obsidian 的 `Zotero/00 首頁`，從「▶️ 從這裡開始」挑一篇；每篇文獻筆記最上面是導覽列和「重點」。用 Notion 的話，資料庫每篇一頁，欄位可以排序、篩選。
 
-Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bobyu89.github.io/ZotMax/)有逐步說明。以下是設定頁的細節，需要時再展開。
+**AI 要選哪一個？**（之後可以在 設定 → ZotMax → AI 改）
+
+| 你的情況 | 選 | 費用 |
+|---|---|---|
+| 不會申請 API key，或已經有 ChatGPT、Claude、Gemini（免費或訂閱）、學校提供的 AI | **網頁版 AI（複製貼上）**：在文獻上按右鍵 → ZotMax ▸ **AI 筆記（複製貼上，免 API key）…**，見[網頁版 AI](#網頁版-ai免-api-key) | 不用另外付費 |
+| 想讓同步時自動產生，但不想花錢 | **OpenRouter** 的免費模型：用 Google 帳號註冊，不用綁信用卡 | 免費；沒有儲值時每天約 50 篇（[額度](#openrouter-免費額度)） |
+| 要穩定的品質，或一次很多篇 | **Claude**、**OpenAI** 的 API key，或 OpenRouter 的付費模型 | 依用量計費；一次超過 5 篇會先確認 |
+| 先不用 | 「先不用 AI」 | 不花錢 |
+
+ChatGPT Plus、Claude Pro 這類訂閱不能當 API key 用，但可以用網頁版 AI。Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bobyu89.github.io/ZotMax/)有逐步說明。不想用精靈，就到 Zotero → 設定 → **ZotMax** →「同步」和「AI」分頁自己設定。以下是設定頁的細節，需要時再展開。
+
+<details>
+<summary><b>首次設定精靈</b>：每一步做什麼、之後怎麼再打開</summary>
 
 ### 首次設定精靈
 
@@ -42,6 +54,8 @@ Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bob
 6. **完成**：告訴你工具列按鈕、右側面板、快速指令和設定頁在哪。
 
 每一步按「下一步」才會存，「略過」和「上一步」什麼都不改；中途按 Esc 或關掉視窗，已經存下的設定都會留著。之後想再跑一次：快速指令（`Ctrl+Shift+P`，macOS `⇧⌘P`）搜「設定精靈」、工具列 ZotMax 按鈕選單的 **設定精靈…**，或 設定 → ZotMax → 功能 最上面的 **開啟設定精靈**。從舊版更新、已經設定過的人不會看到它跳出來。
+
+</details>
 
 <details>
 <summary><b>Notion</b>：建立 integration，以及外掛自動建立的欄位</summary>
@@ -73,7 +87,7 @@ Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bob
 
 - **預設子資料夾**：例如 `Zotero`。
 - **檔名格式**：建議用 Citation key（沒有時用「作者 年份 - 標題」）。Zotero 10 有內建 Citation Key 欄位；有裝 Better BibTeX 也會讀取。
-- **建立「Zotero 文獻庫.base」總表**（預設開啟）：只建立一次，之後不覆寫你的修改。想要新版的欄位就刪掉舊檔，下次同步重建。
+- **建立「Zotero 文獻庫.base」總表**（預設開啟，放在 `90 系統/`；舊版平鋪結構放在預設子資料夾）：只建立一次，之後不覆寫你的修改。想要新版的欄位就刪掉舊檔，下次同步重建。
   - 「文獻總表」：標題、作者、年份、期刊、研究設計、樣本數、證據等級、閱讀狀態、分類。
   - 「閱讀進度」：依 `status` 分成待讀／閱讀中／已讀／已引用的看板，拖曳卡片就改了 `status`，下次同步 Zotero 與 Notion 也跟著改。
 - **由外掛管理的 frontmatter**：`study_design`、`sample_size`、`evidence_level`、`jbi_level`、`appraisal_tool`、`appraisal_overall`、`appraisal_verified`、`setting`、`population`、`intervention`、`comparison`、`outcomes`、`measures`、`country`、`effect_direction`、`full_text`、`fulltext`。有新資料時會覆寫，請不要用這些名稱存自己的資料。你自己加的其他欄位（例如 `aliases`）會保留。
@@ -89,16 +103,21 @@ Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bob
 |---|---|---|
 | Anthropic（Claude） | <https://console.anthropic.com> | 可調思考深度（effort：low～max）；批次 API、圖片劃線只支援 Claude |
 | OpenAI | <https://platform.openai.com> | 可填相容服務的 API base URL |
-| OpenRouter | <https://openrouter.ai>（Google 帳號即可註冊 → Keys） | 一個 key 用 Claude、GPT、Gemini、DeepSeek 等數百個模型。預設 `openrouter/free` 自動挑免費模型：不用錢、不用綁信用卡，品質較不穩定；次數限制見下方「OpenRouter 免費額度」；按「載入模型清單」可以選付費模型（費用從 OpenRouter 儲值扣，用量表直接記 OpenRouter 回報的金額）。只送文字，掃描版 PDF 不送檔案 |
+| OpenRouter | <https://openrouter.ai>（Google 帳號即可註冊 → Keys） | 一個 key 用 Claude、GPT、Gemini、DeepSeek 等數百個模型。預設 `openrouter/free` 自動挑免費模型：不用錢、不用綁信用卡，品質較不穩定；次數限制見下方[OpenRouter 免費額度](#openrouter-免費額度)；按「載入模型清單」可以選付費模型（費用從 OpenRouter 儲值扣，用量表直接記 OpenRouter 回報的金額）。只送文字，掃描版 PDF 不送檔案 |
 | 網頁版 AI（免 API key） | 不需要 | 不呼叫 API：用複製貼上的方式產生 AI 文獻筆記，見下方[網頁版 AI](#網頁版-ai免-api-key)。其他 AI 功能（比較表、文獻探討草稿、評讀陪練、讀懂統計、AI 主題分類）仍需要 API key |
 
 - 預設模型可以在設定頁改。
 - **全文最多送出字元數**：預設 150,000。超過會截斷，frontmatter 標 `fulltext_truncated: true`，也會告訴 AI 後段沒有提供。設成 0 表示只送摘要與註記，最省錢。
 - **自動重試**：API 暫時忙碌或網路中斷（HTTP 408／409／429／500／502／503／504、Claude 的 529）最多重試 4 次，間隔以指數退避並遵守 `retry-after`；金鑰錯誤（401）、請求錯誤（400）或模型拒絕處理不重試。
-- **OpenRouter 免費額度**：免費模型不用綁信用卡。沒有儲值時每天約 50 次、每分鐘 20 次；帳戶累計儲值滿 US$10 後提高到每天約 1000 次（儲值有手續費，以 [OpenRouter 公告](https://openrouter.ai/docs/api-reference/limits)為準）。一篇文獻的 AI 筆記算一次。
-  - 當天額度用完時（HTTP 429 `free-models-per-day`），外掛不再重試，直接說「OpenRouter 今天的免費額度用完了」和重置時間（免費次數以 UTC 日計算，台灣時間每天早上 8 點重置）；同一批後面的文獻照常同步、先不產生 AI 筆記，額度重置後再同步一次就會補上。急的話改用[網頁版 AI](#網頁版-ai免-api-key)。
-  - 免費模型太多人用（429）會照常重試，最後請你過幾分鐘再試或換模型；付費模型餘額不足（402）會請你儲值或改回 `openrouter/free`。
 - **筆記模板**：「AI 文獻筆記 → 筆記模板（system prompt）」可以照課程或指導教授的要求改；按「載入內建模板來修改」從內建版開始。改了模板，外掛仍會要求 AI 附上結構化資料。
+
+#### OpenRouter 免費額度
+
+免費模型不用綁信用卡。依 [OpenRouter 的說明](https://openrouter.ai/docs/api-reference/limits)：沒有儲值時每天 50 次、每分鐘 20 次；帳戶累計儲值滿 US$10 後提高到每天 1000 次（儲值有手續費；數字可能調整，以 OpenRouter 公告為準）。一篇文獻的 AI 筆記算一次。免費次數以 UTC 日計算，台灣時間每天早上 8 點重置。
+
+- **當天用完時**（HTTP 429 `free-models-per-day`）：外掛不再重試，直接說「OpenRouter 今天的免費額度用完了」和重置時間；同一批後面的文獻照常同步、先不產生 AI 筆記，額度重置後再同步一次就會補上。急的話改用[網頁版 AI](#網頁版-ai免-api-key)。
+- **免費模型太多人在用**（其他 429）：照常自動重試，最後請你過幾分鐘再試或換模型。
+- **付費模型餘額不足**（402）：請你到 OpenRouter 儲值，或把模型改回 `openrouter/free`。
 
 </details>
 
@@ -161,7 +180,7 @@ Notion integration 怎麼建、API key 去哪裡拿，[安裝精靈](https://bob
 | 讀懂統計 ¹ | 在 PDF 選一段文字，AI 用白話解釋裡面的統計和要注意的地方；每個數字都和原文核對 | AI・要付費 | — | ✅ |
 | 匯出給 Gemini Notebook | 把選取的文獻或分類匯出成一個資料夾（全文 Markdown、APA 參考文獻、使用說明）給 Gemini Notebook 當來源；只寫入你電腦上的檔案，上傳由你自己來 | | — | ✅ |
 
-- 標記和設定頁一致：「AI・要付費」會呼叫 AI（用你的 API key 付費），也都會連網；「連網」會連到外部服務。
+- 標記和設定頁一致：「AI・要付費」會呼叫 AI（用你的 API key 付費；OpenRouter 的免費模型不收錢），也都會連網；「連網」會連到外部服務。AI 文獻筆記也可以用網頁版 AI 複製貼上，不呼叫 API。
 - ¹ 要先開另一個開關：全文筆記、AI 文獻筆記要「同步」；批次 API、AI 標重點要「AI 文獻筆記」；概念卡片 AI 綜整要「概念卡片」；AI 主題分類要「文獻自動分類」和「AI 文獻筆記」；評讀陪練要「文獻評讀表」和「AI 文獻筆記」；讀懂統計要「AI 文獻筆記」。前面的關掉時，後面的會變灰並說明原因。
 - ² 關掉「文獻評讀表」只是隱藏表單，已填的評讀照樣同步。
 - ³ 進度報告的「本期摘要」是另外勾選的 AI 選項（AI・要付費，產生前先確認費用）；不勾就完全不呼叫 AI。「連網」是因為可以選擇建成 Notion 頁面。劃線顏色的意義和筆記版面是同步的一部分，沒有另外的開關。
@@ -364,7 +383,7 @@ Zotero 的「工具」選單只留「ZotMax 設定…」、「ZotMax 快速指�
 - **刪除**：在 Zotero 刪掉圖片劃線後再同步，對應的截圖會刪除。只刪這篇文獻 `條目KEY-註記KEY.png` 格式的檔案，你自己放的圖片不會動；筆記自己搬到別的資料夾後，舊的截圖不會跟著搬（在 Zotero 換分類、由 ZotMax 搬的會一起搬）。
 - **Notion**：用檔案上傳 API 上傳成圖片區塊。上傳的檔案沒馬上放進頁面一小時後就失效，而自動同步區每次重建，所以**每次同步到 Notion 都會重新上傳**（每張圖多 2 次 API 請求）。單檔上限 20 MB（Notion 免費方案 5 MB）；失敗時頁面照常同步，只是少了圖。
 - **截圖從哪來**：Zotero 的快取；沒有時請 Zotero 當場從 PDF 產生，產生不了（例如這台電腦沒有 PDF）就保留顏色、頁碼與評註。
-- **AI 也看圖片劃線**（設定 → AI → AI 服務 → AI 文獻筆記，預設關閉）：把截圖一起傳給 Claude 讀表格裡的數字。一次最多 20 張，單張超過約 3.7 MB 或 8000 像素略過；OpenAI 不送圖片。評註文字不論如何都會送給 AI。
+- **AI 也看圖片劃線**（設定 → AI → AI 服務 → AI 文獻筆記，預設關閉）：把截圖一起傳給 Claude 讀表格裡的數字。一次最多 20 張，單張超過約 3.7 MB 或 8000 像素略過；只有 Claude 收圖片，OpenAI、OpenRouter 不送。評註文字不論如何都會送給 AI。
 - 不想要截圖：關掉「圖片劃線」開關。
 
 </details>
@@ -511,6 +530,8 @@ Zotero 的「工具」選單只留「ZotMax 設定…」、「ZotMax 快速指�
 
 #### Obsidian 資料夾結構
 
+<img src="docs/images/vault-tree.png" align="right" width="230" alt="Obsidian 的資料夾：00 首頁、01 研究儀表板、10 文獻（依 Zotero 分類，例如 碩論／跌倒，裡面有主題總覽、證據地圖、每篇的筆記和全文）、20 概念、30 評讀與綜整、40 寫作、50 新文獻、90 系統">
+
 從 0.23.0 起，vault 裡的檔案依 Zotero 分類整理，資料夾加上編號，在檔案總管裡依閱讀順序排列：
 
 ```
@@ -563,9 +584,11 @@ Zotero/
 - 🗺️ **證據地圖**（`00 <分類> 證據地圖.canvas`，主題頁上方有連結）：Obsidian Canvas，主題頁在最上面，下面依結論方向（有效、無差異、有害、不一致、未判定）分成彩色群組，每篇一張卡片：研究設計、樣本數、證據等級、閱讀狀態、介入與結果，點標題打開筆記。每次更新會重新排列；你在 Canvas 上加了自己的卡片後，ZotMax 就不再覆寫它（想自己排，另存一份）。設定 → 同步 → Obsidian 可以關掉。
 - 分類改名或刪除後，舊的主題頁不會被刪，只會標示「目前沒有文獻筆記」，你的筆記保留。
 
+<p align="center"><img src="docs/images/evidence-canvas.png" width="760" alt="證據地圖 Canvas：主題頁在最上面，下面依結論方向分成有效、無差異、不一致、未判定四個彩色群組，每篇一張卡片寫研究設計、樣本數、證據等級、閱讀狀態、介入與結果"></p>
+
 > ⚠️ 「證據說什麼」是 AI 初判：「有效」只代表主要結果有統計上顯著的差異，不等於臨床上有意義，也不代表證據確定性高。寫進報告前請回原文核對，再用 GRADE 判斷整體證據確定性。
 
-**`研究儀表板.base`**（勾選「建立 Zotero 文獻庫.base」時一併建立）：「證據等級表」（依研究設計分組）、「掃描檔待 OCR」、「待讀（依分類）」。只在不存在時建立，可以自由修改；想恢復預設就刪掉它。也可以用 `![[研究儀表板.base#證據等級表]]` 嵌入其中一個檢視。
+**`研究儀表板.base`**（勾選「建立 Zotero 文獻庫.base」時一併建立，也在 `90 系統/`）：「證據等級表」（依研究設計分組）、「掃描檔待 OCR」、「待讀（依分類）」。只在不存在時建立，可以自由修改；想恢復預設就刪掉它。也可以用 `![[研究儀表板.base#證據等級表]]` 嵌入其中一個檢視。
 
 </details>
 
@@ -582,11 +605,11 @@ Zotero/
 
   其他寫法寫進卡片的 `aliases`，所以 `[[falls]]` 也會連到「跌倒」。
 - **卡片內容**：類型（概念／測量工具／結果指標）、文獻數、年份範圍、MeSH 與 PubMed 連結、提到它的文獻表（研究設計、證據等級、一句話摘要）、常一起出現的前 10 個概念。frontmatter 有 `type: "concept"`、`papers`、`aliases`，可以用 Bases 篩選。
-- **概念索引**（`概念/概念索引.md`）：全部概念依文獻數排序，加上前 15 個概念的 Mermaid 關係圖。
+- **概念索引**（`20 概念/概念索引.md`；舊版平鋪結構是 `概念/`）：全部概念依文獻數排序，加上前 15 個概念的 Mermaid 關係圖。
 - **你的內容不會被覆寫**：新卡片有「📖 我的定義」與「✍️ 我的筆記」兩段；`aliases` 只增不減。你先建的同名筆記會在第一個標題下方加上自動區塊。
 - **卡片不會被刪除**：沒有文獻再提到的概念，卡片改成「目前沒有文獻筆記提到這個概念」，`papers` 設為 0，要不要刪由你決定。
 - **AI 綜整**（「概念卡片 AI 綜整」開關，會產生費用）：ZotMax 按鈕或快速指令 → **為概念卡片產生 AI 綜整…** → 選一個概念（至少 2 篇）→ 確認預估費用。AI 讀這些文獻的 AI 筆記（最多 30 篇，最新的優先），寫「定義與內涵、測量方式、相關因素與介入、研究結果的一致與分歧、研究缺口」。和文獻探討草稿一樣只能用 [S#] 代號引用、數字對不上的列在「⚠️ 查核清單」。結果放在「🤖 AI 綜整（草稿）」區塊。提示詞可在 Zotero 進階設定（Config Editor）的 `extensions.zotero-bridge.concepts.aiPrompt` 改。
-- **設定**（設定 → 整理 → 概念卡片（Obsidian））：手動同步後是否更新、卡片資料夾（預設 `概念`）、測量工具／結果指標是否做成卡片、同義詞合併。
+- **設定**（設定 → 整理 → 概念卡片（Obsidian））：手動同步後是否更新、卡片資料夾（預設 `概念`，新的資料夾結構放在 `20 概念/`；改成別的名稱就照你填的）、測量工具／結果指標是否做成卡片、同義詞合併。
 - vault 裡其他地方已有同名筆記時，`[[Self-efficacy]]` 可能連到那一份；卡片本身用完整路徑連結。
 
 </details>
@@ -737,7 +760,7 @@ Zotero/
 - **不會重複匯入**：已有相同 PMID 或 DOI 的略過；外掛記得每個追蹤看過的 PMID，你丟進垃圾桶的不會再回來。兩個追蹤找到同一篇只匯入一次。
 - 單篇匯入失敗下次重試，連續 3 次失敗就放棄（進度視窗列出 PMID）。某個追蹤出錯時，下次從原本的時間點重查，其他追蹤照常。
 
-**4. Obsidian 每日清單**：`<預設子資料夾>/新文獻/YYYY-MM-DD.md`，依追蹤分段，每篇一行待辦（標題、期刊、年份、Zotero／DOI／PubMed 連結）。同一天再檢查只加新的，已勾選的項目和區塊外的筆記保留。
+**4. Obsidian 每日清單**：`Zotero/50 新文獻/YYYY-MM-DD.md`（舊版平鋪結構是 `新文獻/`），依追蹤分段，每篇一行待辦（標題、期刊、年份、Zotero／DOI／PubMed 連結）。同一天再檢查只加新的，已勾選的項目和區塊外的筆記保留。
 
 **注意**：依「加入 PubMed 的日期」（Entrez Date）查詢，晚收錄的舊文獻也會出現，只要近年的請填出版日期限制。匯入一律存到「我的文獻庫」。改了檢索式仍從上次時間點開始；想重新回溯就刪掉追蹤再新增。
 
@@ -1001,6 +1024,8 @@ AI 功能要開關打開、也設定了 API key 才會用到（AI 文獻筆記�
 
 不會申請 API key、不想綁信用卡，或已經有 ChatGPT、Claude、Gemini（免費版或訂閱）、學校提供的 AI 帳號：用複製貼上的方式產生 AI 文獻筆記，不呼叫任何 API，也不產生 API 費用。
 
+<p align="center"><img src="docs/images/manual-ai.png" width="560" alt="「AI 筆記（複製貼上，免 API key）」視窗：1. 複製提示詞（含全文）或只複製指令；2. 開啟 ChatGPT、Claude、Gemini；3. 把回答貼回來，下方即時檢查有沒有分段和結構化資料，最後按「儲存 AI 筆記並同步」"></p>
+
 1. 在文獻上按右鍵 → ZotMax ▸ **AI 筆記（複製貼上，免 API key）…**（或快速指令、右側 ZotMax 面板的「產生 AI 筆記」）。選好幾篇時一篇一篇來，可以「跳過這篇」。
 2. **複製提示詞（含全文）**：和 API 送出的完全一樣——筆記模板、結構化資料（JSON）的規則、書目、摘要、你的劃線與 Zotero 筆記、整理過的全文（參考文獻等段落已省略）。太長時視窗會提醒；這時（或 PDF 是掃描版）改按 **只複製指令（我自己上傳 PDF）**，在 AI 網站把 PDF 一起附上。
 3. 按 **開啟 ChatGPT／Claude／Gemini**（或打開學校的 AI），貼上送出。等它寫完，按回答下面的「複製」按鈕（自己反白容易掉格式）。
@@ -1047,7 +1072,7 @@ AI 會看你選的文字，加上論文「方法／統計分析」段落的節�
 
 - 頁數取自 Zotero 的全文索引或 PDF 工具；讀不到頁數時，少於 20 字元才判為 `none`。多個附件取最好的那個。
 - 產生 AI 筆記時，進度視窗在該篇顯示 ⚠️，例如「掃描版 PDF（沒有文字層），AI 只讀了摘要與劃線」。
-- **掃描版 PDF 直接傳給 AI 讀**（設定 → AI → AI 服務 → AI 文獻筆記，預設開啟）：`none`／`partial` 的 PDF 把檔案本身傳給 AI 看每一頁（Claude；OpenAI 官方 API 也支援，自訂 API base URL 時不傳）。上限 20 MB、100 頁，可在 Config Editor 改 `extensions.zotero-bridge.llm.pdfMaxMB`、`llm.pdfMaxPages`；超過或 API 拒絕時改用摘要與劃線。**比較耗 token**：每頁都當影像計費，費用預估可能**低估**。AI 讀的是影像，所以摘要與劃線裡也找不到的可引用句標「⚠️ 無全文可查證」。
+- **掃描版 PDF 直接傳給 AI 讀**（設定 → AI → AI 服務 → AI 文獻筆記，預設開啟）：`none`／`partial` 的 PDF 把檔案本身傳給 AI 看每一頁（Claude；OpenAI 官方 API 也支援，自訂 API base URL 時不傳；OpenRouter 不傳，網頁版 AI 可以按「只複製指令」自己在網站上傳 PDF）。上限 20 MB、100 頁，可在 Config Editor 改 `extensions.zotero-bridge.llm.pdfMaxMB`、`llm.pdfMaxPages`；超過或 API 拒絕時改用摘要與劃線。**比較耗 token**：每頁都當影像計費，費用預估可能**低估**。AI 讀的是影像，所以摘要與劃線裡也找不到的可引用句標「⚠️ 無全文可查證」。
 - **比較省錢的做法是讓 PDF 有文字層**：用 [OCRmyPDF](https://ocrmypdf.readthedocs.io/)（`ocrmypdf --language eng+chi_tra 掃描.pdf 輸出.pdf`）或 Adobe Acrobat 的「辨識文字」處理後放回 Zotero，或重新下載有文字的版本；重新索引後再「重新產生 AI 筆記」。
 - **沒有東西可讀就不呼叫 AI**：沒有全文、沒有傳 PDF、沒有摘要、也沒有劃線或筆記時略過 AI 筆記，避免 AI 只憑標題編內容；Notion／Obsidian 照常同步。
 - 「全文最多送出字元數」設成 0 時不送全文也不傳 PDF。
@@ -1270,7 +1295,7 @@ pandoc 論文.md --citeproc --bibliography "Zotero/90 系統/references.json" --
 
 **費用**：AI 費用由你自己的帳號支付。
 - 一次替超過 5 篇產生 AI 筆記前會先確認；有用量紀錄時附上預估費用（依過去的平均用量估算，掃描版 PDF 可能低估）。文獻比較表、草稿、AI 主題分類、評讀陪練也都先確認。
-- **用量**：設定 → AI → 本月 AI 用量 顯示呼叫次數、tokens、估計費用（美元），可重設；每次 AI 執行後進度視窗也有一行摘要，研究儀表板列出近三個月。估計用的價格表可以在同一區修改；OpenAI 沒有內建價格，只顯示 tokens。估計值僅供參考，以服務商帳單為準。
+- **用量**：設定 → AI → 本月 AI 用量 顯示呼叫次數、tokens、估計費用（美元），可重設；每次 AI 執行後進度視窗也有一行摘要，研究儀表板列出近三個月。估計用的價格表可以在同一區修改；OpenAI 沒有內建價格，只顯示 tokens；OpenRouter 直接記它回報的實際金額，免費模型記 0 元。網頁版 AI 不經過外掛，不列入用量。估計值僅供參考，以服務商帳單為準。
 - **全文先刪參考文獻**：「全文筆記」開著時，送給 AI 的全文是整理好的 Markdown，並先刪掉 References、Acknowledgements、Funding、Conflict of interest（設定 → 整理 → 全文筆記 可關）。同步完成時進度視窗會顯示「全文整理成 Markdown 後送給 AI：N 字（原本 M 字，省下 X%）」。
 - **全文最多送出字元數**：預設 150,000，在刪減之後才截斷；設成 0 只送摘要與註記，最省。
 - **提示快取**（Claude，自動）：每篇請求開頭相同的筆記模板會被快取，連續產生多篇時後面幾篇的開頭便宜很多。
@@ -1293,7 +1318,7 @@ pandoc 論文.md --citeproc --bibliography "Zotero/90 系統/references.json" --
 - 失敗的（請求錯誤、超過 24 小時、取消、模型拒絕處理）加入接續清單：工具 → **繼續未完成的 ZotMax 同步** 用一般模式重試。
 - 工具 → **檢查 AI 批次進度**（已完成幾篇、等了多久、最晚何時結束）；工具 → **取消 AI 批次**（已完成的仍會寫入，尚未處理的不收費）。
 - 批次請求用 1 小時的快取，寫入費為一般輸入的 2 倍（再打五折）；批次中的快取命中不保證。
-- **只支援 Claude**；選 OpenAI 時一律用一般模式。「本月 AI 用量」會分開列出「批次 API：N 次呼叫，比一般模式省下約 US$…」。
+- **只支援 Claude**；選 OpenAI 或 OpenRouter 時一律用一般模式。「本月 AI 用量」會分開列出「批次 API：N 次呼叫，比一般模式省下約 US$…」。
 
 </details>
 
@@ -1326,7 +1351,8 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi，並更新 updates.j
 | `content/features.js` | 功能開關目錄、兩種模式、自訂判斷、一次性升級遷移、依開關隱藏選單 |
 | `content/preferences.xhtml`／`.js`／`.css` | 設定頁（「功能」區塊、依開關收合的區段） |
 | `content/zotero-adapter.js` | 讀取條目、註記、全文、APA；存 AI 筆記 |
-| `content/llm.js` | 筆記模板、評讀與結構化資料的提示詞、JSON 解析、Claude／OpenAI API（重試、用量） |
+| `content/llm.js` | 筆記模板、評讀與結構化資料的提示詞、JSON 解析、服務商表、Claude／OpenAI／OpenRouter API（重試、用量、OpenRouter 免費額度） |
+| `content/manual-ai.js`／`manual-ai.xhtml`／`.css` | 網頁版 AI（複製貼上）：提示詞、整理與檢查貼回的回答（純函式）、視窗、存成 AI 筆記 |
 | `content/verify.js` | 可引用句查證 |
 | `content/scanned.js` | 掃描版 PDF：全文狀態、傳 PDF 給 AI、沒有內容時略過 AI |
 | `content/secrets.js` | API key／token 存取（Gecko 密碼管理員） |
@@ -1334,7 +1360,8 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi，並更新 updates.j
 | `content/ai-batch.js` | 批次 API：打包送出、輪詢、重新啟動後續查、結果套用、取消 |
 | `content/notion.js` | Notion API（2025-09-03，data sources）、中英文欄位與依 ID 對應、收合區塊 |
 | `content/status.js` | 閱讀狀態三邊合併與同步 |
-| `content/core.js` | Obsidian 筆記組裝（「重點」＋摺疊區塊、劃線顏色意義）、frontmatter 合併、分流規則 |
+| `content/core.js` | Obsidian 筆記組裝（導覽列、「重點」＋摺疊區塊、劃線顏色意義）、frontmatter 合併、分流規則、資料夾結構（依 Zotero 分類） |
+| `content/vault-layout.js` | 整理 Obsidian 資料夾結構：搬移計畫、連結改寫（筆記、Canvas、書籤）、換分類時搬筆記、整理紀錄 |
 | `content/fulltext-md.js`／`fulltext.js` | 全文轉 Markdown（純函式）；轉換快取、markitdown、全文筆記、Notion 子頁面、AI 標重點核對 |
 | `content/markdown.js` | Markdown ⇄ Notion blocks ⇄ HTML |
 | `content/apa-zh.js` | 中文 APA 7 |
@@ -1386,9 +1413,11 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi，並更新 updates.j
 - 中文文獻補強：一筆資料凌亂的中文條目（民國年、全形頁碼、兩位作者擠一格、DOI 在「其他」欄、語言空白）在確認視窗套用後欄位正確、存進資料庫，復原後回到原樣，測完刪除
 - 條目窗格顯示 AI 筆記；設定頁能開啟、值與已存的 token 正確，關閉後新輸入的 key 有存下
 - 工具列按鈕的位置、名稱、圖示、方向鍵；兩種模式下選單依開關顯示；關掉「工具列按鈕」即時隱藏
+- 網頁版 AI：視窗從 `chrome://zotero-bridge/` 打開、樣式有載入，「複製提示詞」含這篇的資料，貼回的回答即時檢查後存成 AI 子筆記並同步到 Obsidian
+- 整理 vault：把前面測試寫出的平鋪 vault 搬到 `10 文獻/<分類>`、`00 首頁`、`90 系統`，使用者自己的連結跟著改，之後的同步寫在新位置
 - 停用再啟用外掛：選單、區塊、FTL、工具列按鈕都清掉再註冊回來
 
-Zotero 10.0.6 每註冊一次外掛的語系檔就會在主控台記一筆 `uncaught exception: undefined`（不裝外掛時一樣會發生，由 baseline 驗證），不算外掛的錯誤。
+Zotero 10.0.6 每註冊一次外掛的語系檔就會在主控台記一筆 `uncaught exception: undefined`（不裝外掛時一樣會發生，由 baseline 驗證），不算外掛的錯誤。Zotero 的背景搜尋索引在測試期間關掉：測試用的掃描版 PDF 索引不了，它幾秒後會在主控台記「Full-text index queues aren't draining」，落在剛好在跑的測試上；外掛不使用這個索引。
 
 </details>
 
