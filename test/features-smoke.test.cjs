@@ -58,7 +58,8 @@ function makeEnv({ prefs, fetch }) {
 		async saveTx() { return this.id; }
 	}
 
-	let prefStore = Object.assign({}, prefs);
+	// The suites below were written for the flat vault layout; vault-layout-smoke covers the organized one
+	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat" }, prefs);
 	let observers = new Map();
 	let observerCount = () => [...observers.values()].reduce((n, list) => n + list.length, 0);
 	let Zotero = {

@@ -120,7 +120,8 @@ function makeEnv(prefs = {}) {
 		return att;
 	}
 
-	let prefStore = Object.assign({}, prefs);
+	// The suites below were written for the flat vault layout; vault-layout-smoke covers the organized one
+	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat" }, prefs);
 	let mainWindow = {
 		openDialog(url, name, features) {
 			assert.equal(url, "chrome://zotero-bridge/content/gemini-export.xhtml");

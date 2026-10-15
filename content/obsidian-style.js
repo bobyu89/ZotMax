@@ -27,7 +27,7 @@
 	const SNIPPET = "zotmax";
 	const FILE_NAME = `${SNIPPET}.css`;
 	// Bumped whenever the CSS changes, so installed copies are refreshed on the next sync
-	const VERSION = 2;
+	const VERSION = 3;
 	const HEADER_RE = /^\/\* ZotMax 看板樣式 v(\d+)\b/;
 
 	/** Card types: [callout type, "r, g, b", Lucide icon]. */
@@ -41,6 +41,8 @@
 		["zm-kpi", "79, 70, 229", "lucide-activity"],
 		["zm-chart", "13, 148, 136", "lucide-chart-column"],
 		["zm-topic", "8, 145, 178", "lucide-folder-open"],
+		["zm-reading", "37, 99, 235", "lucide-book-open"],
+		["zm-inbox", "234, 88, 12", "lucide-inbox"],
 	];
 
 	function header() {
@@ -160,6 +162,56 @@
 	padding: 0;
 	background: none;
 	color: rgb(var(--callout-color));
+}
+
+/* 文獻筆記最上面的導覽列：🏠 首頁 › 主題，下一行「跳到」各段 */
+.callout[data-callout="zm-nav"] {
+	--callout-color: 100, 116, 139;
+	--callout-icon: lucide-compass;
+	padding: 6px 12px;
+	border-radius: 10px;
+	border: 1px solid var(--background-modifier-border);
+	background-color: var(--background-secondary);
+	font-size: 0.9em;
+	mix-blend-mode: normal;
+}
+.callout[data-callout="zm-nav"] > .callout-title {
+	padding: 0;
+	gap: 6px;
+}
+.callout[data-callout="zm-nav"] > .callout-content {
+	padding: 2px 0 0;
+	color: var(--text-muted);
+}
+.callout[data-callout="zm-nav"] > .callout-content > p {
+	margin: 0;
+}
+
+/* 手機與平板：外框和卡片的內距縮小，數字和標籤小一點，寬表格可以左右滑 */
+.is-mobile .callout[data-callout="zm-board"] {
+	padding: 8px 8px 10px;
+	border-radius: 12px;
+}
+.is-mobile .callout[data-callout="zm-board"] > .callout-content {
+	gap: 8px;
+}
+.is-mobile .callout[data-callout="zm-board"] > .callout-content > .callout {
+	padding: 8px 10px;
+}
+.is-phone .callout[data-callout="zm-kpi"] strong {
+	font-size: 1.5em;
+}
+.is-phone .callout[data-callout="zm-board"] > .callout-content > p code {
+	padding: 0 8px;
+	font-size: 0.8em;
+}
+.is-phone .callout[data-callout="zm-nav"] {
+	padding: 6px 10px;
+}
+.is-mobile .markdown-rendered:has(.callout[data-callout^="zm-"]) table {
+	display: block;
+	max-width: 100%;
+	overflow-x: auto;
 }
 
 /* 每種卡片的顏色和圖示 */

@@ -245,7 +245,7 @@
 	// Generated keys handed out so far, kept in the vault so they survive restarts and other devices
 	function storePath(settings) {
 		if (!settings || !settings.vaultPath) return null;
-		return PathUtils.join(settings.vaultPath, ...core.splitFolder(settings.defaults.obsidianFolder), STORE_FILE);
+		return PathUtils.join(settings.vaultPath, ...core.vaultFolder(settings, "system"), STORE_FILE);
 	}
 
 	async function loadStore(path) {
@@ -330,7 +330,7 @@
 
 	/**
 	 * Write `<name>.json` (and `<name>.bib` when enabled) for `items` (null = every item) into the vault's default
-	 * Zotero folder. Citekeys always come from a scan of every library, so a collection
+	 * Zotero folder (90 系統 in the organized layout). Citekeys always come from a scan of every library, so a collection
 	 * file uses exactly the same keys as the main file.
 	 */
 	async function writeBibliography(items, name, settings) {
@@ -353,7 +353,8 @@
 				Zotero.logError(e);
 			}
 		}
-		let dirParts = core.splitFolder(settings.defaults.obsidianFolder);
+		// The default folder, or 90 系統 in the organized layout (core.js)
+		let dirParts = core.vaultFolder(settings, "system");
 		let dir = PathUtils.join(settings.vaultPath, ...dirParts);
 		await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
 		await writeIfChanged(PathUtils.join(dir, name + ".json"), buildCSLJSON(entries));

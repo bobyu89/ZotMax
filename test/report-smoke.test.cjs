@@ -43,7 +43,8 @@ function makeEnv({ prefs = {}, logins = [], console: consoleMessages = [], answe
 	let copied = [];
 	let prompts = [];
 	let dialogs = [];
-	let prefStore = Object.assign({}, prefs);
+	// The suites below were written for the flat vault layout; vault-layout-smoke covers the organized one
+	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat" }, prefs);
 	let dom = new JSDOM(MAIN_WINDOW);
 	let win = dom.window;
 	win.document.createXULElement = tag => win.document.createElement(tag);

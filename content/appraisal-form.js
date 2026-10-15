@@ -922,7 +922,7 @@
 	}
 
 	async function summaryTarget(settings, collection) {
-		let dirParts = [...core.splitFolder(settings.defaults.obsidianFolder), REVIEW_FOLDER];
+		let dirParts = core.vaultFolder(settings, "reviews");
 		let dir = PathUtils.join(settings.vaultPath, ...dirParts);
 		let key = collectionKey(collection);
 		let base = core.sanitizeFilename(collection.name);

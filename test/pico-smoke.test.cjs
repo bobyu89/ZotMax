@@ -117,7 +117,8 @@ function makeEnv(prefs = {}) {
 		return note;
 	}
 
-	let prefStore = Object.assign({}, prefs);
+	// The suites below were written for the flat vault layout; vault-layout-smoke covers the organized one
+	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat" }, prefs);
 	let mainWindow = {
 		openDialog(url, name, features) {
 			assert.match(url, /^chrome:\/\/zotero-bridge\/content\/(pico-(card|table)|grade)\.xhtml$/);

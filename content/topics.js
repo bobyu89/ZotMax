@@ -1,18 +1,20 @@
 /*
- * ZotMax — 首頁 and 主題頁: the vault organised by Zotero collection, without moving a file.
+ * ZotMax — 首頁 and 主題頁: the vault organised by Zotero collection.
  *
- *   <folder>/首頁.md               the front page: the 總覽 number cards, one card per topic (a Zotero collection
- *                                  that has literature notes) and quick links.
- *   <folder>/主題/<collection>.md   one page per topic: 總覽 cards, 🧭 證據說什麼 (the notes' effect_direction by
+ *   00 首頁.md (首頁.md flat)      the front page: ▶️ 從這裡開始 (繼續閱讀, 待核對的評讀, 最近加入), the 總覽 number
+ *                                  cards, one card per topic (a Zotero collection that has literature notes), quick links.
+ *   10 文獻/<collection>/00 <name> 總覽.md (主題/<collection>.md flat)
+ *                                  one page per topic: 總覽 cards, 🧭 證據說什麼 (the notes' effect_direction by
  *                                  intervention), 📈 趨勢 (the last five publication years against the five before,
  *                                  common interventions and outcomes), 🕳️ 研究缺口與下一步 (rules and the evidence gap
  *                                  map) and 📚 文獻 (every paper with its design, level, direction and status).
+ *   …/00 <name> 證據地圖.canvas    the topic as an Obsidian Canvas: the page on top, the papers grouped by direction.
  *
- * A note in two collections shows up on both topic pages; the files stay where the sync put them, so links never
- * break. Built together with the 研究儀表板 (dashboard.js update(), pref dashboard.topicPages) from the notes'
+ * Where the files go is core.js's vault layout (organized or flat); a note in two collections shows up on both topic
+ * pages. Built together with the 研究儀表板 (dashboard.js update(), pref dashboard.topicPages) from the notes'
  * frontmatter only: no network, no AI. Only the %% zotero-bridge:start/end %% block is rewritten; 「✍️ 我的筆記」
  * and the user's frontmatter keys stay. A topic page whose collection has no notes any more keeps the user's part
- * and says so.
+ * and says so; a canvas the user added cards to is never rewritten.
  *
  * The functions down to "Zotero" are pure (Node tests); the rest needs Zotero.
  */
@@ -343,12 +345,18 @@
 		return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 	}
 
-	/** A topic page's managed region. meta: { now, layout, homeLink, dashboardLink } */
+	/** A topic page's managed region. meta: { now, layout, homeLink, dashboardLink, organized, canvasLink } */
 	function topicSection(topic, s, meta = {}) {
-		let links = [meta.homeLink ? `← ${wikilink(meta.homeLink, HOME_NAME)}` : "", meta.dashboardLink ? wikilink(meta.dashboardLink, "研究儀表板") : ""].filter(Boolean).join(" · ");
+		let links = [
+			meta.homeLink ? `← ${wikilink(meta.homeLink, HOME_NAME)}` : "",
+			meta.dashboardLink ? wikilink(meta.dashboardLink, "研究儀表板") : "",
+			meta.canvasLink ? `🗺️ ${wikilink(meta.canvasLink, "證據地圖（Canvas）")}` : "",
+		].filter(Boolean).join(" · ");
 		let info = [
 			`> [!info] 由 ZotMax 依 Zotero 分類「${topic.path}」的 ${s.total} 篇文獻筆記於 ${stamp(meta.now)} 產生；只讀筆記的 frontmatter，不連網、不呼叫 AI。`,
-			"> 筆記沒有搬動，一篇在幾個分類，就會出現在幾個主題頁。",
+			meta.organized
+				? "> 這個分類的文獻筆記就在這頁所在的資料夾；同時屬於幾個分類的，放在最深的那個分類，其他主題頁連過去。"
+				: "> 筆記沒有搬動，一篇在幾個分類，就會出現在幾個主題頁。",
 			...(links ? [`> ${links}`] : []),
 		].join("\n");
 		return [info, topicOverview(s, meta.layout), directionSection(s), trendSection(s), gapSection(s), paperSection(topic.records)].join("\n\n");
@@ -417,11 +425,111 @@
 	function homeSection(meta) {
 		let total = meta.stats ? meta.stats.total : 0;
 		let info = [
-			`> [!info] ZotMax 首頁：依 Zotero 分類整理 vault 裡的 ${total} 篇文獻筆記（${stamp(meta.now)} 更新）。每張主題卡連到它的主題頁；筆記本身沒有搬動。`,
+			`> [!info] ZotMax 首頁：依 Zotero 分類整理 vault 裡的 ${total} 篇文獻筆記（${stamp(meta.now)} 更新）。每張主題卡連到它的主題頁`
+				+ (meta.organized ? "，主題頁和那個分類的文獻在同一個資料夾。" : "；筆記本身沒有搬動。"),
 			"> 想一打開 Obsidian 就看到這頁：把它加入書籤（Bookmarks），或用 Homepage 外掛設成首頁。",
 		].join("\n");
+		let start = startHere(meta.records || [], { now: meta.now, layout: meta.layout });
 		let overview = meta.layout === "board" && meta.stats ? dashboard.overviewBoard(meta.stats, { reviews: meta.reviews }) : "";
-		return [info, ...(overview ? [overview] : []), topicsBlock(meta.entries || [], meta.layout, meta.unfiled || 0), quickLinks(meta)].join("\n\n");
+		return [info, ...(start ? [start] : []), ...(overview ? [overview] : []), topicsBlock(meta.entries || [], meta.layout, meta.unfiled || 0), quickLinks(meta)].join("\n\n");
+	}
+
+	const START_ROWS = 5;
+	const RECENT_DAYS = 14;
+
+	/**
+	 * 「▶️ 從這裡開始」 on the home page: what to open next. 繼續閱讀 (閱讀中, else the newest 待讀), 待核對的評讀 (an AI
+	 * appraisal not yet checked against the paper), 最近加入 (the last 14 days). "" when there is nothing.
+	 */
+	function startHere(records, opts = {}) {
+		let now = opts.now || new Date();
+		let live = records.filter(r => !r.deleted);
+		let newest = (a, b) => String(b.dateAdded).localeCompare(String(a.dateAdded)) || a.title.localeCompare(b.title, "zh-Hant");
+		let line = r => `- ${wikilink(r.link, shortTitle(r))}${yearOf(r) ? ` · ${yearOf(r)}` : ""}${r.studyDesign ? ` · ${designLabel(r.studyDesign)}` : ""}`;
+		let reading = live.filter(r => r.status === "閱讀中").sort(newest);
+		let readingTitle = "繼續閱讀";
+		if (!reading.length) {
+			reading = live.filter(r => !r.status || r.status === "待讀").sort(newest);
+			readingTitle = "下一篇讀這個";
+		}
+		let verify = live.filter(r => r.appraisal && !r.appraisalVerified && r.status !== "待讀").sort(newest);
+		let cutoff = now.getTime() - RECENT_DAYS * 86400000;
+		let recent = live.filter(r => Date.parse(r.dateAdded) >= cutoff).sort(newest);
+		let groups = [
+			["zm-reading", `${readingTitle}（${reading.length}）`, reading],
+			["zm-appraisal", `待核對的評讀（${verify.length}）`, verify],
+			["zm-inbox", `最近 ${RECENT_DAYS} 天加入（${recent.length}）`, recent],
+		].filter(([, , list]) => list.length);
+		if (!groups.length) return "";
+		let body = ([type, title, list]) => [...list.slice(0, START_ROWS).map(line), ...(list.length > START_ROWS ? [`- ……還有 ${list.length - START_ROWS} 篇`] : [])].join("\n");
+		if (opts.layout !== "board") {
+			return ["## ▶️ 從這裡開始", ...groups.map(g => `**${g[1]}**\n${body(g)}`)].join("\n\n");
+		}
+		let cards = groups.map(g => [`> [!${g[0]}] ${g[1]}`, ...body(g).split("\n").map(l => `> ${l}`)].join("\n"));
+		return [`> [!zm-board] ▶️ 從這裡開始`, ...cards.map(c => c.split("\n").map(l => `> ${l}`).join("\n"))].join("\n>\n");
+	}
+
+	function shortTitle(r) {
+		let t = String(r.title || r.name || "");
+		return cell(t.length > 60 ? t.slice(0, 58).trim() + "…" : t);
+	}
+
+	// Canvas colours (JSON Canvas presets) for the directions
+	const CANVAS_COLORS = { "有效": "4", "無差異": "5", "有害": "1", "不一致": "2" };
+	const CANVAS = { cardW: 320, cardH: 120, gap: 24, colGap: 60, groupPad: 30, head: 60 };
+
+	/**
+	 * A topic's evidence map as a JSON Canvas (Obsidian .canvas): the topic page on top, one group per effect
+	 * direction (有效 / 無差異 / 有害 / 不一致 / 未判定), a card per paper with its design, level, size, intervention and
+	 * outcomes, best evidence first. Node ids start with "zm-" (writeCanvas() tells them from the user's).
+	 */
+	function evidenceCanvas(topic, opts = {}) {
+		let nodes = [];
+		let edges = [];
+		let { cardW, cardH, gap, colGap, groupPad, head } = CANVAS;
+		let live = (topic.records || []).filter(r => !r.deleted);
+		let columns = [...DIRECTIONS, UNJUDGED].map(d => [d, live.filter(r => directionOf(r) === d).sort(sortForList)]).filter(([, list]) => list.length);
+		let colW = cardW + groupPad * 2;
+		let totalW = columns.length * colW + Math.max(0, columns.length - 1) * colGap;
+		let topW = 560;
+		nodes.push({ id: "zm-topic", type: opts.topicFile ? "file" : "text", ...(opts.topicFile ? { file: opts.topicFile } : { text: `# ${topic.name}` }),
+			x: Math.round((totalW - topW) / 2), y: 0, width: topW, height: 260 });
+		nodes.push({ id: "zm-info", type: "text", text: `由 ZotMax 自動產生（${stamp(opts.now)}），依結論方向分組；每次更新研究儀表板會重新排列。想自己排，請另存一份 Canvas。`,
+			x: Math.round((totalW - topW) / 2), y: -110, width: topW, height: 80 });
+		columns.forEach(([dir, list], i) => {
+			let x = i * (colW + colGap);
+			let y = 360;
+			let h = head + list.length * (cardH + gap) - gap + groupPad;
+			let gid = `zm-group-${i}`;
+			nodes.push(Object.assign({ id: gid, type: "group", label: `${dir}（${list.length}）`, x, y, width: colW, height: h }, CANVAS_COLORS[dir] ? { color: CANVAS_COLORS[dir] } : {}));
+			edges.push(Object.assign({ id: `zm-edge-${i}`, fromNode: "zm-topic", fromSide: "bottom", toNode: gid, toSide: "top" }, CANVAS_COLORS[dir] ? { color: CANVAS_COLORS[dir] } : {}));
+			list.forEach((r, k) => {
+				let facts = [designLabel(r.studyDesign), r.sampleSize !== null && r.sampleSize !== undefined ? `N = ${r.sampleSize}` : "", r.evidenceLevel ? `CEBM ${r.evidenceLevel}` : "", r.status].filter(Boolean).join(" · ");
+				let text = [`**${wikilink(r.link, shortTitle(r))}**${yearOf(r) ? ` (${yearOf(r)})` : ""}`, facts,
+					r.intervention ? `I：${oneLineShort(r.intervention)}` : "", r.outcomes ? `O：${oneLineShort(r.outcomes)}` : ""].filter(Boolean).join("\n");
+				nodes.push(Object.assign({ id: `zm-paper-${i}-${k}`, type: "text", text, x: x + groupPad, y: y + head + k * (cardH + gap), width: cardW, height: cardH },
+					CANVAS_COLORS[dir] ? { color: CANVAS_COLORS[dir] } : {}));
+			});
+		});
+		return JSON.stringify({ nodes, edges }, null, "\t");
+	}
+
+	function oneLineShort(t) {
+		let s = String(t || "").replace(/\s+/g, " ").trim();
+		return s.length > 70 ? s.slice(0, 68).trim() + "…" : s;
+	}
+
+	/** May we (re)write this canvas? Not when it has nodes the user added (ids without the "zm-" prefix). */
+	function canvasIsOurs(text) {
+		if (text === null || text === undefined) return true;
+		try {
+			let data = JSON.parse(text);
+			let nodes = (data && data.nodes) || [];
+			return nodes.some(n => n && n.id === "zm-info") && nodes.every(n => n && String(n.id).startsWith("zm-"));
+		}
+		catch (e) {
+			return false;
+		}
 	}
 
 	/**
@@ -483,11 +591,11 @@
 	}
 
 	/** The concept index's vault link when the file exists ("" otherwise). */
-	async function conceptIndexLink(settings, folderParts) {
+	async function conceptIndexLink(settings) {
 		try {
 			let concepts = scope.ZB && scope.ZB.concepts;
 			if (!concepts) return "";
-			let parts = [...folderParts, ...core.splitFolder(concepts.readOptions().folder), concepts.INDEX_NAME];
+			let parts = [...concepts.folderParts(settings), concepts.INDEX_NAME];
 			return (await IOUtils.exists(PathUtils.join(settings.vaultPath, ...parts) + ".md")) ? parts.join("/") : "";
 		}
 		catch (e) {
@@ -496,34 +604,57 @@
 	}
 
 	/**
-	 * Write 首頁.md and 主題/*.md. ctx (from dashboard.update): { records, stats, reviews, latestReport, layout,
-	 * aliases, now }. Returns { home: relPath, topics: n, written: n }.
+	 * Write 首頁.md and the topic pages: 主題/*.md (flat) or "00 <name> 總覽.md" in each collection's folder under
+	 * 10 文獻 (organized, core.js LAYOUTS). ctx (from dashboard.update): { records, stats, reviews, latestReport,
+	 * layout, aliases, now }. Returns { home: relPath, topics: n, written: n }.
 	 */
 	async function writeAll(settings, ctx) {
 		let now = ctx.now || new Date();
+		let organized = core.structureOf(settings) === "organized";
 		let folderParts = core.splitFolder(settings.defaults.obsidianFolder);
 		let rel = (...p) => [...folderParts, ...p].join("/");
-		let dir = PathUtils.join(settings.vaultPath, ...folderParts, TOPIC_FOLDER);
-		await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
-		let homeLink = rel(HOME_NAME);
-		let dashboardLink = rel(dashboard.NOTE_NAME);
+		let homeName = core.vaultPage(settings, "home");
+		let homeLink = rel(homeName);
+		let dashboardLink = rel(core.vaultPage(settings, "dashboard"));
 		let entries = [];
 		let written = 0;
 		let done = new Set();
 		for (let { topic, file } of assignFiles(groupTopics(ctx.records))) {
-			topic.link = rel(TOPIC_FOLDER, file);
+			let page = core.topicPage(settings, topic.path, file);
+			topic.link = [...page.dirParts, page.name].join("/");
 			let stats = topicStats(topic, { aliases: ctx.aliases, now });
 			entries.push({ topic, stats });
-			let path = PathUtils.join(dir, file + ".md");
+			let dir = PathUtils.join(settings.vaultPath, ...page.dirParts);
+			await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
+			let path = PathUtils.join(dir, page.name + ".md");
 			done.add(path);
+			// 🗺️ 證據地圖 next to the topic page; one the user added cards to is left alone
+			let canvasLink = "";
+			if (pref("dashboard.canvas") !== false) {
+				let canvasName = page.name.replace(/ 總覽$/, "") + " 證據地圖.canvas";
+				let canvasPath = PathUtils.join(dir, canvasName);
+				try {
+					let old = await readIfExists(canvasPath);
+					if (canvasIsOurs(old)) {
+						let json = evidenceCanvas(topic, { now, topicFile: [...page.dirParts, page.name + ".md"].join("/") });
+						// The info node's time changes every run: compare without it
+						let same = old !== null && old.replace(/"text": "由 ZotMax 自動產生（[^）]*）/, "") === json.replace(/"text": "由 ZotMax 自動產生（[^）]*）/, "");
+						if (!same && await writeIfChanged(canvasPath, json, old)) written++;
+					}
+					canvasLink = [...page.dirParts, canvasName].join("/");
+				}
+				catch (e) {
+					Zotero.debug(`ZotMax: no evidence map for ${topic.path}: ${e}`);
+				}
+			}
 			let existing = await readIfExists(path);
-			let text = buildPage(existing, topicSection(topic, stats, { now, layout: ctx.layout, homeLink, dashboardLink }), topic.name,
+			let text = buildPage(existing, topicSection(topic, stats, { now, layout: ctx.layout, homeLink, dashboardLink, organized, canvasLink }), topic.name,
 				{ type: "topic", zotero_collection: topic.path, studies: stats.total, updated: now.toISOString() });
 			if (await writeIfChanged(path, text, existing)) written++;
 		}
 		// Topic pages left from collections that have no notes now: their block says so
-		for (let child of await IOUtils.getChildren(dir)) {
-			if (done.has(child) || !/\.md$/i.test(child)) continue;
+		for (let child of await topicPageFiles(settings)) {
+			if (done.has(child)) continue;
 			try {
 				let existing = await IOUtils.readUTF8(child);
 				let fm = dashboard.parseFrontmatter(core.splitFrontmatter(existing).frontmatter || "");
@@ -536,16 +667,48 @@
 			}
 		}
 		let unfiled = ctx.records.filter(r => !r.deleted && !(r.collections || []).length).length;
-		let baseLink = (await IOUtils.exists(PathUtils.join(settings.vaultPath, ...folderParts, "Zotero 文獻庫.base"))) ? rel("Zotero 文獻庫.base") : "";
+		let systemParts = core.vaultFolder(settings, "system");
+		let baseLink = (await IOUtils.exists(PathUtils.join(settings.vaultPath, ...systemParts, "Zotero 文獻庫.base"))) ? [...systemParts, "Zotero 文獻庫.base"].join("/") : "";
 		let section = homeSection({
-			now, layout: ctx.layout, stats: ctx.stats, entries, unfiled, reviews: ctx.reviews, dashboardLink,
-			conceptIndex: await conceptIndexLink(settings, folderParts), latestReport: ctx.latestReport, baseLink,
+			now, layout: ctx.layout, stats: ctx.stats, entries, unfiled, reviews: ctx.reviews, dashboardLink, organized, records: ctx.records,
+			conceptIndex: await conceptIndexLink(settings), latestReport: ctx.latestReport, baseLink,
 		});
-		let homePath = PathUtils.join(settings.vaultPath, ...folderParts, HOME_NAME + ".md");
+		let homePath = PathUtils.join(settings.vaultPath, ...folderParts, homeName + ".md");
 		let existing = await readIfExists(homePath);
 		let text = buildPage(existing, section, HOME_NAME, { type: "home", updated: now.toISOString() });
 		if (await writeIfChanged(homePath, text, existing)) written++;
-		return { home: rel(HOME_NAME + ".md"), topics: entries.length, written };
+		return { home: rel(homeName + ".md"), topics: entries.length, written, organized };
+	}
+
+	/** Every topic page there is: 主題/*.md (flat), or "00 … 總覽.md" anywhere under 10 文獻 (organized). */
+	async function topicPageFiles(settings) {
+		if (core.structureOf(settings) !== "organized") {
+			let dir = PathUtils.join(settings.vaultPath, ...core.vaultFolder(settings, "topics"));
+			try {
+				return (await IOUtils.getChildren(dir)).filter(c => /\.md$/i.test(c));
+			}
+			catch (e) {
+				return [];
+			}
+		}
+		let out = [];
+		let visit = async (dir, depth) => {
+			let children;
+			try {
+				children = await IOUtils.getChildren(dir);
+			}
+			catch (e) {
+				return;
+			}
+			for (let child of children) {
+				let name = PathUtils.filename(child);
+				if (name.startsWith(".")) continue;
+				if (/^00 .+ 總覽\.md$/.test(name)) out.push(child);
+				else if (depth < 16 && !/\.[a-z0-9]+$/i.test(name) && (await IOUtils.stat(child)).type === "directory") await visit(child, depth + 1);
+			}
+		};
+		await visit(PathUtils.join(settings.vaultPath, ...core.vaultFolder(settings, "literature")), 0);
+		return out;
 	}
 
 	/** Called by dashboard.update(); off with the pref dashboard.topicPages = false. Never throws. */
@@ -563,7 +726,7 @@
 	return {
 		HOME_NAME, TOPIC_FOLDER, DIRECTIONS, UNJUDGED, MAX_CARDS,
 		topicFileName, groupTopics, tally, verdict, termGroups, trendOf, topicStats, nextSteps,
-		topicOverview, topicSection, staleSection, topicCard, topicsBlock, quickLinks, homeSection, buildPage, assignFiles,
+		topicOverview, topicSection, staleSection, topicCard, topicsBlock, quickLinks, homeSection, startHere, evidenceCanvas, canvasIsOurs, buildPage, assignFiles,
 		writeAll, afterDashboard,
 	};
 });

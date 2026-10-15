@@ -36,9 +36,7 @@
 	const HISTORY_PREF = "progressReport.history";
 	const OPTIONS_PREF = "progressReport.options";
 	const REPORT_FOLDER = "進度報告";
-	const REVIEW_FOLDER = "Reviews";
 	const DRAFTS_FOLDER = "Drafts";
-	const DIGEST_FOLDER = "新文獻";
 	const FILTER_FILE = "zotero-bridge-report.lua";
 	const DIALOG_TITLE = "ZotMax：進度報告";
 	const DEFAULT_DAYS = 14;
@@ -648,18 +646,32 @@
 
 	// ---------- the note and Pandoc (pure) ----------
 
+	/** Relative path from a folder (parts) to a file (parts), with "/" separators. */
+	function relativePath(fromDirParts, toParts) {
+		let i = 0;
+		while (i < fromDirParts.length && i < toParts.length - 1 && fromDirParts[i] === toParts[i]) i++;
+		return [...Array(fromDirParts.length - i).fill(".."), ...toParts.slice(i)].join("/");
+	}
+
 	function shellQuote(s) {
 		return /^[\p{L}\p{N}._\/@+-]+$/u.test(s) ? s : `"${String(s).replace(/(["\\$`])/g, "\\$1")}"`;
 	}
 
-	/** Where the report goes and the Pandoc command (with a reference .docx from Drafts when there is one). */
-	function reportPaths(folderParts, date, referenceDoc) {
-		let dirParts = [...folderParts, REPORT_FOLDER];
+	/**
+	 * Where the report goes and the Pandoc command (with a reference .docx from the drafts folder when there is
+	 * one). layout: { dirParts, draftsParts } of the vault layout (core.js); without it, 進度報告/ and Drafts/ under
+	 * folderParts (the flat layout).
+	 */
+	function reportPaths(folderParts, date, referenceDoc, layout = {}) {
+		let dirParts = layout.dirParts || [...folderParts, REPORT_FOLDER];
+		let draftsParts = layout.draftsParts || [...folderParts, DRAFTS_FOLDER];
 		let fileName = `${date}.md`;
 		let docx = `進度報告-${date}.docx`;
-		let ref = referenceDoc ? ` --reference-doc ${shellQuote(`../${DRAFTS_FOLDER}/${referenceDoc}`)}` : "";
+		let ref = referenceDoc ? ` --reference-doc ${shellQuote(relativePath(dirParts, [...draftsParts, referenceDoc]))}` : "";
 		return {
 			dirParts,
+			// The drafts folder as the notes name it (under the default folder)
+			draftsLabel: draftsParts.slice(folderParts.length).join("/") || DRAFTS_FOLDER,
 			fileName,
 			relPath: [...dirParts, fileName].join("/"),
 			link: [...dirParts, date].join("/"),
@@ -722,8 +734,8 @@ end
 			"",
 			`- \`${FILTER_FILE}\`：插件放在同一資料夾，轉檔時略過 %% 標記、提示框、本節與「我的筆記」，並把筆記連結換成文字。`,
 			paths.referenceDoc
-				? `- \`--reference-doc\`：沿用 \`${DRAFTS_FOLDER}/${paths.referenceDoc}\` 的 Word 樣式；不需要可以拿掉。`
-				: `- 想套用論文的 Word 樣式：把範本存成 \`${DRAFTS_FOLDER}/reference.docx\`，下次產生報告時指令會自動加上 \`--reference-doc\`。`,
+				? `- \`--reference-doc\`：沿用 \`${paths.draftsLabel || DRAFTS_FOLDER}/${paths.referenceDoc}\` 的 Word 樣式；不需要可以拿掉。`
+				: `- 想套用論文的 Word 樣式：把範本存成 \`${paths.draftsLabel || DRAFTS_FOLDER}/reference.docx\`，下次產生報告時指令會自動加上 \`--reference-doc\`。`,
 		].join("\n");
 	}
 
@@ -903,9 +915,14 @@ end
 		return core.splitFolder(settings.defaults.obsidianFolder);
 	}
 
+	/** <F>/進度報告 or <F>/40 寫作/進度報告 (core.js layout). */
+	function reportParts(settings) {
+		return core.vaultFolder(settings, "reports");
+	}
+
 	/** Report notes in <folder>/進度報告: [{ date, path }] (files named YYYY-MM-DD.md), oldest first. */
 	async function reportFiles(settings) {
-		let dir = PathUtils.join(settings.vaultPath, ...folderParts(settings), REPORT_FOLDER);
+		let dir = PathUtils.join(settings.vaultPath, ...reportParts(settings));
 		let out = [];
 		for (let child of await children(dir)) {
 			let m = /^(\d{4}-\d{2}-\d{2})\.md$/i.exec(PathUtils.filename(child));
@@ -920,7 +937,7 @@ end
 			if (!settings || !settings.vaultPath) return null;
 			let files = await reportFiles(settings);
 			let last = files[files.length - 1];
-			return last ? { date: last.date, link: [...folderParts(settings), REPORT_FOLDER, last.date].join("/") } : null;
+			return last ? { date: last.date, link: [...reportParts(settings), last.date].join("/") } : null;
 		}
 		catch (e) {
 			Zotero.logError(e);
@@ -988,8 +1005,9 @@ end
 		return out.sort((a, b) => b.date.localeCompare(a.date));
 	}
 
-	async function projectNotes(settings, sub) {
-		let dirParts = [...folderParts(settings), sub];
+	/** The files in the reviews or drafts folder (kind, core.js layout). */
+	async function projectNotes(settings, kind) {
+		let dirParts = core.vaultFolder(settings, kind);
 		let out = [];
 		for (let child of await children(PathUtils.join(settings.vaultPath, ...dirParts))) {
 			let name = PathUtils.filename(child);
@@ -1001,7 +1019,7 @@ end
 
 	async function reviewRecords(settings) {
 		let out = [];
-		for (let f of await projectNotes(settings, REVIEW_FOLDER)) {
+		for (let f of await projectNotes(settings, "reviews")) {
 			if (!/\.md$/i.test(f.name)) continue;
 			try {
 				let r = reviewRecord((await readFrontmatter(f.path)) || "", f.relPath);
@@ -1018,7 +1036,7 @@ end
 	async function draftRecords(settings) {
 		let drafts = [];
 		let names = [];
-		for (let f of await projectNotes(settings, DRAFTS_FOLDER)) {
+		for (let f of await projectNotes(settings, "drafts")) {
 			names.push(f.name);
 			if (!/\.md$/i.test(f.name)) continue;
 			try {
@@ -1034,7 +1052,7 @@ end
 	}
 
 	async function digests(settings, period) {
-		let dirParts = [...folderParts(settings), DIGEST_FOLDER];
+		let dirParts = core.vaultFolder(settings, "digest");
 		let out = [];
 		for (let child of await children(PathUtils.join(settings.vaultPath, ...dirParts))) {
 			let m = /^(\d{4}-\d{2}-\d{2})\.md$/i.exec(PathUtils.filename(child));
@@ -1295,7 +1313,7 @@ end
 			Zotero.logError(e);
 		}
 		let prevFile = files.filter(f => f.date === prevDate)[0];
-		let previous = prevDate ? { date: prevDate, link: [...folderParts(settings), REPORT_FOLDER, prevDate].join("/"), path: prevFile ? prevFile.path : "" } : null;
+		let previous = prevDate ? { date: prevDate, link: [...reportParts(settings), prevDate].join("/"), path: prevFile ? prevFile.path : "" } : null;
 		return ZB.main.enqueue(() => generate(settings, answer, { date: today, previous, previousEntry: previousEntry(history, today), currentNote }));
 	}
 
@@ -1392,7 +1410,8 @@ end
 			let runTotals = { ledger: {} };
 			let summary = answer.ai ? await aiSummary(settings, toPlainText(sectionsMd), period, line, runTotals, notes) : null;
 
-			let paths = reportPaths(folderParts(settings), ctx.date, facts.referenceDoc);
+			let paths = reportPaths(folderParts(settings), ctx.date, facts.referenceDoc,
+				{ dirParts: reportParts(settings), draftsParts: core.vaultFolder(settings, "drafts") });
 			let generatedAt = new Date().toISOString();
 			let meta = { date: ctx.date, period, previous: ctx.previous, generatedAt, paths, model: summary ? summary.model : "" };
 			let history = readHistory();

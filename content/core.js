@@ -802,13 +802,74 @@
 		let { keyPoints, sections } = buildNoteSections(data, Object.assign({}, opts, { target: "obsidian" }));
 		// opts.layout: "board" (看板, the default the sync passes) or anything else for the classic 「重點」 callout
 		let top = opts.layout === "board" ? buildBoard(data, opts) : callout("abstract", "重點", keyPoints, false);
-		let parts = [MARK_START, top];
-		for (let s of sections) parts.push(callout(s.type, s.title, s.md, true));
+		let anchors = opts.nav ? sectionAnchors(sections) : new Map();
+		let parts = [MARK_START];
+		if (opts.nav) parts.push(navBar(opts.nav, anchors, opts.fullTextLink));
+		parts.push(top);
+		for (let s of sections) {
+			let block = callout(s.type, s.title, s.md, true);
+			// A block ID after the callout: the 「跳到」 links scroll to it (Obsidian hides the ID line)
+			parts.push(anchors.has(s.id) ? `${block}\n\n^${anchors.get(s.id).id}` : block);
+		}
 		parts.push(MARK_END);
 		return parts.join("\n\n");
 	}
 
-	const USER_SECTION = "## ✍️ 我的筆記\n\n";
+	// The folded sections the navigation bar jumps to: section id (or prefix) → block ID and label
+	const NAV_TARGETS = [
+		["annotations:", "zm-highlights", "劃線"], ["appraisal", "zm-appraisal", "評讀表"], ["ai", "zm-ai", "AI 筆記"],
+		["abstract", "zm-abstract", "摘要"],
+	];
+
+	/** section id → { id, label } for the first section of each kind the note has. */
+	function sectionAnchors(sections) {
+		let out = new Map();
+		for (let [match, id, label] of NAV_TARGETS) {
+			let s = sections.find(x => (match.endsWith(":") ? x.id.startsWith(match) : x.id === match));
+			if (s) out.set(s.id, { id, label });
+		}
+		return out;
+	}
+
+	/**
+	 * The navigation bar at the top of a literature note (organized layout): 🏠 首頁 › its topic pages, then
+	 * 「跳到」 the folded sections, the full text and 「✍️ 我的筆記」. nav: { home: vault link | "", topics: [{ link,
+	 * label }] }.
+	 */
+	function navBar(nav, anchors, fullTextLink) {
+		let crumbs = [];
+		if (nav.home) crumbs.push(`[[${nav.home}|🏠 首頁]]`);
+		let topics = (nav.topics || []).filter(t => t && t.link).map(t => `[[${t.link}|${t.label}]]`);
+		if (topics.length) crumbs.push(topics.join(" · "));
+		let jumps = [...anchors.values()].map(a => `[[#^${a.id}|${a.label}]]`);
+		if (fullTextLink) jumps.push(`[[${fullTextLink}|全文]]`);
+		jumps.push(`[[#${USER_HEADING}|✍️ 我的筆記]]`);
+		return `> [!zm-nav] ${crumbs.length ? crumbs.join(" › ") : "📄 文獻筆記"}\n> 跳到：${jumps.join(" · ")}`;
+	}
+
+	/**
+	 * The nav argument for a note: the home page and the topic pages of the item's collections (primary first,
+	 * at most three), as vault links. exists(parts) says whether a page is there (pages not written yet are left
+	 * out). Organized layout only; null otherwise.
+	 */
+	async function noteNav(settings, data, exists) {
+		if (structureOf(settings) !== "organized") return null;
+		let root = splitFolder(settings.defaults && settings.defaults.obsidianFolder);
+		let homeParts = [...root, vaultPage(settings, "home")];
+		let home = (await exists(homeParts)) ? homeParts.join("/") : "";
+		let primary = primaryCollection(data.collections);
+		let cols = [...new Set([primary, ...(data.collections || [])].filter(Boolean))].slice(0, 3);
+		let topics = [];
+		for (let c of cols) {
+			let page = topicPage(settings, c);
+			let parts = [...page.dirParts, page.name];
+			if (await exists(parts)) topics.push({ link: parts.join("/"), label: collectionParts(c).join(" › ") });
+		}
+		return { home, topics };
+	}
+
+	const USER_HEADING = "✍️ 我的筆記";
+	const USER_SECTION = `## ${USER_HEADING}\n\n`;
 
 	/**
 	 * Build the full Obsidian note. When `existing` is given, user-owned content
@@ -927,6 +988,109 @@
 		].join("\n");
 	}
 
+	// ---------- Vault layout ----------
+
+	/*
+	 * Where things go under the default folder <F>. "organized" (the default since 0.23.0) follows the Zotero
+	 * collections and numbers the top folders so they sort in reading order; "flat" is the layout before it
+	 * (notes directly in <F>, English and Chinese subfolders side by side). vault-layout.js moves a flat vault over.
+	 *
+	 *   organized                                   flat
+	 *   <F>/00 首頁.md, 01 研究儀表板.md              <F>/首頁.md, 研究儀表板.md
+	 *   <F>/10 文獻/<collection path>/<note>.md       <F>/<note>.md
+	 *        …/<note> · 全文.md, …/附件/*.png          <F>/全文/<note>.md, <F>/attachments/*.png
+	 *        …/00 <collection> 總覽.md (topic page)    <F>/主題/<A／B>.md
+	 *   <F>/10 文獻/未分類/ (no collection)
+	 *   <F>/20 概念/                                 <F>/概念/
+	 *   <F>/30 評讀與綜整/ (+ 文獻比較/)               <F>/Reviews/, <F>/文獻比較/
+	 *   <F>/40 寫作/文獻探討/, 40 寫作/進度報告/        <F>/Drafts/, <F>/進度報告/
+	 *   <F>/50 新文獻/                               <F>/新文獻/
+	 *   <F>/90 系統/ (.base, references.json)         <F>/
+	 */
+	const LAYOUTS = {
+		organized: {
+			literature: ["10 文獻"], unfiled: ["10 文獻", "未分類"], concepts: ["20 概念"],
+			reviews: ["30 評讀與綜整"], synthesis: ["30 評讀與綜整", "文獻比較"],
+			drafts: ["40 寫作", "文獻探討"], reports: ["40 寫作", "進度報告"], digest: ["50 新文獻"], system: ["90 系統"],
+			topics: null, home: "00 首頁", dashboard: "01 研究儀表板", attachments: "附件",
+		},
+		flat: {
+			literature: [], unfiled: [], concepts: ["概念"],
+			reviews: ["Reviews"], synthesis: ["文獻比較"],
+			drafts: ["Drafts"], reports: ["進度報告"], digest: ["新文獻"], system: [],
+			topics: ["主題"], home: "首頁", dashboard: "研究儀表板", attachments: "attachments",
+		},
+	};
+	const FULLTEXT_SUFFIX = " · 全文";
+	const TOPIC_PAGE = (leaf) => `00 ${leaf} 總覽`;
+
+	/** "organized" or "flat" (settings.structure, from the pref obsidian.structure; anything else is flat). */
+	function structureOf(settings) {
+		return settings && settings.structure === "organized" ? "organized" : "flat";
+	}
+
+	function layoutOf(settings) {
+		return LAYOUTS[structureOf(settings)];
+	}
+
+	/**
+	 * A folder of the layout as vault-relative parts: literature, unfiled, concepts, reviews, synthesis, drafts,
+	 * reports, digest, system (topics: flat only, null when organized).
+	 */
+	function vaultFolder(settings, kind) {
+		let sub = layoutOf(settings)[kind];
+		if (sub === null) return null;
+		return [...splitFolder(settings && settings.defaults && settings.defaults.obsidianFolder), ...sub];
+	}
+
+	/** The file name (no .md) of the home or dashboard page. */
+	function vaultPage(settings, kind) {
+		return layoutOf(settings)[kind];
+	}
+
+	/** Collection path "碩論/跌倒" → folder parts ["碩論", "跌倒"]. */
+	function collectionParts(path) {
+		return String(path || "").split("/").map(s => s.trim()).filter(Boolean).map(sanitizeFilename);
+	}
+
+	/**
+	 * The collection whose folder holds the note: the deepest one (a note in 碩論 and 碩論/跌倒 goes to 跌倒),
+	 * then the first in Chinese collation, so the choice does not depend on Zotero's order. "" for none.
+	 */
+	function primaryCollection(collections) {
+		let list = [...new Set((collections || []).map(c => String(c || "").trim()).filter(Boolean))];
+		list.sort((a, b) => collectionParts(b).length - collectionParts(a).length || a.localeCompare(b, "zh-Hant"));
+		return list[0] || "";
+	}
+
+	/**
+	 * The folder of an item's literature note. A routing rule's own folder wins; otherwise organized: 10 文獻/<primary
+	 * collection> (or 未分類), flat: the default folder.
+	 */
+	function noteFolder(settings, route, data) {
+		let defaults = (settings && settings.defaults) || {};
+		let ruleFolder = route && route.obsidianFolder && route.obsidianFolder !== (defaults.obsidianFolder || "");
+		if (ruleFolder || structureOf(settings) !== "organized") return splitFolder(route ? route.obsidianFolder : defaults.obsidianFolder);
+		let primary = primaryCollection(data && data.collections);
+		return primary ? [...vaultFolder(settings, "literature"), ...collectionParts(primary)] : vaultFolder(settings, "unfiled");
+	}
+
+	/** Every folder the item's note may sit in without being moved (organized; its collections, else 未分類). */
+	function noteFolders(settings, data) {
+		let cols = (data && data.collections || []).filter(c => String(c || "").trim());
+		if (!cols.length) return [vaultFolder(settings, "unfiled")];
+		return cols.map(c => [...vaultFolder(settings, "literature"), ...collectionParts(c)]);
+	}
+
+	/** The topic page of a collection: { dirParts, name } (organized: in the collection's folder, "00 <name> 總覽"). */
+	function topicPage(settings, collectionPath, flatName) {
+		let parts = collectionParts(collectionPath);
+		if (structureOf(settings) === "organized") {
+			return { dirParts: [...vaultFolder(settings, "literature"), ...parts], name: sanitizeFilename(TOPIC_PAGE(parts[parts.length - 1] || "未分類")) };
+		}
+		return { dirParts: vaultFolder(settings, "topics"), name: flatName || sanitizeFilename(parts.join("／")) };
+	}
+
 	// ---------- Routing ----------
 
 	/**
@@ -981,6 +1145,7 @@
 		annotationsMarkdown, buildManagedSection, buildObsidianNote, buildNoteSections, callout, bar, buildBoard, nextSteps,
 		DEFAULT_COLOR_MEANINGS, colorMeanings, annotationGroups, topHighlights, keyPoints, shorten, oneLine, oneSentence, keyFindings, aiNoteBody, factsLine,
 		resolveRoute, parseRules, truncate, buildBaseFile, STATUSES, DELETED_STATUS,
+		LAYOUTS, FULLTEXT_SUFFIX, navBar, sectionAnchors, noteNav, structureOf, vaultFolder, vaultPage, collectionParts, primaryCollection, noteFolder, noteFolders, topicPage,
 		frontmatterScalar, setFrontmatterValue, zoteroKeyFromHead, markObsidianNoteDeleted,
 	};
 });

@@ -133,7 +133,8 @@ function makeEnv({ prefs = {}, mac = false } = {}) {
 		getAttachments() { return []; }
 	}
 
-	let prefStore = Object.assign({}, prefs);
+	// The suites below were written for the flat vault layout; vault-layout-smoke covers the organized one
+	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat" }, prefs);
 	let observers = new Map();
 	let win = makeMainWindow(selection, dialogs);
 	let Zotero = {
@@ -377,7 +378,7 @@ test("catalog: unique IDs, every command and variant runnable, real switches, ke
 	}
 	// Every command is gated by a real switch except the ones that must stay reachable
 	let ungated = C.COMMANDS.filter(c => !c.features.length).map(c => c.id);
-	same(ungated, ["stop", "discard", "classify-undo", "zh-meta-undo", "ai-batch-check", "ai-batch-cancel"]);
+	same(ungated, ["stop", "discard", "classify-undo", "vault-layout", "zh-meta-undo", "ai-batch-check", "ai-batch-cancel"]);
 	// The list variants fill as many slots as the modules allow
 	assert.equal(C.get("screen-ft-exclude").max, env.ZB.screening.MAX_MENU_REASONS);
 	assert.equal(C.get("search-db").max, env.ZB.searchLinks.MENU_SLOTS);

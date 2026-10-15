@@ -670,7 +670,7 @@
 	async function writeDigest(settings, results, now) {
 		let groups = results.filter(r => r.imported.length).map(r => ({ name: r.name, entries: r.imported }));
 		if (!groups.length || !settings.vaultPath) return "";
-		let parts = [...core.splitFolder(settings.defaults.obsidianFolder), DIGEST_FOLDER];
+		let parts = core.vaultFolder(settings, "digest");
 		let dir = PathUtils.join(settings.vaultPath, ...parts);
 		let date = localDate(now);
 		let path = PathUtils.join(dir, `${date}.md`);

@@ -70,7 +70,8 @@ function makeEnv({ prefs, fetch, confirm = () => true }) {
 	}
 
 	let collections = new Map();
-	let prefStore = Object.assign({}, prefs);
+	// The suites below were written for the flat vault layout; vault-layout-smoke covers the organized one
+	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat" }, prefs);
 	let activeCollection = null;
 	let Zotero = {
 		Prefs: { get: k => prefStore[k], set: (k, v) => { prefStore[k] = v; }, clear: (k) => { delete prefStore[k]; } },
@@ -288,7 +289,7 @@ test("a manual sync writes the dashboard and its .base; 快速指令 or the tool
 	assert.match(text, /還沒有回顧專案/);
 	// Every linked note exists
 	for (let [, target] of text.matchAll(/\[\[([^|\]]+)[|\]]/g)) {
-		assert.ok(fs.existsSync(path.join(env.vault, target.endsWith(".base") ? target : target + ".md")), target);
+		assert.ok(fs.existsSync(path.join(env.vault, /\.(base|canvas)$/.test(target) ? target : target + ".md")), target);
 	}
 	let basePath = path.join(env.vault, "Zotero", "研究儀表板.base");
 	assert.equal(fs.readFileSync(basePath, "utf8"), ZB.dashboard.buildDashboardBase());
@@ -312,7 +313,7 @@ test("a manual sync writes the dashboard and its .base; 快速指令 or the tool
 	assert.match(topic, /\| \[\[Zotero\/Author1 2024 - Study 1 of fall prevention in hospitals\\\|Study 1 of fall prevention in hospitals\]\] \| 2024 \| RCT \| L2 \|/);
 	assert.match(topic, /\*\*1 篇還沒有 AI 筆記\*\*/);
 	for (let [, target] of (home + topic).matchAll(/\[\[([^|\]\\]+)(?:\\?\||\]\])/g)) {
-		assert.ok(fs.existsSync(path.join(env.vault, target.endsWith(".base") ? target : target + ".md")), target);
+		assert.ok(fs.existsSync(path.join(env.vault, /\.(base|canvas)$/.test(target) ? target : target + ".md")), target);
 	}
 	fs.writeFileSync(topicPath, topic + "主題心得。\n");
 

@@ -173,3 +173,39 @@ test("buildPage: a new page; later only the managed block and the given keys cha
 	assert.match(stale, /> \[!warning\] Zotero 分類「碩論\/跌倒」目前沒有文獻筆記（2026-10-14 09:00 檢查）/);
 	assert.match(stale, /心得。\n$/);
 });
+
+test("首頁「從這裡開始」: 閱讀中 first (else the newest 待讀), unverified AI appraisals, the last 14 days", () => {
+	let rs = [
+		note("Reading", { status: "閱讀中", design: "RCT" }), note("Waiting", { status: "待讀" }),
+		note("Checked", { status: "已讀", verified: true }), note("Unchecked", { status: "已讀" }),
+	];
+	rs[1].dateAdded = "2026-10-10T00:00:00Z";
+	// The AI's appraisal, not yet checked (the reading one too)
+	rs[0].appraisal = rs[3].appraisal = "納入";
+	let md = T.startHere(rs, { now: NOW, layout: "board" });
+	assert.match(md, /^> \[!zm-board\] ▶️ 從這裡開始\n>\n> > \[!zm-reading\] 繼續閱讀（1）\n> > - \[\[Zotero\/Reading\|Reading\]\] · 2024 · RCT\n>\n> > \[!zm-appraisal\] 待核對的評讀（2）\n/);
+	assert.match(md, /> > \[!zm-inbox\] 最近 14 天加入（1）\n> > - \[\[Zotero\/Waiting\|Waiting\]\]/);
+	assert.doesNotMatch(md, /Checked\]\]/, "a verified appraisal isn't listed");
+	// Nothing 閱讀中: the newest 待讀 instead; classic: headings and lists
+	let classic = T.startHere([rs[1]], { now: NOW, layout: "classic" });
+	assert.match(classic, /^## ▶️ 從這裡開始\n\n\*\*下一篇讀這個（1）\*\*\n- \[\[Zotero\/Waiting\|Waiting\]\]/);
+	assert.equal(T.startHere([], { now: NOW }), "");
+});
+
+test("證據地圖 canvas: the topic page on top, a coloured group per direction, a card per paper; the user's canvas stays", () => {
+	let topic = T.groupTopics(falls())[0];
+	let json = T.evidenceCanvas(topic, { now: NOW, topicFile: "Zotero/主題/碩論／跌倒.md" });
+	let c = JSON.parse(json);
+	assert.equal(c.nodes[0].file, "Zotero/主題/碩論／跌倒.md");
+	let groups = c.nodes.filter(n => n.type === "group");
+	assert.deepEqual(groups.map(g => [g.label, g.color]), [["有效（3）", "4"], ["無差異（1）", "5"], ["未判定（1）", undefined]]);
+	assert.equal(c.edges.length, 3);
+	let cards = c.nodes.filter(n => n.id.startsWith("zm-paper-"));
+	assert.equal(cards.length, 5);
+	assert.match(cards[0].text, /^\*\*\[\[Zotero\/D\|D\]\]\*\* \(2024\)\nRCT · N = 30 · CEBM 1 · 待讀\nI：多因子介入\nO：跌倒發生率$/, "best evidence first");
+	assert.ok(c.nodes.every(n => n.id.startsWith("zm-")));
+	assert.equal(T.canvasIsOurs(json), true);
+	assert.equal(T.canvasIsOurs(null), true);
+	assert.equal(T.canvasIsOurs(JSON.stringify({ nodes: [...c.nodes, { id: "a1b2", type: "text" }] })), false);
+	assert.equal(T.canvasIsOurs("{ broken"), false);
+});

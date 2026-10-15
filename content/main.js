@@ -50,6 +50,8 @@
 			filenameFormat: pref("obsidian.filenameFormat") || "citekey",
 			createBase: pref("obsidian.createBase") !== false,
 			includeNotes: pref("includeNotes") !== false,
+			// 10 文獻/<collection> or the flat layout before 0.23.0 (core.js LAYOUTS; vault-layout.js picks it once)
+			structure: pref("obsidian.structure") === "flat" ? "flat" : "organized",
 			defaults: {
 				obsidianFolder: pref("obsidian.folder") || "",
 				notionDatabase: String(pref("notion.database") || "").trim(),
@@ -61,6 +63,8 @@
 	async function readSettings() {
 		let provider = pref("llm.provider") === "openai" ? "openai" : "anthropic";
 		let vault = vaultSettings();
+		// First run with a vault: keep a vault that already has the flat layout flat until 整理 vault
+		if (!pref("obsidian.structure") && vault.vaultPath) vault.structure = await ZB.vaultLayout.detect(vault);
 		// Secrets live in the login manager (secrets.js), not in prefs
 		let notionToken = await ZB.secrets.get("notionToken");
 		let apiKey = await ZB.secrets.get(provider === "openai" ? "openaiKey" : "anthropicKey");
@@ -343,13 +347,13 @@
 		let fullTextInfo = rendered ? Object.assign({ rendered, engine: fullText.sources[0].engine }, ftOptions) : null;
 
 		let route = ZB.core.resolveRoute(data, settings.rules, settings.defaults);
-		let folderParts = ZB.core.splitFolder(route.obsidianFolder);
+		let folderParts = ZB.core.noteFolder(settings, route, data);
 		let basename = ZB.core.noteBasename(data, settings.filenameFormat);
 		let obsidian = null;
 		if (settings.vaultPath) {
 			// A changed citekey/title renames the existing note, but only when this run writes Obsidian
 			obsidian = await resolveObsidianPath(settings, folderParts, basename, data, {
-				index: ctx.obsidianIndex, rename: action.targets.has("obsidian"),
+				index: ctx.obsidianIndex, rename: action.targets.has("obsidian"), moves: ctx.moves,
 			});
 		}
 		// Reading status merged across Zotero, Notion and Obsidian before anything is written (status.js)
@@ -478,6 +482,8 @@
 			path: PathUtils.join(settings.vaultPath, ...relParts),
 			relParts,
 			relPath,
+			// Full text "<name> · 全文" and images in 附件 next to the note (organized), or 全文/ and attachments/
+			structure: ZB.core.structureOf(settings),
 			uri: settings.vaultName ? ZB.core.obsidianURI(settings.vaultName, relPath) : "",
 		};
 	}
@@ -501,6 +507,14 @@
 			let notes = (await opts.index.get()).get(zoteroKey) || [];
 			let fileName = n => n.relParts[n.relParts.length - 1].replace(/\.md$/i, "");
 			let found = notes.find(n => fileName(n) === basename || fileName(n) === altName) || notes[0];
+			// Organized: the item moved to another collection in Zotero → its note (with full text and images) follows
+			if (found && opts.rename) {
+				let moved = await ZB.vaultLayout.relocate(settings, found, data, opts.moves);
+				if (moved) {
+					found.path = moved.path;
+					found.relParts = moved.relParts;
+				}
+			}
 			if (found) {
 				let name = fileName(found);
 				if (opts.rename && name !== basename && name !== altName) {
@@ -576,7 +590,7 @@
 			}
 			else {
 				let route = ZB.core.resolveRoute(data, settings.rules, settings.defaults);
-				target = await resolveObsidianPath(settings, ZB.core.splitFolder(route.obsidianFolder), ZB.core.noteBasename(data, settings.filenameFormat), data);
+				target = await resolveObsidianPath(settings, ZB.core.noteFolder(settings, route, data), ZB.core.noteBasename(data, settings.filenameFormat), data);
 			}
 			if ((await noteOwner(target.path)) !== `${data.libraryPath}/${data.key}`) return out;
 			let text = await IOUtils.readUTF8(target.path);
@@ -614,7 +628,7 @@
 		}
 		else {
 			let route = ZB.core.resolveRoute(data, settings.rules, settings.defaults);
-			target = await resolveObsidianPath(settings, ZB.core.splitFolder(route.obsidianFolder), ZB.core.noteBasename(data, settings.filenameFormat), data,
+			target = await resolveObsidianPath(settings, ZB.core.noteFolder(settings, route, data), ZB.core.noteBasename(data, settings.filenameFormat), data,
 				{ index: obsidianIndexCache(settings) });
 		}
 		if ((await noteOwner(target.path)) !== `${data.libraryPath}/${data.key}`) return null;
@@ -668,6 +682,8 @@
 			colorMeanings: pref("annotations.colorMeanings") || "",
 			aiHighlights: opts.aiHighlights,
 			fullTextLink,
+			// 🏠 首頁 › topic pages and 「跳到」 at the top (organized layout; pages that exist only)
+			nav: opts.settings ? await noteNav(opts.settings, data) : null,
 			now: nowISO(),
 		});
 		text = ZB.status.applyPlanToNote(text, opts.status);
@@ -676,10 +692,23 @@
 		}
 	}
 
+	/** The navigation bar's links for a note (core.noteNav); never throws. */
+	async function noteNav(settings, data) {
+		try {
+			// 首頁 and the topic pages are rebuilt after each manual sync: link them even before the first one
+			let built = featureOn("dashboard") && pref("dashboard.topicPages") !== false && pref("dashboard.autoUpdate") !== false;
+			return await ZB.core.noteNav(settings, data, async parts => built || IOUtils.exists(PathUtils.join(settings.vaultPath, ...parts) + ".md"));
+		}
+		catch (e) {
+			Zotero.debug(`ZotMax: no navigation bar: ${e}`);
+			return null;
+		}
+	}
+
 	// Create the Obsidian Bases overview (table + reading-status kanban) once; never overwrite it
 	async function ensureBaseFile(settings) {
 		if (!settings.vaultPath || !settings.createBase) return;
-		let dir = PathUtils.join(settings.vaultPath, ...ZB.core.splitFolder(settings.defaults.obsidianFolder));
+		let dir = PathUtils.join(settings.vaultPath, ...ZB.core.vaultFolder(settings, "system"));
 		let path = PathUtils.join(dir, "Zotero 文獻庫.base");
 		if (await IOUtils.exists(path)) return;
 		await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
@@ -992,6 +1021,8 @@
 			schemaCache: new Map(),
 			schemaHints: new Set(),
 			obsidianIndex: settings.vaultPath ? obsidianIndexCache(settings) : null,
+			// Notes this run moved to follow their Zotero collection (old → new link target; vault-layout.js)
+			moves: new Map(),
 			notion(token) {
 				if (!clients.has(token)) clients.set(token, notionClient(token));
 				return clients.get(token);
@@ -1072,6 +1103,8 @@
 				Zotero.logError(e);
 			}
 		}
+		// Links to the notes this run moved to another collection's folder; never throws
+		if (ctx.moves.size) await ZB.vaultLayout.afterMoves(settings, ctx.moves);
 		if (pw) {
 			let quoteSummary = items.length > 1 ? ZB.verify.summarize(quotes) : "";
 			pw.addDescription(`完成 ${ok} 筆${failures.length ? `，失敗 ${failures.length} 筆（詳見 說明 → 除錯輸出記錄）` : ""}`
@@ -1378,11 +1411,11 @@
 					let index = obsidianIndexCache(settings);
 					for (let [i, src] of sources.entries()) {
 						let route = ZB.core.resolveRoute(src.data, settings.rules, settings.defaults);
-						let target = await resolveObsidianPath(settings, ZB.core.splitFolder(route.obsidianFolder),
+						let target = await resolveObsidianPath(settings, ZB.core.noteFolder(settings, route, src.data),
 							ZB.core.noteBasename(src.data, settings.filenameFormat), src.data, { index });
 						if (await IOUtils.exists(target.path)) linkTargets[entries[i].id] = target.relPath.replace(/\.md$/i, "");
 					}
-					let dir = PathUtils.join(settings.vaultPath, ...ZB.core.splitFolder(settings.defaults.obsidianFolder), "文獻比較");
+					let dir = PathUtils.join(settings.vaultPath, ...ZB.core.vaultFolder(settings, "synthesis"));
 					await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
 					let path = PathUtils.join(dir, `${ZB.core.sanitizeFilename(title)} ${stamp()}.md`);
 					await IOUtils.writeUTF8(path, ZB.synthesis.buildSynthesisNote(md, entries, {
@@ -1744,6 +1777,8 @@
 		catch (e) {
 			Zotero.logError(e);
 		}
+		// The vault layout (vault-layout.js): picked once, so the item pane finds notes before the first sync
+		if (!pref("obsidian.structure")) ZB.vaultLayout.detect(vaultSettings()).catch(e => Zotero.logError(e));
 	}
 
 	// A batch still marked running at startup was cut off by Zotero quitting or crashing

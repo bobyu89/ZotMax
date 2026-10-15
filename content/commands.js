@@ -325,6 +325,12 @@
 			features: ["dashboard"], needs: null, menus: [],
 			keywords: ["儀表板", "dashboard", "進度", "progress", "待讀", "統計", "statistics", "obsidian"],
 			run: () => ZB().dashboard.runFromMenu() },
+		// 整理 vault 資料夾 (vault-layout.js): the flat layout moved to 10 文獻/<collection> and the numbered folders
+		{ id: "vault-layout", group: "organize", l10n: "zotero-bridge-cmd-vault-layout", label: "整理 Obsidian 資料夾結構…",
+			features: [], needs: null, menus: [],
+			keywords: ["整理", "資料夾", "folder", "folders", "vault", "obsidian", "結構", "structure", "搬移", "move",
+				"reorganize", "首頁", "migrate", "遷移", "layout"],
+			run: () => ZB().vaultLayout.run() },
 		// Word 中文 APA 樣式 (word-style.js): the CSL styles for the Zotero Word plugin
 		{ id: "word-style", group: "organize", l10n: "zotero-bridge-cmd-word-style", label: "安裝 Word 中文 APA 樣式",
 			features: ["apaZh"], needs: null, menus: [],
