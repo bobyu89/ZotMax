@@ -2099,7 +2099,7 @@ const TESTS = [
 				check(copied.length === 1 && copied[0].includes("# 文獻資料") && copied[0].includes(item.getField("title")), "the prompt names the paper");
 				root.querySelector("[data-zb-site=\"chatgpt\"]").click();
 				eq(opened.join(), "https://chatgpt.com/", "the site opened");
-				answer.value = "好的，以下是筆記。\n\n## 一句話摘要\nE2E 網頁版 AI 的一句話：運動介入降低住院長者跌倒。\n\n## 主要結果\n- 跌倒率下降\n- 遵從度高\n\n"
+				answer.value = "好的，以下是筆記。\n\n## 一句話摘要\nE2E 網頁版 AI 的一句話：運動介入降低住院長者跌倒。\n\n## 研究方法\n- 隨機對照試驗，64 位 65 歲以上住院病人\n- 介入組每日平衡與肌力運動 30 分鐘，對照組常規照護\n- 追蹤 12 週，主要結果為跌倒發生率\n\n## 主要結果\n- 跌倒率下降\n- 遵從度高\n\n"
 					+ "```json\n" + JSON.stringify({ study_design: "RCT", sample_size: 64, evidence_level: "2", effect_direction: "有效" }) + "\n```";
 				answer.dispatchEvent(new win.Event("input"));
 				d.checks = [...root.querySelectorAll("[data-zb-checks] li")].map(li => li.getAttribute("data-zb-level"));
