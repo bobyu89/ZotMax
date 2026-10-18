@@ -776,6 +776,17 @@ const TESTS = [
 					key: "P", code: "KeyP", shiftKey: true, ctrlKey: !Zotero.isMac, metaKey: !!Zotero.isMac, bubbles: true, cancelable: true,
 				}));
 				await waitFor(() => P.isOpen, "the shortcut to open the palette", 10000);
+				// Close it only once it has drawn its search field: closed while still loading, open()
+				// reports that it could not open (a plugin error in the console)
+				await waitFor(() => {
+					for (let w of Services.wm.getEnumerator(null)) {
+						try {
+							if (!w.closed && w.document.documentURI === P.DIALOG_URL && w.document.getElementById("zb-pal-input")) return w;
+						}
+						catch (e) {}
+					}
+					return null;
+				}, "the shortcut's palette to finish opening", 10000);
 				P.close();
 			}
 			finally {
