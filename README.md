@@ -10,7 +10,7 @@
 
 ## 它幫你做什麼
 
-- 📄 **每篇一頁重點**：研究設計、樣本數、證據等級、PICO、評讀燈號、主要發現，10 秒看完；你的劃線依顏色的意義分組，點一下回到 PDF 原位置。重新同步不會蓋掉你寫的東西。
+- 📄 **每篇一頁重點**：研究設計、樣本數、證據等級、PICO、評讀燈號、主要發現排成卡片，10 秒看完；長的內容收在四個摺疊區塊，手機上也好讀；你的劃線依顏色的意義分組，點一下回到 PDF 原位置。重新同步不會蓋掉你寫的東西。
 - 🗂️ **資料夾跟 Zotero 分類一樣**：文獻筆記、全文、圖片放在同一個資料夾。`00 首頁` 告訴你接下來讀哪篇、哪些評讀還沒核對；每個分類有主題頁和證據地圖。
 - 🤖 **AI 研讀筆記（選用）**：沒有 API key 也行，把提示詞貼到 ChatGPT、Claude、Gemini 網頁，再把回答貼回來。也可以用 OpenRouter 的免費模型，或自己的 Claude／OpenAI key 在同步時自動產生。可引用句都回原文核對。
 - ✅ **從篩選、評讀到寫作**：篩選與 PRISMA 2020、CASP／JBI 評讀表、PICO 表、GRADE、中文 APA 7（含 Word 引用樣式）、給 Pandoc 的參考文獻檔、給指導教授的進度報告。
@@ -531,14 +531,14 @@ Zotero 的「工具」選單只留「ZotMax 設定…」、「ZotMax 快速指�
 
 看板版（預設）一打開是「總覽」「圖表」「待處理」三排卡片，下面這些完整的表格收在摺疊區塊裡；精簡版照舊一段一段排開。只用 Obsidian 內建功能（Mermaid、Bases、連結），不需要 Dataview。不想手動同步後自動更新：設定 → 同步 → Obsidian，取消「手動同步後更新『研究儀表板』筆記」（自動同步不會更新它）。
 
-- 📖 **閱讀進度**：各狀態篇數與比例、已讀完成率（已讀 + 已引用）、圓餅圖、各分類的完成率
+- 📖 **閱讀進度**：各狀態篇數與比例、已讀完成率（已讀 + 已引用）、各分類的完成率；看板版在「圖表」用一排狀態色塊（⬜ 待讀、🟨 閱讀中、🟩 已讀、🟦 已引用），精簡版是圓餅圖
 - 🔬 **證據概況**：研究設計、證據等級（CEBM 與 JBI）、評讀結果的分布；還沒有 AI 筆記的篇數；全文狀態（`none`／`partial` 是掃描檔，建議先 OCR）
 - 🗺️ **證據缺口地圖**（evidence gap map）：列是介入（I）、欄是結果指標（O），取自各篇 AI 筆記的 PICO；每格是篇數的熱度方塊（⬜ 沒有研究、🟨 1 篇、🟧 2–3 篇、🟥 4 篇以上）和最強的 CEBM 等級。⬜ 的組合可能就是研究缺口；下面列出證據最多的 5 個組合和連結。名稱只做字面合併，同一件事寫法不同（「運動」「Exercise」）時，到 設定 → 概念卡片 → 別名 合成一組，地圖也會跟著合併。這是字詞層級的整理，不是系統性回顧。
-- 📝 **待處理清單**：待讀最久的 10 篇；資料待補的文獻：沒有 AI 筆記、掃描檔、期刊文章缺 DOI、中文作者姓名可疑（例如「陳, 美玲」，通常是 Zotero 作者欄要修正）
+- 📝 **待處理清單**：待讀最久的 10 篇（看板版另有「待處理」卡片，各列 5 篇）；資料待補的文獻：沒有 AI 筆記、掃描檔、期刊文章缺 DOI、中文作者姓名可疑（例如「陳, 美玲」，通常是 Zotero 作者欄要修正）
 - 🗂️ **回顧專案**：`30 評讀與綜整/` 的 PRISMA 筆記與 `40 寫作/文獻探討/` 的草稿
 - 🧠 **熱門概念**：文獻數最多的 10 張概念卡片
 - 🤖 **AI 用量**：本月與前兩個月的呼叫次數、tokens 與估計費用
-- 🆕 **本週新增**：最近 7 天加入的文獻
+- 🆕 **本週新增**：最近 7 天加入的文獻（看板版在「待處理」的卡片裡）
 - 開頭連到最新一份進度報告。
 
 只改寫 `%% zotero-bridge:start/end %%` 之間，區塊上方的研究目標、「✍️ 我的筆記」和你的 frontmatter 都保留。
@@ -658,7 +658,7 @@ Zotero/
 | 🩷 洋紅 | 我的想法 |
 | ⚪ 灰 | 其他 |
 
-可以改名稱（最多 40 字）、用「上移／下移」排順序、「恢復預設」。每組一個摺疊區塊（例如「🟡 重要發現（3）」），保留頁碼連結、評註與標籤；「重點」裡的「我的劃線」依同一個順序挑選。Obsidian 只有 6 種螢光筆顏色，洋紅顯示成紫色、灰色用預設顏色；Notion 轉成對應的背景色。不在這 8 色裡的顏色歸到「其他顏色」。
+可以改名稱（最多 40 字）、用「上移／下移」排順序、「恢復預設」。每組一個區塊（例如「🟡 重要發現（3）」；看板版放在「我的劃線與筆記」摺疊區塊裡，精簡版各自摺疊），保留頁碼連結、評註與標籤；「重點」裡的「我的劃線」依同一個順序挑選。Obsidian 只有 6 種螢光筆顏色，洋紅顯示成紫色、灰色用預設顏色；Notion 轉成對應的背景色。不在這 8 色裡的顏色歸到「其他顏色」。
 
 </details>
 
@@ -1271,6 +1271,10 @@ pandoc 論文.md --citeproc --bibliography "Zotero/90 系統/references.json" --
 
 **重新同步會蓋掉我寫的東西嗎？** 不會。外掛只改自己的區塊（見[收集與同步](#收集與同步)）。直接改 AI 子筆記也沒問題，下次同步會沿用你改過的內容。
 
+**更新後 Obsidian 的筆記還是舊樣子，或卡片上下排、沒有排成格狀？** 版面在下次同步時才會換，先在 Zotero 同步一次（研究儀表板和首頁可以用 ZotMax 按鈕 → 更新研究儀表板）。卡片要排成格狀需要 ZotMax 的 CSS 片段：Obsidian 開著時到 設定 → 外觀 → CSS 片段 按重新整理，確認 `zotmax` 是打開的；被關掉或刪掉的話，到 Zotero 設定 → 同步 → Obsidian 按 **安裝看板樣式到 Obsidian**。
+
+**文獻筆記最上面的屬性區少了研究設計、PICO 等欄位？** 看板版預設只顯示閱讀狀態、標籤和你自己加的屬性，其他資料已經在卡片上；它們仍在 frontmatter，Bases、Dataview 和搜尋都讀得到。想全部顯示：設定 → 同步 → Obsidian，取消「看板：文獻筆記最上面的屬性區只顯示…」，下次同步生效。
+
 **選單裡找不到某個功能？** 先到 設定 → ZotMax → 功能 看開關是不是關著（研究生引導有些預設關閉）。找重複、PRISMA、評讀總表、引文追蹤納入研究要先在左側選一個分類；其他功能要先選文獻。
 
 **AI 筆記看起來只讀了摘要？** 多半是掃描版 PDF 或沒有 PDF，進度視窗會顯示 ⚠️，frontmatter 的 `full_text` 也會標出。先用 OCR 讓 PDF 有文字層，再「重新產生 AI 筆記」。
@@ -1375,7 +1379,7 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi，並更新 updates.j
 | `content/ai-batch.js` | 批次 API：打包送出、輪詢、重新啟動後續查、結果套用、取消 |
 | `content/notion.js` | Notion API（2025-09-03，data sources）、中英文欄位與依 ID 對應、收合區塊 |
 | `content/status.js` | 閱讀狀態三邊合併與同步 |
-| `content/core.js` | Obsidian 筆記組裝（導覽列、「重點」＋摺疊區塊、劃線顏色意義）、frontmatter 合併、分流規則、資料夾結構（依 Zotero 分類） |
+| `content/core.js` | Obsidian 筆記組裝（導覽列、「重點」看板卡片＋四組摺疊區塊、`cssclasses`、劃線顏色意義）、frontmatter 合併、分流規則、資料夾結構（依 Zotero 分類） |
 | `content/vault-layout.js` | 整理 Obsidian 資料夾結構：搬移計畫、連結改寫（筆記、Canvas、書籤）、換分類時搬筆記、整理紀錄 |
 | `content/fulltext-md.js`／`fulltext.js` | 全文轉 Markdown（純函式）；轉換快取、markitdown、全文筆記、Notion 子頁面、AI 標重點核對 |
 | `content/markdown.js` | Markdown ⇄ Notion blocks ⇄ HTML |
@@ -1386,9 +1390,9 @@ npm run build    # 產生 dist/zotero-bridge-<version>.xpi，並更新 updates.j
 | `content/classify.js`／`classify-review.*` | 文獻自動分類與確認視窗 |
 | `content/zh-meta.js`／`zh-meta-review.*` | 中文文獻補強：檢查中文文獻資料（純函式）、確認視窗、套用與復原 |
 | `content/gemini-export.js`／`gemini-export.*` | 匯出給 Gemini Notebook：檔名、來源上限、各檔內容（純函式）、匯出視窗、寫檔 |
-| `content/dashboard.js`、`concepts.js` | 研究儀表板（總覽數字卡、圖表看板、證據缺口地圖、比例長條）、概念卡片 |
+| `content/dashboard.js`、`concepts.js` | 研究儀表板（總覽數字卡、圖表看板、待處理卡片、證據缺口地圖、比例長條）、概念卡片 |
 | `content/topics.js` | 首頁與主題頁：依 Zotero 分類分組、證據方向、趨勢、研究缺口與下一步 |
-| `content/obsidian-style.js` | 看板的 CSS 片段：內容、版本、寫進 vault 並在 appearance.json 啟用 |
+| `content/obsidian-style.js` | 看板的 CSS 片段（v4：統一卡片樣式、精簡屬性區、手機版面）：內容、版本、寫進 vault 並在 appearance.json 啟用 |
 | `content/search-links.js` | 醫學文獻快速搜尋：資料庫目錄、EZproxy、找這篇、PICO 與 MeSH 檢索式 |
 | `content/pubmed-watch.js` | PubMed 新文獻追蹤（E-utilities、去重、匯入、每日清單） |
 | `content/citation-chase.js` | 引文追蹤（OpenAlex 查詢、去重、勾選清單、匯入） |
