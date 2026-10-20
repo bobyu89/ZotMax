@@ -727,6 +727,7 @@
 			appraisal: opts.appraisal && opts.appraisal.values,
 			// 看板 (the default) or the classic 「重點」 callout; the 評讀 card reads the form itself
 			layout: noteLayout(),
+			compactProperties: pref("obsidian.compactProperties") !== false,
 			appraisalBoard: opts.appraisal ? ZB.appraisalForm.boardInfo(opts.appraisal) : null,
 			colorMeanings: pref("annotations.colorMeanings") || "",
 			aiHighlights: opts.aiHighlights,

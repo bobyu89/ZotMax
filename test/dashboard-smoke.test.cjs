@@ -266,13 +266,13 @@ test("a manual sync writes the dashboard and its .base; 快速指令 or the tool
 	let text = fs.readFileSync(dashboardPath(env), "utf8");
 	assert.match(text, /^---\ntype: "research-dashboard"\nupdated: "[^"]+"\n---\n\n# 研究儀表板\n\n%% zotero-bridge:start/);
 	assert.match(text, /共 \*\*3\*\* 篇文獻，已讀完成率 \*\*0%\*\*/);
-	assert.match(text, /```mermaid\npie showData\n {4}title 閱讀狀態\n {4}"待讀" : 3\n```/);
+	assert.match(text, /> > \[!zm-chart\] 閱讀進度\n> > \*\*0%\*\* 已讀完成 {2}\n> > ⬜⬜⬜ {2}\n> > ⚪ 待讀 3\n/);
 	assert.match(text, /\| 碩論\/跌倒 \| 2 \| 2 \| 0 \| 0 \| 0 \| 0% \|/);
 	assert.match(text, /\| （未分類） \| 1 \|/);
 	assert.match(text, /\| RCT \| 1 \|/);
 	assert.match(text, /有 AI 文獻筆記：\*\*1\*\* 篇；沒有：\*\*2\*\* 篇/);
 	// The 圖表 board (看板 layout, the default) and the gap map, which needs two AI notes with I and O
-	assert.match(text, /\n> \[!zm-board\] 圖表\n> > \[!zm-chart\] 研究設計\n/);
+	assert.match(text, /\n> \[!zm-board\] 圖表\n> > \[!zm-chart\] 閱讀進度\n(?:> .*\n|>\n)*> > \[!zm-chart\] 研究設計\n/);
 	assert.match(text, /> > \[!zm-chart\] 出版年份\n> > 2024 ▰▰▰▰▰▰▰▰▰▰ 3/);
 	assert.match(text, /## 🗺️ 證據缺口地圖\n\n還畫不出來/);
 	// Oldest unread first, with links to the notes
@@ -284,7 +284,7 @@ test("a manual sync writes the dashboard and its .base; 快速指令 or the tool
 	]);
 	assert.match(text, /中文作者姓名可疑（王）/);
 	assert.match(text, /無 AI 筆記 2 · 掃描檔待 OCR 0 · 期刊文章缺 DOI 2 · 中文作者姓名可疑 1/);
-	assert.match(text, /這 7 天新增 \*\*1\*\* 篇：\n\n- \[\[Zotero\/Author1 2024 - Study 1 of fall prevention in hospitals\|Study 1 of fall prevention in hospitals\]\]/);
+	assert.match(text, /> > \[!zm-inbox\] 本週新增（1）\n> > - \[\[Zotero\/Author1 2024 - Study 1 of fall prevention in hospitals\|Study 1 of fall prevention in hospitals\]\]/);
 	assert.match(text, /近 3 個月沒有 AI 呼叫紀錄/);
 	assert.match(text, /還沒有回顧專案/);
 	// Every linked note exists
@@ -301,8 +301,8 @@ test("a manual sync writes the dashboard and its .base; 快速指令 or the tool
 	assert.match(home, /> \[!zm-board\] 總覽\n/);
 	assert.match(home, /> \[!zm-board\] 主題（1）\n> > \[!zm-topic\] \[\[Zotero\/主題\/碩論／跌倒\|跌倒\]\]\n> > \*\*2 篇\*\* · 已讀 0%/);
 	assert.match(home, /另有 1 篇沒有放進任何 Zotero 分類/);
-	assert.match(home, /- 📊 \[\[Zotero\/研究儀表板\|研究儀表板\]\]/);
-	assert.match(home, /- 📚 \[\[Zotero\/Zotero 文獻庫\.base\|文獻總表\]\]/);
+	assert.match(home, /^> \[!zm-links\] 快速入口\n> \[\[Zotero\/研究儀表板\|📊 研究儀表板\]\] · /m);
+	assert.match(home, / · \[\[Zotero\/Zotero 文獻庫\.base\|📚 文獻總表\]\]$/m);
 	let topicPath = path.join(env.vault, "Zotero", "主題", "碩論／跌倒.md");
 	let topic = fs.readFileSync(topicPath, "utf8");
 	assert.match(topic, /^---\ntype: "topic"\nzotero_collection: "碩論\/跌倒"\nstudies: 2\n/);
@@ -342,12 +342,12 @@ test("a manual sync writes the dashboard and its .base; 快速指令 or the tool
 	let topicAgain = fs.readFileSync(topicPath, "utf8");
 	assert.match(topicAgain, /## ✍️ 我的筆記\n\n主題心得。\n$/, "the user's part of a topic page stays");
 	assert.match(topicAgain, /\*\*2 篇\*\* {2}\n/);
-	assert.match(fs.readFileSync(path.join(env.vault, "Zotero", "首頁.md"), "utf8"), /- 🗂️ 回顧專案：\[\[Zotero\/Reviews\/跌倒\|跌倒：篩選與 PRISMA 2020\]\]/);
+	assert.match(fs.readFileSync(path.join(env.vault, "Zotero", "首頁.md"), "utf8"), /\[\[Zotero\/Reviews\/跌倒\|🗂️ 跌倒：篩選與 PRISMA 2020\]\]/);
 	let again = fs.readFileSync(dashboardPath(env), "utf8");
 	assert.match(again, /# 研究儀表板\n\n我的目標：12 月前讀完。\n/);
 	assert.match(again, /## ✍️ 我的筆記\n\n今天的心得。\n$/);
 	assert.equal(again.split("%% zotero-bridge:start").length, 2);
-	assert.match(again, /"已讀" : 1/);
+	assert.match(again, /> > ⚪ 待讀 2 · 🟢 已讀 1\n/);
 	assert.match(again, /- \[\[Zotero\/Reviews\/跌倒\|跌倒：篩選與 PRISMA 2020\]\]：納入 \*\*6\*\* 篇（辨識 40 → 篩選 35 → 全文評估 10） · 更新於 2026-10-01/);
 	assert.match(again, /- \[\[Zotero\/Drafts\/文獻探討-跌倒\|文獻探討-跌倒\]\]：2 篇文獻 · 產生於 2026-10-02/);
 	assert.match(again, /（本月） \| 1 \| 1,000,000 \| US\$1\.00 \|/);

@@ -993,12 +993,12 @@ const TESTS = [
 			expectFM("chinese", "status", "待讀");
 			let en = notes.english.text;
 			let zh = notes.chinese.text;
-			if (!/^> \*\*APA 7\*\*: 陳美玲、林小華、歐陽志明（2023）。護理人員跌倒預防衛教之成效。\*護理雜誌，70\*\(2\)，45–56。https:\/\/doi\.org\/10\.6224\/JN\.202304_70\(2\)\.07$/m.test(zh)) {
+			if (!/^> > \*\*APA 7\*\*: 陳美玲、林小華、歐陽志明（2023）。護理人員跌倒預防衛教之成效。\*護理雜誌，70\*\(2\)，45–56。https:\/\/doi\.org\/10\.6224\/JN\.202304_70\(2\)\.07$/m.test(zh)) {
 				problems.push(`Chinese APA line wrong: ${(/^.*APA 7.*$/m.exec(zh) || ["(no APA line)"])[0]}`);
 			}
 			if (!/^authors:\n {2}- "陳美玲"\n {2}- "林小華"\n {2}- "歐陽志明"$/m.test(zh)) problems.push("Chinese note authors are not the full names 陳美玲, 林小華, 歐陽志明");
 			// English item: Zotero's own citeproc APA (with a Chinese co-author)
-			if (!/^> \*\*APA 7\*\*: Lee, A\., & 陳/m.test(en)) {
+			if (!/^> > \*\*APA 7\*\*: Lee, A\., & 陳/m.test(en)) {
 				problems.push(`English APA line (Zotero citeproc) wrong: ${(/^.*APA 7.*$/m.exec(en) || ["(no APA line)"])[0]}`);
 			}
 			if (!en.includes("E2E child note")) problems.push("English note does not contain the child note text");
@@ -1006,6 +1006,8 @@ const TESTS = [
 			if (!/%% zotero-bridge:start[^\n]*%%\n\n> \[!zm-board\] 重點\n/.test(en)) problems.push("English note has no 「重點」 board at the top of the managed region");
 			if (!/^> > \[!zm-highlights\|wide\] 我的劃線（1）$/m.test(en)) problems.push("the board has no 我的劃線 card");
 			if (!/^> > \[!zm-next\|wide\] 下一步$/m.test(en)) problems.push("the board has no 下一步 card");
+			if (!/^> \[!zm-mine\]- 我的劃線與筆記（劃線 1 · 筆記 \d+）$/m.test(en)) problems.push("the highlights and notes are not in one folded 我的劃線與筆記 group");
+			if (!/^cssclasses:\n {2}- "zotmax-note"\n {2}- "zm-compact-props"$/m.test(en)) problems.push("the note lacks the snippet's cssclasses");
 			// The CSS snippet was written into the vault and turned on
 			let snippet = PathUtils.join(vault, ".obsidian", "snippets", "zotmax.css");
 			if (!(await IOUtils.exists(snippet))) problems.push(`no CSS snippet ${snippet}`);
@@ -1013,7 +1015,7 @@ const TESTS = [
 			let appearance = JSON.parse(await IOUtils.readUTF8(PathUtils.join(vault, ".obsidian", "appearance.json")));
 			d.appearance = appearance;
 			if (!(appearance.enabledCssSnippets || []).includes("zotmax") || appearance.theme !== "obsidian") problems.push(`appearance.json not updated as expected: ${JSON.stringify(appearance)}`);
-			if (!/^> \[!quote\]- 🔴 限制／疑問（1）\n> - ==🔴The intervention reduced the rate of falls by thirty percent compared with usual care\.== · \[p\. 1\]/m.test(en)) {
+			if (!/^> > \[!quote\] 🔴 限制／疑問（1）\n> > - ==🔴The intervention reduced the rate of falls by thirty percent compared with usual care\.== · \[p\. 1\]/m.test(en)) {
 				problems.push("English note does not list the red highlight under 限制／疑問");
 			}
 			// The full-text note next to it (全文筆記 is on in 研究生引導), with the highlight coloured in place

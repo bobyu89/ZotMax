@@ -37,19 +37,22 @@
 		"fulltext",
 		// Set only while the item is deleted in Zotero (markObsidianNoteDeleted); a re-sync drops them
 		"zotero_deleted", "status_before_delete",
+		// The 看板 layout's classes for the CSS snippet, merged with the user's own (noteClasses)
+		"cssclasses",
 	];
 
-	// `highlight` is the Obsidian 1.14 highlight color emoji (==🟡text==); "" = theme default.
+	// `highlight` is the Obsidian 1.14 highlight color emoji (==🟡text==); "" = theme default. `square` draws the
+	// 看板's highlight bar (one square per highlight, in the colour's place).
 	// Obsidian has six highlight colors, so magenta maps to purple and gray to the default.
 	const COLORS = {
-		"#ffd400": { name: "yellow", emoji: "🟡", highlight: "🟡", notion: "yellow_background" },
-		"#ff6666": { name: "red", emoji: "🔴", highlight: "🔴", notion: "red_background" },
-		"#5fb236": { name: "green", emoji: "🟢", highlight: "🟢", notion: "green_background" },
-		"#2ea8e5": { name: "blue", emoji: "🔵", highlight: "🔵", notion: "blue_background" },
-		"#a28ae5": { name: "purple", emoji: "🟣", highlight: "🟣", notion: "purple_background" },
-		"#e56eee": { name: "magenta", emoji: "🩷", highlight: "🟣", notion: "pink_background" },
-		"#f19837": { name: "orange", emoji: "🟠", highlight: "🟠", notion: "orange_background" },
-		"#aaaaaa": { name: "gray", emoji: "⚪", highlight: "", notion: "gray_background" },
+		"#ffd400": { name: "yellow", emoji: "🟡", highlight: "🟡", notion: "yellow_background", square: "🟨" },
+		"#ff6666": { name: "red", emoji: "🔴", highlight: "🔴", notion: "red_background", square: "🟥" },
+		"#5fb236": { name: "green", emoji: "🟢", highlight: "🟢", notion: "green_background", square: "🟩" },
+		"#2ea8e5": { name: "blue", emoji: "🔵", highlight: "🔵", notion: "blue_background", square: "🟦" },
+		"#a28ae5": { name: "purple", emoji: "🟣", highlight: "🟣", notion: "purple_background", square: "🟪" },
+		"#e56eee": { name: "magenta", emoji: "🩷", highlight: "🟣", notion: "pink_background", square: "🟪" },
+		"#f19837": { name: "orange", emoji: "🟠", highlight: "🟠", notion: "orange_background", square: "🟧" },
+		"#aaaaaa": { name: "gray", emoji: "⚪", highlight: "", notion: "gray_background", square: "⬜" },
 	};
 
 	// Reading-status values for the Bases kanban view; only set when a note is first created
@@ -59,7 +62,7 @@
 	const DELETED_CALLOUT = "> [!warning] 已從 Zotero 刪除";
 
 	function colorInfo(hex) {
-		return COLORS[String(hex || "").toLowerCase()] || { name: "other", emoji: "⚫", highlight: "", notion: "default" };
+		return COLORS[String(hex || "").toLowerCase()] || { name: "other", emoji: "⚫", highlight: "", notion: "default", square: "⬛" };
 	}
 
 	function sanitizeFilename(name) {
@@ -680,11 +683,51 @@
 	const PICO_ROWS = [["P", "population"], ["I", "intervention"], ["C", "comparison"], ["O", "outcomes"]];
 	const NOT_REPORTED_RE = /^(?:n\/?a|null|none|未報告|未提及|不適用|無)$/i;
 
-	/** The study's P, I, C, O lines ("" when the AI note has none of them). */
+	/** The study's P, I, C, O as list items ("" when the AI note has none of them); the snippet sets them out 2 × 2. */
 	function picoCard(study) {
 		let s = study || {};
 		let rows = PICO_ROWS.map(([k, f]) => [k, oneLine(s[f])]).filter(([, v]) => v && !NOT_REPORTED_RE.test(v));
-		return rows.map(([k, v]) => `**${k}** ${v}`).join("  \n");
+		return rows.map(([k, v]) => `- **${k}** ${v}`).join("\n");
+	}
+
+	/** Oxford CEBM 2011 level 1 (strongest) … 5 as a strength bar: 1 → ▰▰▰▰▰, 5 → ▰▱▱▱▱; "" for anything else. */
+	function levelBar(level) {
+		let n = Number.parseInt(String(level || ""), 10);
+		return n >= 1 && n <= 5 && String(n) === String(level).trim() ? bar(6 - n, 5, 5) : "";
+	}
+
+	/**
+	 * The study at a glance, the 看板's first card: 「研究設計：**RCT**」 … as list items (研究設計, 樣本數, 場域 or 國家,
+	 * 證據等級 with a strength bar, JBI 等級). The snippet sets them out as tiles, label over value. "" without data.
+	 */
+	function statsCard(study) {
+		let s = study || {};
+		let known = v => (v = oneLine(v)) && !NOT_REPORTED_RE.test(v) ? v : "";
+		let place = [known(s.setting), known(s.country)].filter(Boolean);
+		let rows = [
+			known(s.study_design) ? ["研究設計", known(s.study_design)] : null,
+			Number.isFinite(s.sample_size) ? ["樣本數", `N = ${s.sample_size}`] : null,
+			place.length ? [known(s.setting) ? "場域" : "國家", place.join(" · ")] : null,
+			known(s.evidence_level) ? ["證據等級", `CEBM ${known(s.evidence_level)}`, levelBar(known(s.evidence_level))] : null,
+			known(s.jbi_level) ? ["JBI 等級", known(s.jbi_level)] : null,
+		].filter(Boolean);
+		// Asterisks and backticks would end the bold or open code: their full-width and plain stand-ins
+		return rows.map(([label, value, extra]) => `- ${label}：**${value.replace(/\*/g, "＊").replace(/`/g, "'")}**${extra ? ` ${extra}` : ""}`).join("\n");
+	}
+
+	/** A creator's name in the byline: a Chinese name in full, else the family name. */
+	function bylineName(c) {
+		let zh = apaZh && apaZh.zhPersonName(c);
+		if (zh) return zh;
+		return oneLine(c.lastName || c.name || c.firstName);
+	}
+
+	/** 「Lee、Chen · 2024 · *Journal of Advanced Nursing*」: who, when and where, at the top of the 看板 ("" without any). */
+	function byline(data) {
+		let names = authorCreators(data).map(bylineName).filter(Boolean);
+		let who = names.length > 3 ? `${names.slice(0, 3).join("、")} 等` : names.join("、");
+		let pub = oneLine(data.publication).replace(/\*/g, "＊");
+		return [who, oneLine(data.year), pub ? `*${pub}*` : ""].filter(Boolean).join(" · ");
 	}
 
 	/**
@@ -712,17 +755,27 @@
 		return "";
 	}
 
-	/** The 我的劃線 card: a bar per colour meaning, then the top quotes. */
+	// The highlight bar's length: one square per highlight up to this many, then scaled
+	const HIGHLIGHT_SQUARES = 20;
+
+	/** One coloured square per highlight, by meaning in order (🟨🟨🟥🟩🟦); long lists scaled to 20, every meaning ≥ 1. */
+	function highlightBar(groups) {
+		let total = groups.reduce((n, g) => n + g.items.length, 0);
+		let scale = total > HIGHLIGHT_SQUARES ? HIGHLIGHT_SQUARES / total : 1;
+		return groups.map(g => (g.info.square || "⬛").repeat(Math.max(1, Math.round(g.items.length * scale)))).join("");
+	}
+
+	/** The 我的劃線 card: the coloured bar, one line of meanings with counts, then the top quotes. */
 	function highlightsCard(data, groups, top) {
 		if (!groups.length) return "";
-		let total = groups.reduce((n, g) => n + g.items.length, 0);
-		let lines = groups.map(g => `${g.info.emoji} ${g.meaning} ${bar(g.items.length, total, 6)} ${g.items.length}`);
+		// The bar and the legend are paragraphs of their own, so the snippet can set the bar larger
+		let lines = [highlightBar(groups), "", groups.map(g => `${g.info.emoji} ${g.meaning} ${g.items.length}`).join(" · ")];
 		let quotes = top.slice(0, 2).map(({ att, ann, group }) => {
 			let text = shorten(ann.text, 90);
 			let mark = ann.type === "underline" ? `${group.info.emoji} <u>${text}</u>` : highlightMark(colorInfo(ann.color), text);
 			return `- ${mark} · ${pageLink(data, att, ann)}`;
 		});
-		return lines.join("  \n") + (quotes.length ? "\n\n" + quotes.join("\n") : "");
+		return lines.join("\n") + (quotes.length ? "\n\n" + quotes.join("\n") : "");
 	}
 
 	/**
@@ -749,31 +802,24 @@
 	}
 
 	/**
-	 * 「重點」 as a board of cards (the 看板 layout): the facts as chips, then 一句話, PICO, 主要發現, 評讀, 我的劃線
-	 * and 下一步 as nested callouts, then the links. Reads as stacked callouts in plain Obsidian; the ZotMax CSS
-	 * snippet (obsidian-style.js) lays the cards out as a grid. opts: as buildNoteSections, plus appraisalBoard.
+	 * 「重點」 as a board of cards (the 看板 layout): the byline, the study at a glance (研究設計, 樣本數, 場域, 證據等級
+	 * as tiles), 一句話, PICO beside 評讀, 主要發現, 我的劃線 and 下一步 as nested callouts, then the links. Reads as a
+	 * line and stacked callouts in plain Obsidian; the ZotMax CSS snippet (obsidian-style.js) lays the cards out as
+	 * a grid. opts: as buildNoteSections, plus appraisalBoard.
 	 */
 	function buildBoard(data, opts = {}) {
 		let parts = keyPoints(data, opts);
 		let { ai, groups, sentence, findings, top } = parts;
-		let s = opts.study || {};
-		let chips = [
-			s.study_design,
-			Number.isFinite(s.sample_size) ? `N = ${s.sample_size}` : "",
-			oneLine(s.setting),
-			oneLine(s.country),
-			s.evidence_level ? `CEBM ${s.evidence_level}` : "",
-			s.jbi_level ? `JBI ${s.jbi_level}` : "",
-		].map(chip).filter(Boolean);
 		let cards = [];
+		let stats = statsCard(opts.study);
+		if (stats) cards.push(card("zm-stats", "研究概要", stats, true));
 		if (sentence) cards.push(card("zm-summary", "一句話", sentence, true));
 		let pico = picoCard(opts.study);
 		if (pico) cards.push(card("zm-pico", "PICO", pico));
-		if (findings.length) cards.push(card("zm-findings", "主要發現", findings.map(f => `- ${f}`).join("\n")));
 		let appraisal = appraisalCard(opts.appraisalBoard, opts.study);
 		if (appraisal) cards.push(card("zm-appraisal", "評讀", appraisal));
+		if (findings.length) cards.push(card("zm-findings", "主要發現", findings.map(f => `- ${f}`).join("\n"), true));
 		let highlights = highlightsCard(data, groups, top);
-		// Wide: the quotes need the room, and the three cards above fill a row of their own
 		if (highlights) cards.push(card("zm-highlights", `我的劃線（${groups.reduce((n, g) => n + g.items.length, 0)}）`, highlights, true));
 		let steps = nextSteps(data, opts, { ai, groups });
 		cards.push(card("zm-next", "下一步", steps.length ? steps.map(x => `- ${x}`).join("\n") : "✅ 這篇的資料都齊了。想法寫在下面的「✍️ 我的筆記」。", true));
@@ -785,11 +831,52 @@
 		if (data.doi) links.push(`[DOI](https://doi.org/${encodeURI(data.doi)})`);
 
 		let blocks = [];
-		if (chips.length) blocks.push(chips.join(" "));
+		let by = byline(data);
+		if (by) blocks.push(by);
 		blocks.push(...cards);
 		blocks.push(links.join(" · "));
 		let body = blocks.join("\n\n").split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
 		return `> [!zm-board] 重點\n${body}`;
+	}
+
+	// The 看板 layout folds the sections into four groups — the user's own (highlights, Zotero notes), the appraisal
+	// form, the AI's, reference — so a note ends in four rows instead of up to ten. A group's first section in
+	// `direct` is its body; the others are callouts inside it, open. The navigation bar jumps to the groups.
+	const SECTION_GROUPS = [
+		{ type: "zm-mine", ids: id => id.startsWith("annotations:") || id === "notes", anchor: ["zm-highlights", "劃線"] },
+		{ type: "zm-form", ids: id => id === "appraisal", direct: "appraisal", anchor: ["zm-appraisal", "評讀表"] },
+		{ type: "zm-ai", ids: id => id === "ai" || id === "aiHighlights", direct: "ai", anchor: ["zm-ai", "AI 筆記"] },
+		{ type: "zm-ref", ids: id => id === "abstract" || id === "search" || id === "info", anchor: ["zm-abstract", "摘要"] },
+	];
+
+	/** The 看板 layout's group title: what is inside, with counts (the snippet adds the icon). */
+	function groupTitleFor(group, list, data, opts) {
+		if (group.type === "zm-mine") {
+			let marks = annotationGroups(data, opts.colorMeanings).reduce((n, g) => n + g.items.length, 0);
+			let notes = (opts.notesMarkdown || []).filter(n => n.md && n.md.trim()).length;
+			if (marks && notes) return `我的劃線與筆記（劃線 ${marks} · 筆記 ${notes}）`;
+			return marks ? `我的劃線（${marks}）` : `我的 Zotero 筆記（${notes}）`;
+		}
+		if (group.type === "zm-form") return "文獻評讀表";
+		if (group.type === "zm-ai") return (list.find(x => x.id === "ai") || list[0]).title;
+		return list.some(x => x.id === "abstract") ? "摘要與書目" : "書目與延伸搜尋";
+	}
+
+	/** The folded sections of the 看板 layout: [{ md, anchor: { id, label } }], one per group that has sections. */
+	function groupedSections(sections, data, opts) {
+		let out = [];
+		for (let group of SECTION_GROUPS) {
+			let list = sections.filter(x => group.ids(x.id));
+			if (!list.length) continue;
+			let direct = list.find(x => x.id === group.direct);
+			let inner = list.filter(x => x !== direct).map(x => callout(x.type, x.title, x.md, false));
+			let body = [direct ? direct.md : "", ...inner].filter(t => String(t).trim()).join("\n\n");
+			out.push({
+				md: callout(group.type, groupTitleFor(group, list, data, opts), body, true),
+				anchor: { id: group.anchor[0], label: group.anchor[1] },
+			});
+		}
+		return out;
 	}
 
 	/**
@@ -801,7 +888,17 @@
 	function buildManagedSection(data, opts = {}) {
 		let { keyPoints, sections } = buildNoteSections(data, Object.assign({}, opts, { target: "obsidian" }));
 		// opts.layout: "board" (看板, the default the sync passes) or anything else for the classic 「重點」 callout
-		let top = opts.layout === "board" ? buildBoard(data, opts) : callout("abstract", "重點", keyPoints, false);
+		if (opts.layout === "board") {
+			let groups = groupedSections(sections, data, opts);
+			let parts = [MARK_START];
+			if (opts.nav) parts.push(navBar(opts.nav, new Map(groups.map((g, i) => [i, g.anchor])), opts.fullTextLink));
+			parts.push(buildBoard(data, opts));
+			// A block ID after each group: the 「跳到」 links scroll to it (Obsidian hides the ID line)
+			for (let g of groups) parts.push(opts.nav ? `${g.md}\n\n^${g.anchor.id}` : g.md);
+			parts.push(MARK_END);
+			return parts.join("\n\n");
+		}
+		let top = callout("abstract", "重點", keyPoints, false);
 		let anchors = opts.nav ? sectionAnchors(sections) : new Map();
 		let parts = [MARK_START];
 		if (opts.nav) parts.push(navBar(opts.nav, anchors, opts.fullTextLink));
@@ -871,12 +968,49 @@
 	const USER_HEADING = "✍️ 我的筆記";
 	const USER_SECTION = `## ${USER_HEADING}\n\n`;
 
+	// The 看板 layout's classes on a literature note, for the CSS snippet: the note itself, and (unless turned off,
+	// pref obsidian.compactProperties) the compact properties area showing the reading status, tags and the user's
+	// own properties only; everything else is on the board
+	const NOTE_CLASS = "zotmax-note";
+	const COMPACT_PROPS_CLASS = "zm-compact-props";
+
+	/** The values of a list key in frontmatter text: `k: [a, b]`, `k: a` or `k:` with `  - a` lines; [] without it. */
+	function frontmatterList(fm, key) {
+		let block = parseFrontmatterBlocks(fm || "").find(b => b.key === key);
+		if (!block) return [];
+		let lines = block.text.split(/\r?\n/);
+		let first = lines[0].slice(lines[0].indexOf(":") + 1).trim();
+		let unquote = (v) => {
+			v = v.trim();
+			if (/^"/.test(v)) {
+				try {
+					return String(JSON.parse(v));
+				}
+				catch (e) {}
+			}
+			return v.replace(/^'(.*)'$/, "$1");
+		};
+		let values = first.startsWith("[") ? first.replace(/^\[|\]$/g, "").split(",")
+			: first ? [first]
+			: lines.slice(1).map(l => /^\s*-\s*(.*)$/.exec(l)).filter(Boolean).map(m => m[1]);
+		return values.map(unquote).filter(Boolean);
+	}
+
+	/** cssclasses for a note: ZotMax's (看板 layout only) first, then the user's own as they were; "" for none. */
+	function noteClasses(frontmatter, opts = {}) {
+		let own = frontmatterList(frontmatter, "cssclasses").filter(c => c !== NOTE_CLASS && c !== COMPACT_PROPS_CLASS);
+		let ours = opts.layout === "board" ? [NOTE_CLASS, ...(opts.compactProperties === false ? [] : [COMPACT_PROPS_CLASS])] : [];
+		let all = [...ours, ...own];
+		return all.length ? all : "";
+	}
+
 	/**
 	 * Build the full Obsidian note. When `existing` is given, user-owned content
 	 * (frontmatter keys outside MANAGED_KEYS and everything outside the markers) is kept.
 	 */
 	function buildObsidianNote(existing, data, opts = {}) {
 		let fmObj = managedFrontmatter(data, opts);
+		fmObj.cssclasses = noteClasses(existing ? splitFrontmatter(existing).frontmatter : null, opts);
 		let managed = buildManagedSection(data, opts);
 		if (!existing) {
 			// `status` is the user's to change (e.g. by dragging in the kanban), so it is only set here
@@ -1147,5 +1281,6 @@
 		resolveRoute, parseRules, truncate, buildBaseFile, STATUSES, DELETED_STATUS,
 		LAYOUTS, FULLTEXT_SUFFIX, navBar, sectionAnchors, noteNav, structureOf, vaultFolder, vaultPage, collectionParts, primaryCollection, noteFolder, noteFolders, topicPage,
 		frontmatterScalar, setFrontmatterValue, zoteroKeyFromHead, markObsidianNoteDeleted,
+		statsCard, levelBar, byline, highlightBar, groupedSections, SECTION_GROUPS, NOTE_CLASS, COMPACT_PROPS_CLASS, noteClasses, frontmatterList,
 	};
 });

@@ -129,7 +129,7 @@ test("topicSection: info with links, the 總覽 cards (看板) or one line (clas
 	assert.match(classic, /\*\*5 篇\*\*｜已讀 40%｜最強證據 CEBM 1｜證據：多數有效（3／4）（AI 初判）｜近 5 年 2 篇 →/);
 });
 
-test("homeSection: the 總覽, a card per topic linking to its page (or a table with classic), the unfiled count, quick links", () => {
+test("homeSection: the folded update note, four number cards, a card per topic linking to its page (or a table with classic), the unfiled count, quick links as buttons", () => {
 	let records = [...falls(), note("F", { collections: [] })];
 	let entries = T.assignFiles(T.groupTopics(records)).map(({ topic, file }) => {
 		topic.link = `Zotero/主題/${file}`;
@@ -139,13 +139,14 @@ test("homeSection: the 總覽, a card per topic linking to its page (or a table 
 		reviews: [{ link: "Zotero/Reviews/跌倒", title: "跌倒：PRISMA" }], conceptIndex: "Zotero/概念/概念索引", latestReport: { date: "2026-10-13", link: "Zotero/進度報告/2026-10-13" },
 		baseLink: "Zotero/Zotero 文獻庫.base" };
 	let md = T.homeSection(meta);
-	assert.ok(md.startsWith("> [!info] ZotMax 首頁：依 Zotero 分類整理 vault 裡的 6 篇文獻筆記（2026-10-14 09:00 更新）。"));
+	assert.ok(md.startsWith("> [!zm-meta]- 🏠 6 篇文獻筆記 · 2026-10-14 09:00 更新\n> ZotMax 依 Zotero 分類整理 vault 裡的文獻筆記。"), md.slice(0, 120));
 	assert.match(md, /Bookmarks/);
 	assert.ok(md.indexOf("> [!zm-board] 總覽") < md.indexOf("> [!zm-board] 主題（2）"));
+	assert.deepEqual([...md.matchAll(/^> > \[!zm-kpi\] (.+)$/gm)].map(m => m[1]), ["文獻", "已讀完成率", "AI 筆記", "評讀已核對"], "the dashboard has the rest");
 	assert.match(md, /> > \[!zm-topic\] \[\[Zotero\/主題\/碩論／跌倒\|跌倒\]\]\n> > \*\*5 篇\*\* · 已讀 40% {2}\n> > ▰▰▰▰▱▱▱▱▱▱ {2}\n> > 🧭 多數有效（3／4） · CEBM 1 {2}\n> > 📈 近 5 年 2 篇 → {2}\n> > ➡️ 4 篇 RCT，還沒有系統性回顧 {2}\n> > 📁 碩論\n/);
 	assert.match(md, /> > \[!zm-topic\] \[\[Zotero\/主題\/EBP 報告\|EBP 報告\]\]\n> > \*\*1 篇\*\* · 已讀 0%  \n> > ▱+ {2}\n> > 🧭 僅 1 篇：有效 · CEBM 1/);
 	assert.match(md, /另有 1 篇沒有放進任何 Zotero 分類/);
-	assert.match(md, /## 🚀 快速入口\n\n- 📊 \[\[Zotero\/研究儀表板\|研究儀表板\]\]：.*\n- 🗂️ 回顧專案：\[\[Zotero\/Reviews\/跌倒\|跌倒：PRISMA\]\]\n- 🧠 \[\[Zotero\/概念\/概念索引\|概念索引\]\]：.*\n- 📝 最新進度報告：\[\[Zotero\/進度報告\/2026-10-13\|2026-10-13\]\]\n- 📚 \[\[Zotero\/Zotero 文獻庫\.base\|文獻總表\]\]/);
+	assert.match(md, /\n> \[!zm-links\] 快速入口\n> \[\[Zotero\/研究儀表板\|📊 研究儀表板\]\] · \[\[Zotero\/Reviews\/跌倒\|🗂️ 跌倒：PRISMA\]\] · \[\[Zotero\/概念\/概念索引\|🧠 概念索引\]\] · \[\[Zotero\/進度報告\/2026-10-13\|📝 進度報告 2026-10-13\]\] · \[\[Zotero\/Zotero 文獻庫\.base\|📚 文獻總表\]\]$/);
 	// More than MAX_CARDS topics: the rest in one line
 	let many = Array.from({ length: T.MAX_CARDS + 2 }, (_, k) => ({ topic: { link: `Zotero/主題/t${k}`, name: `t${k}`, parent: "" }, stats: entries[1].stats }));
 	let block = T.topicsBlock(many, "board", 0);
@@ -153,7 +154,9 @@ test("homeSection: the 總覽, a card per topic linking to its page (or a table 
 	assert.match(block, /其他主題：\[\[Zotero\/主題\/t12\|t12\]\]（1）、\[\[Zotero\/主題\/t13\|t13\]\]（1）/);
 	// Classic: a table, no boards
 	let classic = T.homeSection(Object.assign({}, meta, { layout: "classic" }));
-	assert.doesNotMatch(classic, /zm-board/);
+	assert.doesNotMatch(classic, /zm-board|zm-meta|zm-links/);
+	assert.ok(classic.startsWith("> [!info] ZotMax 首頁：依 Zotero 分類整理 vault 裡的 6 篇文獻筆記（2026-10-14 09:00 更新）。"));
+	assert.match(classic, /## 🚀 快速入口\n\n- 📊 \[\[Zotero\/研究儀表板\|研究儀表板\]\]：/);
 	assert.match(classic, /## 🗂️ 主題（2）\n\n\| 主題 \| 篇數 \|.*\n.*\n\| \[\[Zotero\/主題\/碩論／跌倒\\\|碩論／跌倒\]\] \| 5 \| ▰▰▱▱▱▱ 40% \| CEBM 1 \| 多數有效（3／4） \| 近 5 年 2 篇 → \| 4 篇 RCT，還沒有系統性回顧 \|/);
 	assert.match(T.topicsBlock([], "board", 0), /還沒有主題：在 Zotero 把文獻放進分類/);
 	assert.match(T.quickLinks({}), /回顧專案：還沒有/);

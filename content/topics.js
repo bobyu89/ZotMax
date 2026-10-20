@@ -424,6 +424,7 @@
 	 */
 	function homeSection(meta) {
 		let total = meta.stats ? meta.stats.total : 0;
+		if (meta.layout === "board") return boardHome(meta, total);
 		let info = [
 			`> [!info] ZotMax 首頁：依 Zotero 分類整理 vault 裡的 ${total} 篇文獻筆記（${stamp(meta.now)} 更新）。每張主題卡連到它的主題頁`
 				+ (meta.organized ? "，主題頁和那個分類的文獻在同一個資料夾。" : "；筆記本身沒有搬動。"),
@@ -432,6 +433,34 @@
 		let start = startHere(meta.records || [], { now: meta.now, layout: meta.layout });
 		let overview = meta.layout === "board" && meta.stats ? dashboard.overviewBoard(meta.stats, { reviews: meta.reviews }) : "";
 		return [info, ...(start ? [start] : []), ...(overview ? [overview] : []), topicsBlock(meta.entries || [], meta.layout, meta.unfiled || 0), quickLinks(meta)].join("\n\n");
+	}
+
+	/**
+	 * The 看板 layout's home page: the update note (folded), 從這裡開始, four number cards, the topic cards and the quick
+	 * links as one row of buttons.
+	 */
+	function boardHome(meta, total) {
+		let parts = [dashboard.metaCallout(`🏠 ${total} 篇文獻筆記 · ${stamp(meta.now)} 更新`, [
+			"ZotMax 依 Zotero 分類整理 vault 裡的文獻筆記。每張主題卡連到它的主題頁"
+				+ (meta.organized ? "，主題頁和那個分類的文獻在同一個資料夾。" : "；筆記本身沒有搬動。"),
+			"想一打開 Obsidian 就看到這頁：把它加入書籤（Bookmarks），或用 Homepage 外掛設成首頁。",
+		])];
+		let start = startHere(meta.records || [], { now: meta.now, layout: "board" });
+		if (start) parts.push(start);
+		if (meta.stats && meta.stats.total) parts.push(dashboard.overviewBoard(meta.stats, { reviews: meta.reviews, compact: true }));
+		parts.push(topicsBlock(meta.entries || [], "board", meta.unfiled || 0), quickLinkBar(meta));
+		return parts.filter(Boolean).join("\n\n");
+	}
+
+	/** The quick links as a callout of links the snippet sets out as buttons (看板 layout). */
+	function quickLinkBar(meta) {
+		let links = [];
+		if (meta.dashboardLink) links.push(wikilink(meta.dashboardLink, "📊 研究儀表板"));
+		for (let r of (meta.reviews || []).slice(0, 3)) links.push(wikilink(r.link, `🗂️ ${r.title}`));
+		if (meta.conceptIndex) links.push(wikilink(meta.conceptIndex, "🧠 概念索引"));
+		if (meta.latestReport) links.push(wikilink(meta.latestReport.link, `📝 進度報告 ${meta.latestReport.date}`));
+		if (meta.baseLink) links.push(wikilink(meta.baseLink, "📚 文獻總表"));
+		return `> [!zm-links] 快速入口\n> ${links.join(" · ")}`;
 	}
 
 	const START_ROWS = 5;
@@ -726,7 +755,7 @@
 	return {
 		HOME_NAME, TOPIC_FOLDER, DIRECTIONS, UNJUDGED, MAX_CARDS,
 		topicFileName, groupTopics, tally, verdict, termGroups, trendOf, topicStats, nextSteps,
-		topicOverview, topicSection, staleSection, topicCard, topicsBlock, quickLinks, homeSection, startHere, evidenceCanvas, canvasIsOurs, buildPage, assignFiles,
+		topicOverview, topicSection, staleSection, topicCard, topicsBlock, quickLinks, quickLinkBar, homeSection, boardHome, startHere, evidenceCanvas, canvasIsOurs, buildPage, assignFiles,
 		writeAll, afterDashboard,
 	};
 });

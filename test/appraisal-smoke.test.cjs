@@ -392,7 +392,7 @@ test("文獻評讀表: pane prefilled from the AI note → answers, B reviewer, 
 	assert.match(chenMd, /\nappraisal_tool: "CASP Checklist: For Randomised Controlled Trials \(RCTs\) \(2024\)"\n/);
 	assert.match(chenMd, /\nappraisal_overall: "需更多資訊"\n/);
 	assert.match(chenMd, /\nappraisal_verified: true\n/);
-	assert.match(chenMd, /\n> \[!example\]- 文獻評讀表\n> > \[!success\] 已核對（\d{4}-\d{2}-\d{2}）\n/);
+	assert.match(chenMd, /\n> \[!zm-form\]- 文獻評讀表\n> > \[!success\] 已核對（\d{4}-\d{2}-\d{2}）\n/);
 	assert.match(chenMd, /\| 3\. 所有進入研究的受試者在研究結束時是否都有交代？ \| 否 \| 流失 25%，未做 ITT \|/);
 	assert.match(chenMd, /\*\*整體評價\*\*：需更多資訊 — 研究品質尚可/);
 	assert.match(chenMd, /\*\*雙人評讀\*\*：評讀者 A／B；κ = 0\.50/);
@@ -400,7 +400,7 @@ test("文獻評讀表: pane prefilled from the AI note → answers, B reviewer, 
 	let leeMd = fs.readFileSync(path.join(vault, "Zotero", "lee2021.md"), "utf8");
 	assert.match(leeMd, /\nappraisal_tool: "JBI Checklist for Randomized Controlled Trials"\n/);
 	assert.match(leeMd, /\nappraisal_verified: false\n/);
-	assert.match(leeMd, /> \[!example\]- 文獻評讀表\n> > \[!warning\] AI 初評，尚未核對\n> > 評讀工具：\[JBI Critical Appraisal Tool/);
+	assert.match(leeMd, /> \[!zm-form\]- 文獻評讀表\n> > \[!warning\] AI 初評，尚未核對\n> > 評讀工具：\[JBI Critical Appraisal Tool/);
 	assert.match(leeMd, /\| 2\. 分派至各組的過程是否隱匿？ \| 是 \| 中央分派 \|/);
 
 	let chenPage = state.pages.get(`library/${chen.key}`);

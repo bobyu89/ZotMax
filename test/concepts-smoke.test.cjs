@@ -325,7 +325,7 @@ test("a manual sync writes the cards and the index; the dashboard links them; �
 	}
 	// The dashboard (written after the cards) lists the top concepts and links the index
 	let dashboard = fs.readFileSync(path.join(env.vault, "Zotero", "研究儀表板.md"), "utf8");
-	assert.match(dashboard, /## 🧠 熱門概念\n\n\[\[Zotero\/概念\/概念索引\|概念索引\]\]：共 6 個概念；文獻數最多的 6 個：\n\n\[\[Zotero\/概念\/Morse Fall Scale\|Morse Fall Scale\]\]（2） · \[\[Zotero\/概念\/Self-efficacy\|Self-efficacy\]\]（2）/);
+	assert.match(dashboard, /> \[!zm-ref\]- 熱門概念\n> \[\[Zotero\/概念\/概念索引\|概念索引\]\]：共 6 個概念；文獻數最多的 6 個：\n>\n> \[\[Zotero\/概念\/Morse Fall Scale\|Morse Fall Scale\]\]（2） · \[\[Zotero\/概念\/Self-efficacy\|Self-efficacy\]\]（2）/);
 
 	// The user writes a definition and notes; aliases merge 自我效能 into Self-efficacy and the falls together
 	let sePath = path.join(conceptDir(env), "Self-efficacy.md");
@@ -404,7 +404,7 @@ test("no concepts yet: nothing is written; the command says so; without a vault 
 	await ZB.main.run([d], { targets: ["obsidian"], ai: "reuse" });
 	assert.ok(!fs.existsSync(conceptDir(env)));
 	let dashboard = fs.readFileSync(path.join(env.vault, "Zotero", "研究儀表板.md"), "utf8");
-	assert.match(dashboard, /## 🧠 熱門概念\n\n還沒有概念卡片：ZotMax 按鈕或快速指令 → 更新概念卡片/);
+	assert.match(dashboard, /> \[!zm-ref\]- 熱門概念\n> 還沒有概念卡片：ZotMax 按鈕或快速指令 → 更新概念卡片/);
 	let before = env.descriptions.length;
 	tools(env).update.onCommand();
 	await settle(() => env.descriptions.length > before);

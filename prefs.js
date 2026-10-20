@@ -5,6 +5,8 @@ pref("extensions.zotero-bridge.obsidian.filenameFormat", "citekey");
 pref("extensions.zotero-bridge.obsidian.createBase", true);
 // The literature note's 「重點」 (core.js buildBoard): "board" = 看板 of cards, "classic" = one callout
 pref("extensions.zotero-bridge.obsidian.layout", "board");
+// 看板: hide the properties the board already shows (cssclasses zm-compact-props, content/obsidian-style.js)
+pref("extensions.zotero-bridge.obsidian.compactProperties", true);
 // "organized" (10 文獻/<collection>, numbered folders) or "flat" (before 0.23.0); empty: picked once by vault-layout.js
 pref("extensions.zotero-bridge.obsidian.structure", "");
 // The 看板 CSS snippet (content/obsidian-style.js) was installed once; a snippet the user turned off stays off

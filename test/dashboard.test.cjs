@@ -271,9 +271,13 @@ test("overviewBoard: number cards for the vault (literature, reading, AI notes, 
 	assert.match(board, /> > \[!zm-kpi\] 待讀\n> > \*\*2 篇\*\* {2}\n> > ⚠️ \d+ 篇資料要補/);
 	assert.match(board, /> > \[!zm-kpi\] 回顧專案\n> > \*\*2 個\*\* {2}\n> > 納入 4 篇$/);
 	assert.equal(d.overviewBoard(d.aggregate([], { now: NOW })), "", "nothing to show without notes");
-	// In the section: right after the info callout, only with layout "board"
+	// The home page's four: no 待讀 and 回顧專案
+	let compact = d.overviewBoard(stats, { reviews, compact: true });
+	assert.deepEqual([...compact.matchAll(/^> > \[!zm-kpi\] (.+)$/gm)].map(m => m[1]), ["文獻", "已讀完成率", "AI 筆記", "評讀已核對"]);
+	// In the section: right after the folded update note, only with layout "board"
 	let md = d.buildDashboardSection(stats, { now: NOW, layout: "board", reviews });
-	assert.ok(md.indexOf("> [!zm-board] 總覽") < md.indexOf("## 📖 閱讀進度"));
+	assert.match(md, /^> \[!zm-meta\]- 🔄 \d{4}-\d{2}-\d{2} \d{2}:\d{2} 更新\n/);
+	assert.ok(md.indexOf("> [!zm-board] 總覽") < md.indexOf("> [!zm-ref]- 閱讀進度"));
 	assert.doesNotMatch(d.buildDashboardSection(stats, { now: NOW, layout: "classic" }), /zm-board/);
 	assert.equal(d.share(1, 4), "▰▰▰▱▱▱▱▱▱▱ 25%");
 	// A verified appraisal is counted from the frontmatter
@@ -335,7 +339,9 @@ test("chartsBoard, yearRows and monthRows: a board of chart cards (designs pie, 
 	assert.deepEqual(months[0], ["2025-11", 0]);
 	let stats = d.aggregate(sample(), { now: NOW });
 	let board = d.chartsBoard(stats);
-	assert.ok(board.startsWith("> [!zm-board] 圖表\n> > [!zm-chart] 研究設計\n> > ```mermaid\n> > pie showData\n"), board);
+	// 閱讀進度 first: the read share, one square per paper by status (scaled to 10), the legend
+	assert.ok(board.startsWith("> [!zm-board] 圖表\n> > [!zm-chart] 閱讀進度\n> > **29%** 已讀完成  \n> > ⬜⬜🟨🟩🟦  \n> > ⚪ 待讀 2 · 🟡 閱讀中 1 · 🟢 已讀 1 · 🔵 已引用 1\n"), board);
+	assert.match(board, /> > \[!zm-chart\] 研究設計\n> > ```mermaid\n> > pie showData\n/);
 	assert.match(board, /> > {5}"RCT" : 2\n/);
 	assert.match(board, /> > \[!zm-chart\] 證據等級（CEBM，1 最強）\n> > L2 ▰▰▰▰▰▰▰▰▰▰ 1 {2}\n/);
 	assert.match(board, /> > \[!zm-chart\] 出版年份\n> > 2024 ▰▰▰▰▰▰▰▰▰▰ 7$/m);
@@ -343,10 +349,50 @@ test("chartsBoard, yearRows and monthRows: a board of chart cards (designs pie, 
 	assert.equal(d.sparkline([0, 1, 2, 4, 0]), "▁▃▅█▁");
 	assert.equal(d.sparkline([0, 0]), "▁▁");
 	let titles = [...board.matchAll(/^> > \[!zm-chart\] (.+)$/gm)].map(m => m[1]);
-	assert.deepEqual(titles, ["研究設計", "證據等級（CEBM，1 最強）", "出版年份", "每月新增（近 12 個月）"]);
+	assert.deepEqual(titles, ["閱讀進度", "研究設計", "證據等級（CEBM，1 最強）", "評讀結果", "出版年份", "每月新增（近 12 個月）"]);
+	assert.match(board, /> > \[!zm-chart\] 評讀結果\n> > 納入 ▰▰▰▰▰▰▰▰▰▰ 2 {2}\n> > 需更多資訊 ▰▰▰▰▰▱▱▱▱▱ 1\n/);
+	// The status bar scales to ten squares, every status keeps one
+	assert.deepEqual(d.statusBar([["待讀", 30], ["閱讀中", 1], ["已讀", 9], ["已引用", 0]]), ["⬜⬜⬜⬜⬜⬜⬜⬜🟨🟩🟩", "⚪ 待讀 30 · 🟡 閱讀中 1 · 🟢 已讀 9"]);
+	assert.deepEqual(d.statusBar([]), []);
+	// The year chart keeps the last eight rows, the earlier ones summed
+	assert.deepEqual(d.lastRows([["≤ 2010", 3], ...Array.from({ length: 10 }, (_, k) => [String(2011 + k), 1])], 8), [["≤ 2013", 6], ["2014", 1], ["2015", 1], ["2016", 1], ["2017", 1], ["2018", 1], ["2019", 1], ["2020", 1]]);
+	assert.deepEqual(d.lastRows([["2024", 1]], 8), [["2024", 1]]);
 	assert.equal(d.chartsBoard(d.aggregate([], { now: NOW })), "");
 	let md = d.buildDashboardSection(stats, { now: NOW, layout: "board" });
 	assert.ok(md.indexOf("> [!zm-board] 總覽") < md.indexOf("> [!zm-board] 圖表"));
-	assert.ok(md.indexOf("> [!zm-board] 圖表") < md.indexOf("## 📖 閱讀進度"));
+	assert.ok(md.indexOf("> [!zm-board] 圖表") < md.indexOf("> [!zm-ref]- 閱讀進度"));
 	assert.doesNotMatch(d.buildDashboardSection(stats, { now: NOW, layout: "classic" }), /zm-chart/);
+});
+
+test("the 看板 dashboard: the folded update note, 總覽, 圖表, 待處理 cards, the gap map, then every table folded; empty vaults say how to start", () => {
+	let stats = d.aggregate(sample(), { now: NOW });
+	let reviews = [{ title: "跌倒預防系統性回顧", link: "Zotero/30 評讀與綜整/跌倒", prisma: { identified: 412, screened: 318, assessed: 46, included: 12 } }];
+	let md = d.buildDashboardSection(stats, { now: NOW, layout: "board", reviews, baseLink: "Zotero/90 系統/研究儀表板.base",
+		latestReport: { date: "2026-10-01", link: "Zotero/40 寫作/進度報告/2026-10-01" }, concepts: "## 🧠 熱門概念\n\n概念內容", usage: null });
+	let tops = [...md.matchAll(/^> \[!([\w-]+)\](-?) (.+)$/gm)].map(m => `${m[1]}${m[2]} ${m[3]}`);
+	assert.match(tops[0], /^zm-meta- 🔄 \d{4}-\d{2}-\d{2} \d{2}:\d{2} 更新$/);
+	assert.deepEqual(tops.slice(1), ["zm-board 總覽", "zm-board 圖表", "zm-board 待處理",
+		"zm-ref- 閱讀進度", "zm-ref- 證據概況", "zm-ref- 待處理清單", "zm-ref- 回顧專案", "zm-ref- 熱門概念", "zm-ref- AI 用量"]);
+	// The update note keeps the refresh hint and the links
+	assert.match(md, /^> \[!zm-meta\]- 🔄 [^\n]+\n> 由 ZotMax 依 vault 中的文獻筆記 frontmatter 產生。[^\n]+ {2}\n> Bases 檢視：\[\[Zotero\/90 系統\/研究儀表板\.base\|研究儀表板\.base\]\][^\n]* {2}\n> 最新進度報告（給指導教授）：\[\[Zotero\/40 寫作\/進度報告\/2026-10-01\|2026-10-01\]\]/);
+	// 待處理: one card per kind with something in it, at most five rows
+	let cards = [...md.matchAll(/^> > \[!(zm-(?:reading|issues|review|inbox))\] (.+)$/gm)].map(m => `${m[1]} ${m[2]}`);
+	assert.deepEqual(cards.map(c => c.split(" ")[0]), ["zm-reading", "zm-issues", "zm-review", "zm-inbox"]);
+	assert.match(md, /> > \[!zm-review\] 回顧專案（1）\n> > - \[\[Zotero\/30 評讀與綜整\/跌倒\|跌倒預防系統性回顧\]\]：納入 \*\*12\*\* 篇（412 → 318 → 46）/);
+	assert.match(md, /> > \[!zm-issues\] 資料要補（\d+）\n> > [^-\n][^\n]+\n> >\n> > - /, "the counts line, then the papers");
+	// No status pie in the folded 閱讀進度 (the chart has the statuses)
+	assert.doesNotMatch(md, /title 閱讀狀態/);
+	// The folded titles lose the headings' emoji (the snippet gives one icon)
+	assert.doesNotMatch(md, /^> \[!zm-ref\]- [📖🔬📝🗂🧠🤖]/mu);
+	// Long lists: five rows, then the rest counted
+	assert.match(d.listCard("zm-reading", "t", ["- a", "- b", "- c", "- d", "- e", "- f", "- g"]), /> - e\n> - ……還有 2 篇$/);
+	// No notes yet
+	let empty = d.buildDashboardSection(d.aggregate([], { now: NOW }), { now: NOW, layout: "board" });
+	assert.match(empty, /^> \[!zm-meta\]- [^\n]+\n[\s\S]*\n\n還沒有同步到 Obsidian 的文獻筆記。/);
+	assert.doesNotMatch(empty, /zm-board/);
+	// The gap map's caveat: folded in the 看板 layout, a warning in the classic one
+	let rec = (title, i, o) => d.noteRecord(noteFM({ title }, Object.assign({ study: { intervention: i, outcomes: o, evidence_level: "2", study_design: "RCT" } }, AI), "已讀"), `Zotero/${title}.md`);
+	let map = d.gapMap([rec("A", "運動", "跌倒"), rec("B", "運動", "跌倒")]);
+	assert.match(d.gapMapSection(map, { board: true }), /> \[!zm-meta\]- 這是字詞層級的整理，不是系統性回顧\n> 介入和結果指標/);
+	assert.match(d.gapMapSection(map), /> \[!warning\] 這是字詞層級的整理/);
 });

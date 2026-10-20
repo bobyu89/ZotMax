@@ -492,8 +492,8 @@ test("網頁版 AI: a sync never calls an AI; the copied prompt has the paper; t
 	assert.doesNotMatch(ai.md, /好的，以下是筆記/, "the chat's preamble is gone");
 	let note = read(vault, "Zotero", "lee2024.md");
 	assert.match(note, /^study_design: "RCT"$/m);
-	assert.match(note, /> \[!zm-board\] 重點\n> `RCT` `N = 120`/);
-	assert.match(note, /^> \[!note\]- AI 文獻筆記（ChatGPT 網頁版 · \d{4}-\d{2}-\d{2}）$/m);
+	assert.match(note, /> \[!zm-board\] 重點\n> [^\n]+\n>\n> > \[!zm-stats\|wide\] 研究概要\n> > - 研究設計：\*\*RCT\*\*\n> > - 樣本數：\*\*N = 120\*\*\n/);
+	assert.match(note, /^> \[!zm-ai\]- AI 文獻筆記（ChatGPT 網頁版 · \d{4}-\d{2}-\d{2}）$/m);
 	assert.equal(log.filter(l => l.api === "anthropic" || l.api === "openrouter").length, 0, "still no AI call");
 	assert.deepEqual(env.errors, []);
 
@@ -574,7 +574,7 @@ test("OpenRouter: the key from the login manager, a sync's AI note through Chat 
 	assert.equal(calls[0].body.messages[0].role, "system");
 	assert.match(calls[0].body.messages[1].content, /twelve week exercise intervention/);
 	assert.equal(log.filter(l => l.api === "anthropic").length, 0);
-	assert.match(read(vault, "Zotero", "lee2024.md"), /^> \[!note\]- AI 文獻筆記（google\/gemma-4-31b-it:free · /m);
+	assert.match(read(vault, "Zotero", "lee2024.md"), /^> \[!zm-ai\]- AI 文獻筆記（google\/gemma-4-31b-it:free · /m);
 	let ledger = JSON.parse(env.prefStore[P + "usage.ledger"]);
 	let month = Object.values(ledger)[0];
 	assert.equal(month.byModel["google/gemma-4-31b-it:free"].calls, 1);

@@ -401,8 +401,11 @@
 			kpi("已讀完成率", `${stats.readPercent}%`, core.bar(stats.read, stats.total), `已讀＋已引用 ${stats.read}／${stats.total}`),
 			kpi("AI 筆記", `${stats.withAI}／${stats.total}`, core.bar(stats.withAI, stats.total), stats.total - stats.withAI ? `還有 ${stats.total - stats.withAI} 篇沒有` : "每篇都有"),
 			kpi("評讀已核對", `${stats.verified}／${stats.total}`, core.bar(stats.verified, stats.total), `有評讀結果 ${stats.appraised} 篇（含 AI 初評）`),
-			kpi("待讀", `${stats.unread.length} 篇`, stats.issues.length ? `⚠️ ${stats.issues.length} 篇資料要補` : "資料都齊了"),
-			kpi("回顧專案", `${reviews.length} 個`, reviews.length ? `納入 ${included} 篇` : "還沒有 PRISMA 筆記"),
+			// meta.compact (the home page): the four cards above only; the dashboard has the rest
+			...(meta.compact ? [] : [
+				kpi("待讀", `${stats.unread.length} 篇`, stats.issues.length ? `⚠️ ${stats.issues.length} 篇資料要補` : "資料都齊了"),
+				kpi("回顧專案", `${reviews.length} 個`, reviews.length ? `納入 ${included} 篇` : "還沒有 PRISMA 筆記"),
+			]),
 		];
 		let body = cards.join("\n\n").split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
 		return `> [!zm-board] 總覽\n${body}`;
@@ -525,7 +528,9 @@
 			parts.push(pairs.slice(0, GAP_TOP).map(p => `- **${p.row.name} × ${p.col.name}**：${p.recs.length} 篇${p.level ? `（最強 CEBM ${p.level}）` : ""} — `
 				+ p.recs.slice(0, 4).map(r => wikilink(r.link, r.title)).join("、") + (p.recs.length > 4 ? ` 等 ${p.recs.length} 篇` : "")).join("\n"));
 		}
-		parts.push("> [!warning] 這是字詞層級的整理，不是系統性回顧\n> 介入和結果指標是 AI 筆記從各篇摘出來的，寫法不一致時會分成不同列或欄。找缺口時請回到原文確認，也記得這裡只有你收進 Zotero 的文獻。");
+		// The caveat: a warning in the classic layout, a folded note in the 看板 layout (opts.board)
+		let caveat = "介入和結果指標是 AI 筆記從各篇摘出來的，寫法不一致時會分成不同列或欄。找缺口時請回到原文確認，也記得這裡只有你收進 Zotero 的文獻。";
+		parts.push(opts.board ? metaCallout("這是字詞層級的整理，不是系統性回顧", [caveat]) : `> [!warning] 這是字詞層級的整理，不是系統性回顧\n> ${caveat}`);
 		return parts.join("\n\n");
 	}
 
@@ -542,6 +547,17 @@
 	}
 
 	const SPARK = "▁▂▃▄▅▆▇█";
+	// The 出版年份 chart's rows: the latest years, the rest added up in a 「≤ year」 row
+	const CHART_YEARS = 8;
+
+	/** The last `max` rows of [label, n] year rows, the earlier ones (an earlier 「≤」 row too) summed as 「≤ year」. */
+	function lastRows(rows, max) {
+		if (rows.length <= max) return rows;
+		let cut = rows.length - (max - 1);
+		let older = rows.slice(0, cut);
+		let last = String(older[older.length - 1][0]).replace(/^≤\s*/, "");
+		return [[`≤ ${last}`, older.reduce((t, [, n]) => t + n, 0)], ...rows.slice(cut)];
+	}
 
 	/** One block character per count, scaled to the largest (0 is the lowest block). */
 	function sparkline(counts) {
@@ -556,6 +572,23 @@
 		return [`**${total} 篇**`, `\`${sparkline(months.map(([, n]) => n))}\``, `${months[0][0]} → ${months[months.length - 1][0]}；最多 ${top[0]}（${top[1]} 篇）`];
 	}
 
+	// Reading statuses as squares (one per paper, the bar scaled to 10 so it fits a card's line): 待讀 ⬜, 閱讀中 🟨, 已讀 🟩, 已引用 🟦
+	const STATUS_SQUARES = { "待讀": "⬜", "閱讀中": "🟨", "已讀": "🟩", "已引用": "🟦" };
+	const STATUS_EMOJI = { "待讀": "⚪", "閱讀中": "🟡", "已讀": "🟢", "已引用": "🔵" };
+	const SQUARES = 10;
+
+	/** The reading statuses as a bar of coloured squares and a legend line: [bar, legend]; [] without papers. */
+	function statusBar(statuses) {
+		let rows = statuses.filter(([s, n]) => n > 0 && STATUS_SQUARES[s]);
+		let total = rows.reduce((t, [, n]) => t + n, 0);
+		if (!total) return [];
+		let scale = total > SQUARES ? SQUARES / total : 1;
+		return [
+			rows.map(([s, n]) => STATUS_SQUARES[s].repeat(Math.max(1, Math.round(n * scale)))).join(""),
+			rows.map(([s, n]) => `${STATUS_EMOJI[s]} ${s} ${n}`).join(" · "),
+		];
+	}
+
 	/**
 	 * 「圖表」: a board of chart cards — research designs as a Mermaid pie, evidence levels as bars (CEBM 1 on top,
 	 * like the pyramid), publication years as bars, the last 12 months' additions as a sparkline. "" without notes.
@@ -563,13 +596,17 @@
 	function chartsBoard(stats) {
 		if (!stats.total) return "";
 		let cards = [];
+		let status = statusBar(stats.statuses);
+		if (status.length) cards.push(chartCard("閱讀進度", [`**${stats.readPercent}%** 已讀完成`, ...status]));
 		let designs = stats.designs.filter(([k]) => k !== NO_VALUE);
 		if (designs.length) {
 			cards.push(chartCard("研究設計", ["```mermaid", "pie showData", ...designs.map(([k, n]) => `    "${mermaidText(k)}" : ${n}`), "```"]));
 		}
 		let levels = stats.levels.filter(([k]) => k !== NO_VALUE);
 		if (levels.length) cards.push(chartCard("證據等級（CEBM，1 最強）", barRows(levels.map(([k, n]) => [`L${k}`, n]))));
-		if (stats.years.length) cards.push(chartCard("出版年份", barRows(stats.years)));
+		let verdicts = stats.appraisals.filter(([k]) => k !== NO_VALUE);
+		if (verdicts.length) cards.push(chartCard("評讀結果", barRows(verdicts)));
+		if (stats.years.length) cards.push(chartCard("出版年份", barRows(lastRows(stats.years, CHART_YEARS))));
 		if (stats.months.some(([, n]) => n)) cards.push(chartCard("每月新增（近 12 個月）", monthLines(stats.months)));
 		if (!cards.length) return "";
 		let body = cards.join("\n\n").split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
@@ -589,13 +626,14 @@
 		].join("\n");
 	}
 
-	function progressSection(stats) {
+	function progressSection(stats, opts = {}) {
 		if (!stats.total) return "## 📖 閱讀進度\n\n還沒有同步到 Obsidian 的文獻筆記。";
 		let parts = ["## 📖 閱讀進度"];
 		parts.push(`共 **${stats.total}** 篇文獻，已讀完成率 **${stats.readPercent}%**（已讀 + 已引用 ${stats.read} 篇）。`
 			+ (stats.deleted ? ` 另有 ${stats.deleted} 篇已從 Zotero 刪除，不列入計算。` : ""));
 		parts.push(table(["狀態", "篇數", "比例"], stats.statuses.map(([s, n]) => [s, n, share(n, stats.total)])));
-		let pie = buildStatusPie(stats.statuses);
+		// The 看板 layout shows the statuses in 圖表 already (opts.pie false)
+		let pie = opts.pie === false ? "" : buildStatusPie(stats.statuses);
 		if (pie) parts.push(pie);
 		parts.push("### 各分類進度");
 		let rows = stats.collections.slice(0, MAX_COLLECTIONS).map(c => [
@@ -736,6 +774,92 @@
 		return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())} ${p(date.getHours())}:${p(date.getMinutes())}`;
 	}
 
+	const BOARD_ROWS = 5;
+
+	/** A title for a card list, cut at 50 characters. */
+	function shortTitle(t) {
+		t = String(t || "").replace(/\s+/g, " ").trim();
+		return t.length > 50 ? t.slice(0, 48).trim() + "…" : t;
+	}
+
+	/** A list card of the 待處理 board: the items, at most five, then 「……還有 n 篇」. */
+	function listCard(type, title, items, head) {
+		let rows = items.slice(0, BOARD_ROWS);
+		if (items.length > BOARD_ROWS) rows.push(`- ……還有 ${items.length - BOARD_ROWS} 篇`);
+		return [`> [!${type}] ${title}`, ...(head ? [`> ${head}`, ">"] : []), ...rows.map(l => `> ${l}`)].join("\n");
+	}
+
+	/**
+	 * 「待處理」: what to do next as cards — 待讀最久, 資料要補 (counts by kind, then the papers), 回顧專案 (PRISMA counts), 本週新增.
+	 * Only the cards with something in them; "" when there is nothing.
+	 */
+	function todoBoard(stats, meta = {}) {
+		let now = stats.now;
+		let cards = [];
+		if (stats.unread.length) {
+			cards.push(listCard("zm-reading", `待讀最久（${stats.unread.length}）`, stats.unread.map((r) => {
+				let t = dateOf(r.dateAdded);
+				return `- ${wikilink(r.link, shortTitle(r.title))}${t === null ? "" : ` · 已 ${Math.max(0, Math.floor((now - t) / DAY_MS))} 天`}`;
+			})));
+		}
+		if (stats.issues.length) {
+			let counts = Object.entries(ISSUE_LABELS).filter(([k]) => stats.issueCounts[k]).map(([k, label]) => `${label} ${stats.issueCounts[k]}`).join(" · ");
+			cards.push(listCard("zm-issues", `資料要補（${stats.issues.length}）`,
+				stats.issues.map(({ record, issues }) => `- ${wikilink(record.link, shortTitle(record.title))}：${issues.map(k => ISSUE_LABELS[k]).join("、")}`), counts));
+		}
+		let reviews = meta.reviews || [];
+		if (reviews.length) {
+			cards.push(listCard("zm-review", `回顧專案（${reviews.length}）`, reviews.map((r) => {
+				let p = r.prisma || {};
+				let flow = [p.identified, p.screened, p.assessed].every(n => n !== null && n !== undefined) ? `（${p.identified} → ${p.screened} → ${p.assessed}）` : "";
+				return `- ${wikilink(r.link, shortTitle(r.title))}：納入 **${p.included === null || p.included === undefined ? "—" : p.included}** 篇${flow}`;
+			})));
+		}
+		if (stats.added.length) {
+			cards.push(listCard("zm-inbox", `本週新增（${stats.added.length}）`, stats.added.map(r => `- ${wikilink(r.link, shortTitle(r.title))}${r.status ? ` · ${r.status}` : ""}`)));
+		}
+		if (!cards.length) return "";
+		let body = cards.join("\n\n").split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
+		return `> [!zm-board] 待處理\n${body}`;
+	}
+
+	/** A dashboard section ("## title" then its body) as a folded callout titled the same: the 看板 layout's details. */
+	function foldSection(md) {
+		let text = String(md || "").trim();
+		let m = /^##[ \t]+(.+)\n*/.exec(text);
+		// The heading's emoji goes: the snippet gives the folded sections one icon
+		let title = m ? m[1].replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, "").trim() : "詳細內容";
+		return core.callout("zm-ref", title, m ? text.slice(m[0].length) : text, true);
+	}
+
+	/** The update note at the top of the dashboard and the home page, folded: when, then how to refresh and the links. */
+	function metaCallout(title, lines) {
+		return core.callout("zm-meta", title, lines.filter(Boolean).join("  \n"), true);
+	}
+
+	/**
+	 * The 看板 layout's dashboard: the update note (folded), 總覽, 圖表, 待處理, the evidence gap map, then every table and
+	 * list folded below — the page reads in one screen or two, the details are a click away.
+	 */
+	function boardDashboard(stats, meta = {}) {
+		let parts = [metaCallout(`🔄 ${stamp(meta.now || new Date())} 更新`, [
+			"由 ZotMax 依 vault 中的文獻筆記 frontmatter 產生。重新整理：ZotMax 按鈕或快速指令 → 更新研究儀表板（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。",
+			meta.baseLink ? `Bases 檢視：[[${meta.baseLink}|${BASE_NAME}]]（證據等級表、掃描檔待 OCR、待讀（依分類））` : "",
+			meta.latestReport ? `最新進度報告（給指導教授）：[[${meta.latestReport.link}|${meta.latestReport.date}]]` : "",
+		])];
+		if (!stats.total) {
+			parts.push("還沒有同步到 Obsidian 的文獻筆記。在 Zotero 選文獻 → ZotMax 按鈕 → 同步，這裡就會出現數字和圖表。");
+			return parts.join("\n\n");
+		}
+		parts.push(overviewBoard(stats, meta), chartsBoard(stats), todoBoard(stats, meta));
+		if (meta.gapMap) parts.push(gapMapSection(meta.gapMap, { board: true }));
+		parts.push(foldSection(progressSection(stats, { pie: false })), foldSection(evidenceSection(stats)));
+		parts.push(foldSection(todoSection(stats)), foldSection(projectsSection(meta.reviews || [], meta.drafts || [])));
+		if (meta.concepts) parts.push(foldSection(meta.concepts));
+		parts.push(foldSection(usageSection(meta.usage)));
+		return parts.filter(Boolean).join("\n\n");
+	}
+
 	/**
 	 * The managed region's content.
 	 * meta: { now: Date, reviews, drafts, usage: usageReport(), baseLink: "Zotero/研究儀表板.base" | "", latestReport: { date, link } | null,
@@ -743,6 +867,7 @@
 	 *   gapMap: gapMap() for 「🗺️ 證據缺口地圖」 | absent }
 	 */
 	function buildDashboardSection(stats, meta = {}) {
+		if (meta.layout === "board") return boardDashboard(stats, meta);
 		let info = [
 			`> [!info] 由 ZotMax 於 ${stamp(meta.now || new Date())} 依 vault 中的文獻筆記 frontmatter 產生；`
 				+ "重新整理：ZotMax 按鈕或快速指令 → 更新研究儀表板（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。",
@@ -1057,7 +1182,7 @@
 	return {
 		NOTE_NAME, BASE_NAME, ISSUE_LABELS,
 		parseFrontmatter, suspectChineseNames, noteRecord, projectRecord, aggregate, usageReport,
-		buildStatusPie, share, kpi, wikilink, cell, bestLevel, termKey, overviewBoard, splitTerms, gapMap, gapMapSection, chartsBoard, yearRows, monthRows, sparkline, buildDashboardSection, buildDashboardNote, buildDashboardBase,
+		buildStatusPie, share, kpi, wikilink, cell, bestLevel, statusBar, lastRows, todoBoard, foldSection, metaCallout, boardDashboard, listCard, termKey, overviewBoard, splitTerms, gapMap, gapMapSection, chartsBoard, yearRows, monthRows, sparkline, buildDashboardSection, buildDashboardNote, buildDashboardBase,
 		literatureRecords, projectRecords, update, afterSync, runFromMenu,
 	};
 });

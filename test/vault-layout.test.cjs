@@ -185,8 +185,8 @@ test("the navigation bar: 首頁 › topics, 「跳到」 the folded sections (b
 	let note = core.buildObsidianNote(null, data, { layout: "board", nav, fullTextLink: "Zotero/10 文獻/碩論/跌倒/x · 全文" });
 	assert.match(note, /%%\n\n> \[!zm-nav\] \[\[Zotero\/00 首頁\|🏠 首頁\]\] › \[\[Zotero\/10 文獻\/碩論\/跌倒\/00 跌倒 總覽\|碩論 › 跌倒\]\] · \[\[Zotero\/10 文獻\/碩論\/00 碩論 總覽\|碩論\]\]\n/);
 	assert.match(note, /^> 跳到：\[\[#\^zm-highlights\|劃線\]\] · \[\[#\^zm-abstract\|摘要\]\] · \[\[Zotero\/10 文獻\/碩論\/跌倒\/x · 全文\|全文\]\] · \[\[#✍️ 我的筆記\|✍️ 我的筆記\]\]$/m);
-	assert.match(note, /^> \[!quote\]- 🟡 [^\n]+\n(?:>.*\n)*\n\^zm-highlights\n/m);
-	assert.match(note, /^> \[!info\]- 摘要（Abstract）\n> Background\.\n\n\^zm-abstract\n/m);
+	assert.match(note, /^> \[!zm-mine\]- 我的劃線[^\n]*\n> > \[!quote\] 🟡 [^\n]+\n(?:>.*\n)*\n\^zm-highlights\n/m);
+	assert.match(note, /^> \[!zm-ref\]- 摘要與書目\n> > \[!info\] 摘要（Abstract）\n> > Background\.\n(?:>.*\n)*\n\^zm-abstract\n/m);
 	assert.ok(note.indexOf("[!zm-nav]") < note.indexOf("[!zm-board]"), "the bar comes first");
 	// Without nav: exactly as before
 	let plain = core.buildObsidianNote(null, data, { layout: "board" });
