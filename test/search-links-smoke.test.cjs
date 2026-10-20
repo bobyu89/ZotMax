@@ -576,9 +576,9 @@ test("Obsidian note: the 「🔎 延伸搜尋」 callout in the managed region, 
 	let note = fs.readFileSync(file, "utf8");
 	let start = note.indexOf("%% zotero-bridge:start");
 	let end = note.indexOf("%% zotero-bridge:end %%");
-	let at = note.indexOf("> [!search]- 🔎 延伸搜尋");
+	let at = note.indexOf("> > [!search] 🔎 延伸搜尋");
 	assert.ok(start < at && at < end, note);
-	assert.ok(at > note.indexOf("> [!info] 書目資訊"));
+	assert.ok(at < note.indexOf("> > [!info] 書目資訊"), "延伸搜尋, then 書目資訊, inside 摘要與書目");
 	assert.ok(note.includes("> **找這篇**：[PubMed](https://pubmed.ncbi.nlm.nih.gov/123456/) · "));
 	assert.ok(note.includes("> **相似文獻**：[PubMed Similar articles](https://pubmed.ncbi.nlm.nih.gov/?linkname=pubmed_pubmed&from_uid=123456)"));
 	assert.ok(note.includes("> **MeSH**：[Accidental Falls](https://www.ncbi.nlm.nih.gov/mesh/?term=Accidental%20Falls)"));

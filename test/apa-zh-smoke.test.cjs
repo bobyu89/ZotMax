@@ -289,8 +289,8 @@ test("sync, references.json and a synthesis with Chinese and English items", asy
 	let note = readNote(env.vault, "ZHART001");
 	assert.match(note, /^authors:\n  - "陳美玲"\n  - "林小華"\n  - "歐陽志明"$/m);
 	assert.match(note, /^citekey: "陳2023護理人員"$/m);
-	assert.match(note, /^> \*\*Authors\*\*: 陳美玲; 林小華; 歐陽志明 {2}$/m);
-	assert.match(note, /^> \*\*APA 7\*\*: 陳美玲、林小華、歐陽志明（2023）。護理人員跌倒預防衛教之成效。\*護理雜誌，70\*\(2\)，45–56。https:\/\/doi\.org\/10\.6224\/JN\.202304_70\(2\)\.07$/m);
+	assert.match(note, /^> > \*\*Authors\*\*: 陳美玲; 林小華; 歐陽志明 {2}$/m);
+	assert.match(note, /^> > \*\*APA 7\*\*: 陳美玲、林小華、歐陽志明（2023）。護理人員跌倒預防衛教之成效。\*護理雜誌，70\*\(2\)，45–56。https:\/\/doi\.org\/10\.6224\/JN\.202304_70\(2\)\.07$/m);
 	let thesisNote = readNote(env.vault, "ZHTHS001");
 	assert.match(thesisNote, /^ {2}- "王大明"$/m);
 	assert.match(thesisNote, /\*\*APA 7\*\*: 王大明（2020）。\*加護病房護理人員之工作壓力\*〔碩士論文，國防醫學院〕。華藝線上圖書館。https:\/\/doi\.org\/10\.6832\/NDMC\.2020\.00001$/m);

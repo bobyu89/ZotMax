@@ -447,13 +447,14 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.match(text, /^fulltext_truncated: true$/m);
 	assert.match(text, /\[\[Fall prevention\]\]/);
 	assert.match(text, /My \*\*own\*\* note/);
-	assert.match(text, /^> - ==🟡Falls decreased== · \[p\. 5\]/m, "the highlight under its colour's meaning");
-	assert.match(text, /^> \[!zm-board\] 重點\n> `RCT` `N = 120`/m, "重點 at the top, as the 看板 (the default layout)");
+	assert.match(text, /^> > - ==🟡Falls decreased== · \[p\. 5\]/m, "the highlight under its colour's meaning");
+	assert.match(text, /^> \[!zm-board\] 重點\n> [^\n]+\n>\n> > \[!zm-stats\|wide\] 研究概要\n> > - 研究設計：\*\*RCT\*\*\n> > - 樣本數：\*\*N = 120\*\*\n/m, "重點 at the top, as the 看板 (the default layout)");
 	assert.match(text, /^> > \[!zm-summary\|wide\] 一句話\n> > 護理師主導衛教/m, "the 一句話 card");
 	assert.match(text, /^> > \[!zm-next\|wide\] 下一步\n/m, "the 下一步 card");
 	assert.match(text, /^study_design: "RCT"$/m);
 	assert.match(text, /^sample_size: 120$/m);
 	assert.match(text, /^measures:\n {2}- "Morse Fall Scale"$/m);
+	assert.match(text, /^cssclasses:\n {2}- "zotmax-note"\n {2}- "zm-compact-props"$/m, "the snippet's classes: the 看板 note and its compact properties");
 	assert.doesNotMatch(text, /"study_design"|```json|結構化資料/, "no raw JSON in the Obsidian body");
 	assert.match(text, /^> - "Falls decreased" \(p\. 5\) ✅$/m);
 	// Bases overview created once in the default folder
@@ -477,6 +478,7 @@ test("full sync from the item menu writes Notion, Obsidian and the AI note", asy
 	assert.match(text2, /我的心得：值得引用。/);
 	assert.match(text2, /^> \[!abstract\] 重點\n> \*\*一句話\*\*：護理師主導衛教/m, "the classic 「重點」 when the setting says so");
 	assert.doesNotMatch(text2, /zm-board/);
+	assert.doesNotMatch(text2, /cssclasses|zotmax-note/, "no snippet classes on a classic note");
 	assert.match(text2, /\[\[Fall prevention\]\]/, "AI note read back from Zotero");
 	assert.match(text2, /^ai_model: "claude-opus-5-5"$/m);
 	// Structured data read back from the Zotero note (no AI call)

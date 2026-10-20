@@ -324,9 +324,9 @@ test("image and ink annotations: vault copies, Notion uploads, Claude image bloc
 	assert.ok(fs.readFileSync(path.join(attachments, `${ITEM_KEY}-INK33333.png`)).equals(ink));
 	let note = fs.readFileSync(path.join(env.vault, "Zotero", `paper${ITEM_KEY.toLowerCase()}.md`), "utf8");
 	let at = s => note.indexOf(s);
-	assert.match(note, new RegExp(`^> - 🟢 \\*\\[圖片註記\\]\\* · \\[p\\. 6\\]\\([^)]+\\)\\n> {3}!\\[\\[Zotero/attachments/${ITEM_KEY}-IMG22222\\.png\\]\\]\\n> {3}💬 Table 2：主要結果$`, "m"));
-	assert.match(note, new RegExp(`^> - 🔵 \\*\\[手繪註記\\]\\* · \\[p\\. 7\\]\\([^)]+\\)\\n> {3}!\\[\\[Zotero/attachments/${ITEM_KEY}-INK33333\\.png\\]\\]`, "m"));
-	assert.match(note, /^> - 🟡 \*\[圖片註記\]\* · \[p\. 8\]\([^)]+\)\n> {3}💬 Figure 3$/m, "an image that can't be produced keeps its caption and comment");
+	assert.match(note, new RegExp(`^> > - 🟢 \\*\\[圖片註記\\]\\* · \\[p\\. 6\\]\\([^)]+\\)\\n> > {3}!\\[\\[Zotero/attachments/${ITEM_KEY}-IMG22222\\.png\\]\\]\\n> > {3}💬 Table 2：主要結果$`, "m"));
+	assert.match(note, new RegExp(`^> > - 🔵 \\*\\[手繪註記\\]\\* · \\[p\\. 7\\]\\([^)]+\\)\\n> > {3}!\\[\\[Zotero/attachments/${ITEM_KEY}-INK33333\\.png\\]\\]`, "m"));
+	assert.match(note, /^> > - 🟡 \*\[圖片註記\]\* · \[p\. 8\]\([^)]+\)\n> > {3}💬 Figure 3$/m, "an image that can't be produced keeps its caption and comment");
 	assert.doesNotMatch(note, /IMG44444\.png/);
 	// Grouped by colour meaning (yellow 重要發現, green 研究方法, blue 可引用句), in reading order within a group
 	assert.ok(at("==🟡Falls decreased== ·") < at("Figure 3") && at("Figure 3") < at("IMG22222.png") && at("IMG22222.png") < at("INK33333.png"));
