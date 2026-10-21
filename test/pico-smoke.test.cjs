@@ -118,7 +118,7 @@ function makeEnv(prefs = {}) {
 	}
 
 	// The suites below were written for the flat vault layout; vault-layout-smoke covers the organized one
-	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat" }, prefs);
+	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat", "extensions.zotero-bridge.obsidian.layout": "classic" }, prefs);
 	let mainWindow = {
 		openDialog(url, name, features) {
 			assert.match(url, /^chrome:\/\/zotero-bridge\/content\/(pico-(card|table)|grade)\.xhtml$/);
@@ -669,7 +669,7 @@ test("GRADE window: suggested outcomes, the studies that measured one pre-ticked
 });
 
 test("GRADE into the vault: the Reviews folder; switched off it says so", async () => {
-	let env = await setup({ [P + "obsidian.vaultPath"]: VAULT });
+	let env = await setup({ [P + "obsidian.vaultPath"]: VAULT, [P + "obsidian.layout"]: "board" });
 	let { ZB } = env;
 	ZB.grade.runtime.notice = () => "close";
 	let out = await ZB.grade.open(env.collection, {
@@ -685,6 +685,10 @@ test("GRADE into the vault: the Reviews folder; switched off it says so", async 
 	let note = env.mem.files.get(path.join(VAULT, "Reviews", "跌倒預防 GRADE 證據摘要.md"));
 	assert.ok(note, [...env.mem.files.keys()].join("\n"));
 	assert.match(note, /CSV：`Reviews\/跌倒預防 GRADE 證據摘要\.csv`/);
+	// The 看板 layout: one card per outcome, the tables folded, the snippet's classes
+	assert.match(note, /\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-review"\n/);
+	assert.match(note, /> \[!zm-board\] 證據確定性\n(?:>.*\n)*> > \[!zm-kpi\] 跌倒發生率\n> > \*\*⊕/);
+	assert.match(note, /> \[!zm-ref\]- 證據摘要表（Summary of Findings，可複製到報告）\n/);
 	ZB.features.setEnabled("grade", false);
 	assert.equal(ZB.commands.isVisible(ZB.commands.get("grade")), false);
 	assert.equal(await ZB.grade.open(env.collection), null);

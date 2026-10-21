@@ -215,6 +215,23 @@ test("tableFragment and tableTSV: the card and the table as HTML for the clipboa
 	assert.match(doc, /另存成 \.docx/);
 });
 
+test("noteSection (看板): the card as PICO cards with word matches and the search string, 文獻 cards, the table open, the rest folded", () => {
+	let list = P.keywordSuggestions([["*Accidental Falls/prevention & control", "Exercise"], ["Accidental Falls", "Aged"]], CARD);
+	let meta = { scopeName: "跌倒回顧", generatedAt: "2026-10-13T01:00:00.000Z", links: true, query: P.cardQuery(CARD), screened: null, layout: "board", keywords: list };
+	let md = P.noteSection(rows(), CARD, meta);
+	assert.ok(md.startsWith("> [!zm-meta]- 🧭 PICO 表 · 跌倒回顧 · 2 篇 · 2026-10-13 產生\n"), md.slice(0, 80));
+	assert.match(md, /\n> \[!zm-board\] 本題 PICO\n> 研究問題：[^\n]+\n>\n> > \[!zm-pico\] 治療／預防\n> > - \*\*P\*\* /);
+	assert.match(md, /> > \[!zm-chart\] 和問題卡有共同字詞（1 篇有資料）\n> > P 族群 [▰▱]{10} \d/);
+	assert.match(md, /> > \[!zm-reading\|wide\] 檢索式\n> > - 英文詞：`/);
+	assert.match(md, /\n> \[!zm-board\] 文獻\n> > \[!zm-kpi\] 文獻\n> > \*\*2 篇\*\* {2}\n> > 有 AI 研讀資料 1 篇\n/);
+	assert.match(md, /> > \[!zm-chart\] 檢索詞建議（從這些文獻反推）\n> > Accidental Falls [▰▱]{6} 2/);
+	assert.match(md, /\n\n## PICO 表（2 篇）\n\n\| 文獻 \| 研究設計 \|/, "the table open: the page's point");
+	assert.match(md, /\n> \[!zm-meta\]- 怎麼讀「對照本題」\n> 「對照本題」只是字詞比對/);
+	assert.match(md, /\n> \[!zm-ref\]- 檢索詞建議（完整）\n> 這些詞取自/);
+	assert.match(md, /\n> \[!zm-ref\]- 沒有結構化資料的文獻（1）\n> - Wong, 2020\n/);
+	assert.doesNotMatch(P.noteSection(rows(), null, meta), /本題 PICO|對照本題/, "no card: no card board");
+});
+
 test("noteSection and noteFrontmatter: the info callout, the card, the table, the legend, the no-data list; the frontmatter keys", () => {
 	let meta = { scopeName: "跌倒回顧", generatedAt: "2026-10-13T01:00:00.000Z", uri: "zotero://select/library/collections/C1", csvPath: "Zotero/Reviews/跌倒回顧 PICO 表.csv",
 		htmlPath: "Zotero/Reviews/跌倒回顧 PICO 表.html", links: true, query: P.cardQuery(CARD), screened: { included: 2, total: 5 }, title: "跌倒回顧：PICO 表", collectionKey: "library/collections/C1", path: "跌倒回顧" };

@@ -1003,7 +1003,61 @@
 	// The other pages the snippet styles: the full-text note and the concept cards (and their properties)
 	const FULLTEXT_CLASS = "zm-fulltext";
 	const CONCEPT_CLASS = "zm-concept";
-	const OUR_CLASSES = [NOTE_CLASS, COMPACT_PROPS_CLASS, FULLTEXT_CLASS, CONCEPT_CLASS];
+	// The review pages (PRISMA, PICO 表, GRADE): their own properties are hidden like a literature note's
+	const REVIEW_CLASS = "zm-review";
+	const OUR_CLASSES = [NOTE_CLASS, COMPACT_PROPS_CLASS, FULLTEXT_CLASS, CONCEPT_CLASS, REVIEW_CLASS];
+
+	// ---------- 看板 building blocks for the review pages (PRISMA, PICO 表, GRADE; pure) ----------
+
+	/** The obsidian.layout pref inside Zotero ("board" outside it, e.g. in tests that don't pass a layout). */
+	function layoutPref() {
+		let v = typeof Zotero !== "undefined" && Zotero.Prefs ? Zotero.Prefs.get("extensions.zotero-bridge.obsidian.layout", true) : "";
+		return v === "classic" ? "classic" : "board";
+	}
+
+	/** Lines with hard breaks between them (Obsidian's 「Strict line breaks」 can't merge them). */
+	function hardLines(lines) {
+		let rows = lines.filter(l => l !== "" && l !== null && l !== undefined);
+		return rows.map((l, k) => `${l}${k < rows.length - 1 ? "  " : ""}`);
+	}
+
+	/** A number card: the value in bold, then short lines. */
+	function kpiCard(title, value, ...lines) {
+		return [`> [!zm-kpi] ${title}`, ...hardLines([`**${value}**`, ...lines]).map(l => `> ${l}`)].join("\n");
+	}
+
+	/** A chart card (bars, squares, short lines). */
+	function chartCard(title, lines, wide) {
+		return [`> [!zm-chart${wide ? "|wide" : ""}] ${title}`, ...hardLines(lines).map(l => `> ${l}`)].join("\n");
+	}
+
+	/** A card of any type whose body is Markdown as it is (lists, code). */
+	function plainCard(type, title, md) {
+		return callout(type, title, md, false);
+	}
+
+	/** A [!zm-board] of cards; `head` is a muted first line across the board. */
+	function boardBlock(title, cards, head) {
+		let body = [...(head ? [head] : []), ...cards.filter(Boolean)].join("\n\n");
+		return callout("zm-board", title, body, false);
+	}
+
+	/** The folded note at the top of a page: what made it and when, then how to refresh. */
+	function metaFold(title, lines) {
+		return callout("zm-meta", title, hardLines(lines).join("\n"), true);
+	}
+
+	/** A folded section: the full tables below the cards. */
+	function foldBlock(title, md) {
+		return callout("zm-ref", title, md, true);
+	}
+
+	/** [name, n] pairs as bar lines, scaled to the largest (at most `max` rows). */
+	function barRows(pairs, max = 6, width = 10) {
+		let rows = pairs.filter(([, n]) => n > 0).slice(0, max);
+		let top = Math.max(1, ...rows.map(([, n]) => n));
+		return rows.map(([name, n]) => `${name} ${bar(n, top, width)} ${n}`);
+	}
 
 	/** The values of a list key in frontmatter text: `k: [a, b]`, `k: a` or `k:` with `  - a` lines; [] without it. */
 	function frontmatterList(fm, key) {
@@ -1316,6 +1370,6 @@
 		resolveRoute, parseRules, truncate, buildBaseFile, STATUSES, DELETED_STATUS,
 		LAYOUTS, FULLTEXT_SUFFIX, navBar, sectionAnchors, noteNav, structureOf, vaultFolder, vaultPage, collectionParts, primaryCollection, noteFolder, noteFolders, topicPage,
 		frontmatterScalar, setFrontmatterValue, zoteroKeyFromHead, markObsidianNoteDeleted,
-		statsCard, levelBar, byline, highlightBar, groupedSections, sectionGroups, notionToggles, SECTION_GROUPS, NOTE_CLASS, COMPACT_PROPS_CLASS, FULLTEXT_CLASS, CONCEPT_CLASS, pageClasses, noteClasses, frontmatterList,
+		statsCard, levelBar, byline, highlightBar, groupedSections, sectionGroups, notionToggles, SECTION_GROUPS, NOTE_CLASS, COMPACT_PROPS_CLASS, FULLTEXT_CLASS, CONCEPT_CLASS, REVIEW_CLASS, pageClasses, layoutPref, hardLines, kpiCard, chartCard, plainCard, boardBlock, metaFold, foldBlock, barRows, noteClasses, frontmatterList,
 	};
 });

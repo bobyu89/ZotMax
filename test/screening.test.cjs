@@ -236,6 +236,32 @@ test("evidence table, CSV and the counts table", () => {
 	assert.ok(table.includes("| 納入 | Studies included in review | 2 |"));
 });
 
+test("review note (看板): the stages as number cards, 篩選進度 with the checks, the flow open, the tables folded; the classes", () => {
+	let { result } = review();
+	let meta = { name: "跌倒預防 SR", title: "跌倒預防 SR：篩選與 PRISMA 2020", collectionKey: "library/collections/COLL1234", layout: "board",
+		uri: "zotero://select/library/collections/COLL1234", generatedAt: "2026-10-08T01:02:03.000Z", csvPath: "Zotero/Reviews/跌倒預防 SR 證據表.csv", links: true };
+	let rows = [{ citation: "Lee, 2021", design: "RCT", evidenceLevel: "2", hasData: true }, { citation: "Chen, 2020", design: "RCT", evidenceLevel: "1", hasData: true }];
+	let md = s.buildReviewSection(result, rows, meta);
+	assert.ok(md.startsWith("> [!zm-meta]- 🧭 PRISMA 2020 · 跌倒預防 SR · 15 筆 · 2026-10-08 產生\n> 由 ZotMax 依分類「跌倒預防 SR」的篩選標籤產生"), md.slice(0, 120));
+	assert.deepEqual([...md.matchAll(/^> > \[!zm-kpi\] (.+)$/gm)].map(m => m[1]), ["辨識", "標題摘要篩選", "全文評估", "納入"]);
+	assert.match(md, /> > \[!zm-kpi\] 納入\n> > \*\*2 篇\*\*/);
+	assert.match(md, /> > \[!zm-chart\] 篩選進度\n> > 標題摘要 [▰▱]{10} \d+% {2}\n> > 全文 [▰▱]{10} \d+% {2}\n> > ⚠️ 有 \d+ 項要檢查\n/);
+	assert.match(md, /> > \[!zm-chart\] 納入研究的設計\n> > RCT ▰{10} 2/);
+	assert.match(md, /> > \[!zm-chart\] 證據等級（CEBM，1 最強）\n> > L1 ▰{10} 1 {2}\n> > L2 ▰{10} 1/);
+	assert.match(md, /> > \[!zm-next\|wide\] 一致性檢查（\d+）\n> > - ⚠️ 同時有多個標題摘要決定/);
+	let order = ["> [!zm-board] PRISMA 2020", "> [!zm-board] 篩選進度", "## PRISMA 2020 流程圖\n\n```mermaid\nflowchart TD", "> [!zm-ref]- PRISMA 2020 計數表", "> [!zm-ref]- 證據表（納入研究 2 篇）"].map(h => md.indexOf(h));
+	assert.ok(order.every((at, k) => at > 0 && (!k || at > order[k - 1])), JSON.stringify(order));
+	assert.doesNotMatch(md, /\[!info\]/);
+	// Notion and the classic layout keep the sections
+	assert.match(s.buildReviewSection(result, rows, Object.assign({}, meta, { layout: "classic" })), /^> \[!info\]/);
+	// The classes: ours with the user's; back to classic drops ours
+	let note = s.buildReviewNote(null, s.frontmatterFor(result, meta), meta.title, md, undefined, { layout: "board" });
+	assert.match(note, /\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-review"\n/);
+	let mine = note.replace('  - "zm-review"\n', '  - "zm-review"\n  - "wide-page"\n');
+	assert.match(s.buildReviewNote(mine, s.frontmatterFor(result, meta), meta.title, md, undefined, { layout: "classic" }), /\ncssclasses:\n {2}- "wide-page"\n/);
+	assert.doesNotMatch(s.buildReviewNote(null, s.frontmatterFor(result, meta), meta.title, md), /cssclasses/, "no layout given: no classes (citation chase)");
+});
+
 test("review note: managed block and plugin frontmatter are rewritten, the user's content is kept", () => {
 	let { result } = review();
 	let meta = { name: "跌倒預防 SR", title: "跌倒預防 SR：篩選與 PRISMA 2020", collectionKey: "library/collections/COLL1234",

@@ -712,6 +712,7 @@
 	 * meta: { name, uri, generatedAt, csvPath, links }
 	 */
 	function buildReviewSection(result, rows, meta) {
+		if (meta.layout === "board") return boardReviewSection(result, rows, meta);
 		let info = [
 			`> [!info] 由 ZotMax 依分類「${meta.name}」的 ${result.counts.identified} 筆文獻於 ${String(meta.generatedAt || "").slice(0, 10)} 產生；重新產生只會覆寫這個區塊。`,
 			meta.uri ? `> Zotero：[開啟分類](${meta.uri})` + (meta.csvPath ? ` · 證據表 CSV：\`${meta.csvPath}\`` : "") : "",
@@ -728,6 +729,51 @@
 			`## 證據表（納入研究 ${rows.length} 篇）`,
 			evidenceTable(rows, { links: meta.links }),
 		].filter(Boolean).join("\n\n");
+	}
+
+	/**
+	 * The 看板 layout's PRISMA note (Obsidian only; Notion keeps the sections): the update note (folded), the PICO
+	 * question, the four stages as number cards, 篩選進度 (decided over screened, the reasons, the included studies'
+	 * designs and levels) with the consistency checks, the flow diagram open, the counts and evidence tables folded.
+	 */
+	function boardReviewSection(result, rows, meta) {
+		let c = result.counts;
+		let o = result.other ? result.other.counts : null;
+		let total = result.totalIncluded === undefined ? c.included : result.totalIncluded;
+		let identified = c.identified + (o ? o.identified : 0);
+		let parts = [core.metaFold(`🧭 PRISMA 2020 · ${meta.name} · ${identified} 筆 · ${String(meta.generatedAt || "").slice(0, 10)} 產生`, [
+			`由 ZotMax 依分類「${meta.name}」的篩選標籤產生；重新產生只會覆寫這個區塊。`,
+			meta.uri ? `Zotero：[開啟分類](${meta.uri})` + (meta.csvPath ? ` · 證據表 CSV：\`${meta.csvPath}\`` : "") : "",
+		])];
+		if (meta.pico) parts.push("## 本題 PICO\n\n" + meta.pico);
+		let join = list => list.filter(Boolean).join(" · ");
+		parts.push(core.boardBlock("PRISMA 2020", [
+			core.kpiCard("辨識", `${identified} 筆`, join([`重複 ${c.duplicates + (o ? o.duplicates : 0)} 筆`, o ? `其他方法 ${o.identified} 筆` : ""])),
+			core.kpiCard("標題摘要篩選", `${c.screened} 筆`, join([`排除 ${c.taExcluded}`, c.taPending ? `待定 ${c.taPending}` : ""])),
+			core.kpiCard("全文評估", `${c.assessed} 篇`, join([`排除 ${c.ftExcluded}`, c.notRetrieved ? `無法取得 ${c.notRetrieved}` : "", c.ftPending ? `待定 ${c.ftPending}` : ""])),
+			core.kpiCard("納入", `${total} 篇`, o ? `資料庫 ${c.included} · 其他方法 ${o.included}` : "全文評估後納入"),
+		]));
+		let pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
+		let taDone = c.screened - c.taPending;
+		let ftDone = c.assessed - c.ftPending;
+		let cards = [core.chartCard("篩選進度", [
+			`標題摘要 ${core.bar(taDone, c.screened)} ${pct(taDone, c.screened)}%`,
+			`全文 ${core.bar(ftDone, c.assessed)} ${pct(ftDone, c.assessed)}%`,
+			result.issues.length ? `⚠️ 有 ${result.issues.length} 項要檢查` : "✅ 計數一致，沒有發現問題",
+		])];
+		let reasons = [...result.reasons, ...(result.other ? result.other.reasons : [])];
+		if (reasons.length) cards.push(core.chartCard("全文排除原因", core.barRows(reasons, 6)));
+		let tally = list => [...list.reduce((m, k) => (k ? m.set(k, (m.get(k) || 0) + 1) : m), new Map())];
+		let designs = tally(rows.map(r => r.design)).sort((a, b) => b[1] - a[1]);
+		if (designs.length) cards.push(core.chartCard("納入研究的設計", core.barRows(designs, 5)));
+		let levels = tally(rows.map(r => r.evidenceLevel)).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+		if (levels.length) cards.push(core.chartCard("證據等級（CEBM，1 最強）", core.barRows(levels.map(([l, n]) => [`L${l}`, n]), 5)));
+		if (result.issues.length) cards.push(core.plainCard("zm-next|wide", `一致性檢查（${result.issues.length}）`, issuesMarkdown(result.issues)));
+		parts.push(core.boardBlock("篩選進度", cards));
+		parts.push("## PRISMA 2020 流程圖", "```mermaid\n" + buildMermaid(result) + "\n```");
+		parts.push(core.foldBlock("PRISMA 2020 計數表", countsTable(result)));
+		parts.push(core.foldBlock(`證據表（納入研究 ${rows.length} 篇）`, evidenceTable(rows, { links: meta.links })));
+		return parts.join("\n\n");
 	}
 
 	function otherFrontmatter(other) {
@@ -774,8 +820,14 @@
 	 * %% zotero-bridge:start/end %% block change; empty values keep what the note has (e.g. the
 	 * Notion link when this run had no Notion). `tags`: a new note's tags (the PICO 表 passes its own).
 	 */
-	function buildReviewNote(existing, fm, title, section, tags = ["系統性回顧"]) {
+	function buildReviewNote(existing, fm, title, section, tags = ["系統性回顧"], opts = {}) {
 		let block = `${core.MARK_START}\n\n${section}\n\n${core.MARK_END}`;
+		// 看板 (opts.layout): the snippet's classes with the user's own; switching back drops ours
+		if (opts.layout) {
+			let mine = existing ? core.splitFrontmatter(existing).frontmatter : null;
+			let classes = core.pageClasses(mine, opts.layout === "board" ? [core.NOTE_CLASS, core.REVIEW_CLASS] : []);
+			fm = Object.assign({}, fm, { cssclasses: classes || (core.frontmatterList(mine, "cssclasses").length ? [] : "") });
+		}
 		if (!existing) {
 			return core.buildFrontmatter(Object.assign({}, fm, { tags }), null)
 				+ `\n# ${title}\n\n${block}\n\n## ${USER_HEADING}\n\n`;
@@ -1194,8 +1246,9 @@
 				try {
 					await IOUtils.makeDirectory(target.dir, { createAncestors: true, ignoreExisting: true });
 					await IOUtils.writeUTF8(PathUtils.join(target.dir, `${target.name} 證據表.csv`), buildCSV(rows));
-					let section = buildReviewSection(result, rows, Object.assign({}, meta, { links: true }));
-					let text = buildReviewNote(target.existing, frontmatterFor(result, meta), meta.title, section);
+					let layout = core.layoutPref();
+					let section = buildReviewSection(result, rows, Object.assign({}, meta, { links: true, layout }));
+					let text = buildReviewNote(target.existing, frontmatterFor(result, meta), meta.title, section, undefined, { layout });
 					if (text !== target.existing) await IOUtils.writeUTF8(target.path, text);
 					outputs.push(`Obsidian（${[...target.dirParts, target.name + ".md"].join("/")}）`, "CSV");
 				}
@@ -1240,7 +1293,7 @@
 		planChange, describeState, describeChange,
 		normalizeDOI, normalizeTitle, yearOf, findDuplicates,
 		computePrisma, checkCounts, buildMermaid, countsTable, issuesMarkdown, evidenceRow, sortRows, evidenceTable,
-		csvCell, buildCSV, buildReviewSection, frontmatterFor, buildReviewNote, notionBlocks,
+		csvCell, buildCSV, buildReviewSection, boardReviewSection, frontmatterFor, buildReviewNote, notionBlocks,
 		config, itemRecord, setDecision, renderPaneRow, paneSummary, dedupCollection, generateReport, notionParent, syncNotionPage,
 	};
 });
