@@ -7,6 +7,8 @@ pref("extensions.zotero-bridge.obsidian.createBase", true);
 pref("extensions.zotero-bridge.obsidian.layout", "board");
 // 看板: hide the properties the board already shows (cssclasses zm-compact-props, content/obsidian-style.js)
 pref("extensions.zotero-bridge.obsidian.compactProperties", true);
+// Notion: the folded sections in the four groups of the Obsidian 看板 (core.js notionToggles); false = one toggle per section
+pref("extensions.zotero-bridge.notion.groupSections", true);
 // "organized" (10 文獻/<collection>, numbered folders) or "flat" (before 0.23.0); empty: picked once by vault-layout.js
 pref("extensions.zotero-bridge.obsidian.structure", "");
 // The 看板 CSS snippet (content/obsidian-style.js) was installed once; a snippet the user turned off stays off

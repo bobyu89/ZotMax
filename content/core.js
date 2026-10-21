@@ -862,21 +862,48 @@
 		return list.some(x => x.id === "abstract") ? "摘要與書目" : "書目與延伸搜尋";
 	}
 
-	/** The folded sections of the 看板 layout: [{ md, anchor: { id, label } }], one per group that has sections. */
-	function groupedSections(sections, data, opts) {
+	/**
+	 * The folded sections in their four groups (我的劃線與筆記, 文獻評讀表, AI 文獻筆記, 摘要與書目):
+	 * [{ group, title, direct (the section that is the group's body, or null), inner (the others, in order) }].
+	 */
+	function sectionGroups(sections, data, opts) {
 		let out = [];
 		for (let group of SECTION_GROUPS) {
 			let list = sections.filter(x => group.ids(x.id));
 			if (!list.length) continue;
-			let direct = list.find(x => x.id === group.direct);
-			let inner = list.filter(x => x !== direct).map(x => callout(x.type, x.title, x.md, false));
-			let body = [direct ? direct.md : "", ...inner].filter(t => String(t).trim()).join("\n\n");
-			out.push({
-				md: callout(group.type, groupTitleFor(group, list, data, opts), body, true),
-				anchor: { id: group.anchor[0], label: group.anchor[1] },
-			});
+			let direct = list.find(x => x.id === group.direct) || null;
+			out.push({ group, title: groupTitleFor(group, list, data, opts), direct, inner: list.filter(x => x !== direct) });
 		}
 		return out;
+	}
+
+	/** The folded sections of the 看板 layout: [{ md, anchor: { id, label } }], one per group that has sections. */
+	function groupedSections(sections, data, opts) {
+		return sectionGroups(sections, data, opts).map(({ group, title, direct, inner }) => {
+			let body = [direct ? direct.md : "", ...inner.map(x => callout(x.type, x.title, x.md, false))].filter(t => String(t).trim()).join("\n\n");
+			return { md: callout(group.type, title, body, true), anchor: { id: group.anchor[0], label: group.anchor[1] } };
+		});
+	}
+
+	/**
+	 * The Notion page's folded sections in the same four groups: one toggle per group, the direct section's blocks
+	 * first, then each other section under a heading in its colour (a highlight meaning's background). Headings, not
+	 * nested toggles: Notion takes two levels of blocks per request, so the page is still written in one request.
+	 * toBlocks(md) turns Markdown into Notion blocks (markdown.js). Returns [{ id, title, color, children }], where id
+	 * is the group's type (zm-mine, zm-form, zm-ai, zm-ref).
+	 */
+	function notionToggles(sections, data, opts, toBlocks) {
+		return sectionGroups(sections, data, opts).map(({ group, title, direct, inner }) => {
+			let children = direct ? toBlocks(direct.md) : [];
+			for (let x of inner) {
+				children.push({
+					object: "block",
+					type: "heading_3",
+					heading_3: { rich_text: [{ type: "text", text: { content: String(x.title).slice(0, 2000) } }], color: x.color || "default" },
+				}, ...toBlocks(x.md));
+			}
+			return { id: group.type, title, color: "default", children };
+		});
 	}
 
 	/**
@@ -1281,6 +1308,6 @@
 		resolveRoute, parseRules, truncate, buildBaseFile, STATUSES, DELETED_STATUS,
 		LAYOUTS, FULLTEXT_SUFFIX, navBar, sectionAnchors, noteNav, structureOf, vaultFolder, vaultPage, collectionParts, primaryCollection, noteFolder, noteFolders, topicPage,
 		frontmatterScalar, setFrontmatterValue, zoteroKeyFromHead, markObsidianNoteDeleted,
-		statsCard, levelBar, byline, highlightBar, groupedSections, SECTION_GROUPS, NOTE_CLASS, COMPACT_PROPS_CLASS, noteClasses, frontmatterList,
+		statsCard, levelBar, byline, highlightBar, groupedSections, sectionGroups, notionToggles, SECTION_GROUPS, NOTE_CLASS, COMPACT_PROPS_CLASS, noteClasses, frontmatterList,
 	};
 });

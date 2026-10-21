@@ -132,6 +132,7 @@
 				<button data-l10n-id="zotero-bridge-notion-rename" label="把 Notion 欄位改成中文…" oncommand="ZoteroBridgePrefs.renameNotionColumns()"/>
 			</hbox>
 			<html:p class="zb-hint" data-zb-feature="sync" data-l10n-id="zotero-bridge-notion-columns-hint">新的資料庫直接用中文欄位（標題、作者、年份、研究設計…）；舊資料庫的英文欄位照樣能用。按「把 Notion 欄位改成中文」會先列出要改的欄位，確認後才改名。</html:p>
+			<checkbox data-zb-feature="sync" label="文獻頁面的收合區塊分成四組：我的劃線與筆記、文獻評讀表、AI 文獻筆記、摘要與書目（和 Obsidian 看板一樣；取消則每一段一個收合區塊）" preference="extensions.zotero-bridge.notion.groupSections"/>
 			<html:pre id="zb-notion-status" class="zb-status"/>
 		</groupbox>
 
