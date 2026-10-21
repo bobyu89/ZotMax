@@ -1966,7 +1966,7 @@ const TESTS = [
 				check(note.includes("> [!zm-board] 本題 PICO") && note.includes("## PICO 表（2 篇）"), "the card (看板) and the table");
 				check(/\| \[\[Zotero\/[^\]|]+\\\|Lee & 陳, 2021\]\] \| /.test(note) || /\| Lee & 陳, 2021 \| /.test(note), `the English item's row: ${note.split("## PICO 表")[1]}`);
 				check(/\| 對照本題 \|/.test(note), "the 對照本題 column (no row has data, so it only holds —)");
-				check(note.includes("## 沒有結構化資料的文獻"), "both papers are listed without data");
+				check(note.includes("> [!zm-ref]- 沒有結構化資料的文獻（2）"), "both papers are listed without data (folded on the 看板)");
 				check(note.trimEnd().endsWith("## ✍️ 我的筆記"), "the user's section at the end");
 				// IOUtils.readUTF8 drops a BOM, so the bytes say whether it is there
 				let csvBytes = await IOUtils.read(PathUtils.join(result.dir, "E2E Review PICO 表.csv"));
