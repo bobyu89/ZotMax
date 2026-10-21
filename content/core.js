@@ -1000,6 +1000,10 @@
 	// own properties only; everything else is on the board
 	const NOTE_CLASS = "zotmax-note";
 	const COMPACT_PROPS_CLASS = "zm-compact-props";
+	// The other pages the snippet styles: the full-text note and the concept cards (and their properties)
+	const FULLTEXT_CLASS = "zm-fulltext";
+	const CONCEPT_CLASS = "zm-concept";
+	const OUR_CLASSES = [NOTE_CLASS, COMPACT_PROPS_CLASS, FULLTEXT_CLASS, CONCEPT_CLASS];
 
 	/** The values of a list key in frontmatter text: `k: [a, b]`, `k: a` or `k:` with `  - a` lines; [] without it. */
 	function frontmatterList(fm, key) {
@@ -1023,12 +1027,16 @@
 		return values.map(unquote).filter(Boolean);
 	}
 
-	/** cssclasses for a note: ZotMax's (看板 layout only) first, then the user's own as they were; "" for none. */
-	function noteClasses(frontmatter, opts = {}) {
-		let own = frontmatterList(frontmatter, "cssclasses").filter(c => c !== NOTE_CLASS && c !== COMPACT_PROPS_CLASS);
-		let ours = opts.layout === "board" ? [NOTE_CLASS, ...(opts.compactProperties === false ? [] : [COMPACT_PROPS_CLASS])] : [];
+	/** cssclasses: `ours` first, then the user's own as they were (any ZotMax class dropped); "" for none. */
+	function pageClasses(frontmatter, ours) {
+		let own = frontmatterList(frontmatter, "cssclasses").filter(c => !OUR_CLASSES.includes(c));
 		let all = [...ours, ...own];
 		return all.length ? all : "";
+	}
+
+	/** cssclasses for a note: ZotMax's (看板 layout only) first, then the user's own as they were; "" for none. */
+	function noteClasses(frontmatter, opts = {}) {
+		return pageClasses(frontmatter, opts.layout === "board" ? [NOTE_CLASS, ...(opts.compactProperties === false ? [] : [COMPACT_PROPS_CLASS])] : []);
 	}
 
 	/**
@@ -1308,6 +1316,6 @@
 		resolveRoute, parseRules, truncate, buildBaseFile, STATUSES, DELETED_STATUS,
 		LAYOUTS, FULLTEXT_SUFFIX, navBar, sectionAnchors, noteNav, structureOf, vaultFolder, vaultPage, collectionParts, primaryCollection, noteFolder, noteFolders, topicPage,
 		frontmatterScalar, setFrontmatterValue, zoteroKeyFromHead, markObsidianNoteDeleted,
-		statsCard, levelBar, byline, highlightBar, groupedSections, sectionGroups, notionToggles, SECTION_GROUPS, NOTE_CLASS, COMPACT_PROPS_CLASS, noteClasses, frontmatterList,
+		statsCard, levelBar, byline, highlightBar, groupedSections, sectionGroups, notionToggles, SECTION_GROUPS, NOTE_CLASS, COMPACT_PROPS_CLASS, FULLTEXT_CLASS, CONCEPT_CLASS, pageClasses, noteClasses, frontmatterList,
 	};
 });

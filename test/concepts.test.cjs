@@ -187,6 +187,37 @@ test("a card: aliases, search links, paper table, co-occurring concepts and the 
 	assert.match(c.buildConceptSection(result.byKey.get("morse fall scale"), {}), /「關鍵概念」的連結與研讀資料（測量工具／結果指標）整理/);
 });
 
+test("a card (看板): folded update note, links as buttons, 概念總覽 cards, the tables folded; classes kept with the user's", () => {
+	let result = cards();
+	let cfg = searchLinks.normalizeConfig({});
+	let se = result.concepts[0];
+	let text = c.buildConceptNote(null, se, { indexLink: "Zotero/概念/概念索引", cfg, now: NOW, layout: "board" });
+	assert.match(text, /\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-concept"\nupdated:/);
+	assert.match(text, /%%\n\n> \[!zm-meta\]- 🧠 概念卡片 · 3 篇文獻\n> 由 ZotMax 依文獻筆記「關鍵概念」的連結整理。 {2}\n> 重新整理：/);
+	assert.match(text, /\n> \[!zm-links\] 前往\n> \[\[Zotero\/概念\/概念索引\|🧠 概念索引\]\] · \[MeSH：Self-efficacy\]\([^)]+\) · \[PubMed 搜尋\]/);
+	assert.match(text, /\n> \[!zm-board\] 概念總覽\n> 類型：概念 · 別名：self efficacy、Ｓｅｌｆ－ｅｆｆｉｃａｃｙ\n>\n> > \[!zm-kpi\] 文獻\n> > \*\*3 篇\*\* {2}\n> > 2021–2024\n/);
+	assert.match(text, /> > \[!zm-kpi\] 最強證據\n> > \*\*CEBM 2\*\* {2}\n> > RCT · 2024\n/, "the strongest paper's design and year");
+	assert.match(text, /> > \[!zm-chart\] 常一起出現\n> > \[\[Zotero\/概念\/跌倒\|跌倒\]\] ▰{6} 2 {2}\n/);
+	assert.match(text, /> > \[!zm-reading\|wide\] 提到這個概念的文獻（3）\n> > - \[\[Zotero\/A\|Paper A\]\] · 2024 · RCT · CEBM 2\n/, "strongest evidence first");
+	assert.match(text, /\n> \[!zm-ref\]- 文獻與一句話摘要（3 篇）\n> \| 文獻 \| 年份 \|/);
+	assert.doesNotMatch(text, /^## (?!📖|✍️)/m, "no open section but the user's");
+	// The user's own class stays; the classic layout drops ours and keeps theirs
+	let mine = text.replace('  - "zm-concept"\n', '  - "zm-concept"\n  - "wide-page"\n');
+	assert.match(c.buildConceptNote(mine, se, { now: LATER, layout: "board" }), /cssclasses:\n {2}- "zotmax-note"\n {2}- "zm-concept"\n {2}- "wide-page"\n/);
+	assert.match(c.buildConceptNote(mine, se, { now: LATER }), /cssclasses:\n {2}- "wide-page"\n/);
+	assert.doesNotMatch(c.buildConceptNote(null, se, { now: NOW }), /cssclasses/, "classic: no classes on a new card");
+	// The index (看板): 總覽, the graph open, the table folded
+	let index = c.buildIndexNote(null, result, { now: NOW, layout: "board" });
+	assert.match(index, /> \[!zm-meta\]- 🧠 4 個概念 · 來自 3 篇文獻筆記\n/);
+	assert.match(index, /> > \[!zm-kpi\] 概念\n> > \*\*4 個\*\*/);
+	assert.match(index, /> > \[!zm-chart\] 依類型\n> > 概念 ▰+▱* 3 {2}\n> > 測量工具 ▰+▱* 1/);
+	assert.match(index, /> > \[!zm-chart\|wide\] 出現最多（前 4）\n> > \[\[Zotero\/概念\/Self-efficacy\|Self-efficacy\]\] ▰{10} 3/);
+	assert.match(index, /\n## 🕸️ 前 4 個概念與共同出現\n\n```mermaid/);
+	assert.match(index, /\n> \[!zm-ref\]- 全部概念（4）\n> \| 概念 \| 類型 \|/);
+	// An orphan card (看板)
+	assert.match(c.buildOrphanSection({ indexLink: "Zotero/概念/概念索引", layout: "board" }), /^> \[!zm-meta\] 目前沒有文獻筆記提到這個概念\n[^\n]+\n\n> \[!zm-links\] 前往\n> \[\[Zotero\/概念\/概念索引\|🧠 概念索引\]\]$/);
+});
+
 test("rebuilding a card keeps the user's text, keys and aliases; unchanged cards are not rewritten", () => {
 	let result = cards();
 	let se = result.concepts[0];

@@ -353,6 +353,7 @@
 			aiLegend: rendered.aiMarked > 0,
 			missing: rendered.missing,
 			source: opts.engine || "built-in",
+			board: opts.layout === "board",
 		});
 		await IOUtils.makeDirectory(target.dir, { createAncestors: true, ignoreExisting: true });
 		let existing = (await IOUtils.exists(target.path)) ? await IOUtils.readUTF8(target.path) : null;

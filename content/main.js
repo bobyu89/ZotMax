@@ -701,6 +701,7 @@
 			try {
 				fullTextLink = await ZB.fulltext.writeObsidian(obsidian, data, opts.fullText.rendered, {
 					folder: opts.fullText.folder, engine: opts.fullText.engine, previousLink, vaultPath: opts.settings && opts.settings.vaultPath,
+					layout: noteLayout(),
 				});
 			}
 			catch (e) {
