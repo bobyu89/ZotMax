@@ -1278,6 +1278,37 @@ pandoc 論文.md --citeproc --bibliography "Zotero/90 系統/references.json" --
 
 **更新後 Obsidian 的筆記還是舊樣子，或卡片上下排、沒有排成格狀？** 版面在下次同步時才會換，先在 Zotero 同步一次（研究儀表板和首頁可以用 ZotMax 按鈕 → 更新研究儀表板）。卡片要排成格狀需要 ZotMax 的 CSS 片段：Obsidian 開著時到 設定 → 外觀 → CSS 片段 按重新整理，確認 `zotmax` 是打開的；被關掉或刪掉的話，到 Zotero 設定 → 同步 → Obsidian 按 **安裝看板樣式到 Obsidian**。
 
+**可以在平板（iPad）上看嗎？** 可以。ZotMax 在電腦的 Zotero 裡產生筆記，平板負責看和劃線；要做的是把 Obsidian vault 同步到平板，三種方式擇一：
+
+<details>
+<summary>Windows 電腦配 iPad：Obsidian Sync、iCloud、Notion 三種做法</summary>
+
+| 方式 | 費用 | 優點 | 缺點 |
+|---|---|---|---|
+| **Obsidian Sync**（推薦） | 付費（以 Obsidian 官網為準） | 穩定，CSS 片段和設定也能同步 | 電腦的 Obsidian 開著時才會上傳 |
+| **iCloud for Windows** | 免費 | 不開 Obsidian 也在背景同步 | 在 Windows 上偶爾變慢或產生「(1)」衝突檔 |
+| **Notion** | 免費 | 不用處理 Obsidian 同步，iPad 裝 Notion app 就能看 | 是 Notion 的版面，不是 Obsidian 看板 |
+
+**Obsidian Sync**
+1. 到 obsidian.md 登入並購買 Sync。
+2. Windows 的 Obsidian：設定 → 核心外掛 → 打開「同步」→ 建立新的遠端 vault（設一組加密密碼並記住）；同步設定裡勾「主題與 CSS 片段」和「外觀設定」。
+3. iPad：App Store 裝 Obsidian → 建立一個**不存在 iCloud** 的空 vault → 設定 → 同步 → 連到剛才的遠端 vault，等下載完。
+4. iPad 的 設定 → 外觀 → CSS 片段，確認 `zotmax` 是打開的。
+5. ZotMax 的 vault 路徑不用改。ZotMax 同步完後，打開一下電腦的 Obsidian，iPad 才會收到新筆記。
+
+**iCloud for Windows**
+1. iPad：裝 Obsidian，建立 vault 時勾「存在 iCloud」，iCloud Drive 會出現 `Obsidian` 資料夾。
+2. Windows：從 Microsoft Store 裝 iCloud，登入並打開 iCloud Drive。
+3. **先關掉 Zotero 和 Obsidian**，把原本的 vault 整個資料夾搬進 `iCloud Drive\Obsidian\`，在資料夾上按右鍵 →「一律保留在此裝置上」（沒有這一步，ZotMax 可能讀不到檔案）。
+4. Windows 的 Obsidian 改開新位置的 vault；Zotero → ZotMax 設定 → 同步 → Obsidian，把 vault 路徑改到新位置（有分流規則的話一起檢查）。
+5. 不要在電腦和 iPad 同時改同一篇筆記；你的想法寫在「✍️ 我的筆記」裡。
+
+**在 iPad 讀 PDF、劃線**：裝 Zotero 官方 app、登入同一個帳號（PDF 要同步需要 Zotero 檔案同步：官方空間或 WebDAV），在 iPad 上用顏色劃線，劃線會同步回電腦；電腦的 Zotero 下次同步時，ZotMax 把新劃線寫進文獻筆記，iPad 的 Obsidian 也跟著更新。
+
+**還要知道**：看板在平板和手機上會自動改成兩欄或一欄，寬表格可以左右滑；文獻總表和研究儀表板的 Bases 檢視需要 iPad 的 Obsidian 也是 1.14 以上；筆記裡點回 PDF 的 `zotero://` 連結是給電腦用的，在 iPad 上可能打不開。Mac 配 iPad 時，直接把 vault 放在 iCloud Drive 最簡單。
+
+</details>
+
 **文獻筆記最上面的屬性區少了研究設計、PICO 等欄位？** 看板版預設只顯示閱讀狀態、標籤和你自己加的屬性，其他資料已經在卡片上；它們仍在 frontmatter，Bases、Dataview 和搜尋都讀得到。想全部顯示：設定 → 同步 → Obsidian，取消「看板：文獻筆記最上面的屬性區只顯示…」，下次同步生效。
 
 **選單裡找不到某個功能？** 先到 設定 → ZotMax → 功能 看開關是不是關著（研究生引導有些預設關閉）。找重複、PRISMA、評讀總表、引文追蹤納入研究要先在左側選一個分類；其他功能要先選文獻。
