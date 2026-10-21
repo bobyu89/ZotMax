@@ -113,6 +113,23 @@ test("buildBoard: cards without data are left out, 下一步 says what is missin
 	assert.ok(bar.startsWith("🟨".repeat(18) + "🟥") && bar.endsWith("⬛"), bar);
 });
 
+test("notionToggles: the Notion sections in the same four groups, the inner ones under headings in their colour, two levels only", () => {
+	let opts = { aiMarkdown: AI_FULL, study: STUDY, notesMarkdown: [{ title: "n", md: "我的 Zotero 筆記" }],
+		appraisalMarkdown: "## 文獻評讀表\n\n表", searchCallout: "> [!search]- 🔎 延伸搜尋\n> PubMed", target: "notion" };
+	let { sections } = core.buildNoteSections(item(), opts);
+	let toBlocks = md => md.trim().split(/\n\n+/).map(p => ({ object: "block", type: "paragraph", paragraph: { rich_text: [{ type: "text", text: { content: p } }] } }));
+	let toggles = core.notionToggles(sections, item(), opts, toBlocks);
+	assert.deepEqual(toggles.map(t => [t.id, t.title]), [["zm-mine", "我的劃線與筆記（劃線 3 · 筆記 1）"], ["zm-form", "文獻評讀表"], ["zm-ai", "AI 文獻筆記"], ["zm-ref", "摘要與書目"]]);
+	let headings = t => t.children.filter(b => b.type === "heading_3").map(b => [b.heading_3.rich_text[0].text.content, b.heading_3.color]);
+	assert.deepEqual(headings(toggles[0]), [["🟡 重要發現（2）", "yellow_background"], ["🔴 限制／疑問（1）", "red_background"], ["我的 Zotero 筆記（1）", "default"]]);
+	assert.deepEqual(headings(toggles[1]), [], "the form is the group's body");
+	assert.equal(toggles[1].children[0].paragraph.rich_text[0].text.content, "## 文獻評讀表", "its own heading first, where the real table goes after");
+	assert.deepEqual(headings(toggles[3]).map(h => h[0]), ["摘要（Abstract）", "🔎 延伸搜尋", "書目資訊"]);
+	assert.ok(toggles.every(t => t.color === "default" && t.children.every(b => !b[b.type].children)));
+	// The same groups as the Obsidian 看板
+	assert.deepEqual(core.sectionGroups(sections, item(), opts).map(g => g.group.type), toggles.map(t => t.id));
+});
+
 test("buildObsidianNote: the board layout groups the folded sections in four, the classic layout keeps them one by one; the board replaces the classic block", () => {
 	let opts = { aiMarkdown: AI_FULL, study: STUDY, appraisalBoard: BOARD, notesMarkdown: [{ title: "n", md: "我的 Zotero 筆記" }],
 		appraisalMarkdown: "## 文獻評讀表\n\n表", searchCallout: "> [!search]- 🔎 延伸搜尋\n> PubMed" };

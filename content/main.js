@@ -850,16 +850,16 @@
 			target: "notion",
 			fullTextNote: notionPage,
 		});
-		let toggles = sections.map(sec => ({
-			title: sec.title,
-			color: sec.color || "default",
-			children: ZB.markdown.mdToNotionBlocks(sec.md, { images: uploaded.ids }),
-		}));
+		let toBlocks = md => ZB.markdown.mdToNotionBlocks(md, { images: uploaded.ids });
+		// The four groups of the Obsidian 看板 (pref notion.groupSections), else one toggle per section
+		let toggles = pref("notion.groupSections") === false
+			? sections.map(sec => ({ id: sec.id, title: sec.title, color: sec.color || "default", children: toBlocks(sec.md) }))
+			: ZB.core.notionToggles(sections, uploaded.data, { notesMarkdown: opts.notesMarkdown, colorMeanings: pref("annotations.colorMeanings") || "" }, toBlocks);
 		let { containerId, sectionIds } = await client.replaceManagedSections(page.id, "自動同步區（重新同步會覆寫，個人筆記請寫在此區塊外）",
 			ZB.markdown.mdToNotionBlocks(keyPoints), toggles);
 		// The form's table as a real Notion table, inside the 文獻評讀表 toggle (it can't go in with the toggle's children)
 		if (opts.appraisal) {
-			let at = sections.findIndex(sec => sec.id === "appraisal");
+			let at = toggles.findIndex(t => t.id === "appraisal" || t.id === "zm-form");
 			await ZB.appraisalForm.insertNotionTable(client, at >= 0 && sectionIds[at] ? sectionIds[at] : containerId, opts.appraisal, opts.messages);
 		}
 		// 「全文筆記」 with the Notion option: the full text as a child page (fulltext.js; never fails the sync)

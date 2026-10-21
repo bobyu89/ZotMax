@@ -490,14 +490,29 @@ test("sync writes the full-text note with coloured highlights and the compact li
 	assert.doesNotMatch(note, /invented by the model/);
 	assert.ok(note.indexOf("[!quote] 🔴 限制／疑問") < note.indexOf("[!tip] AI 標的重點"), "the AI's after the user's own");
 
-	// Notion: 重點 open in the container, the rest as coloured toggles
+	// Notion: 重點 open in the container, the rest in the four groups of the 看板; each highlight meaning under a heading in its colour
 	let container = log.find(l => l.method === "PATCH" && l.path === "blocks/page-1/children");
 	assert.match(JSON.stringify(container.body.children[0].callout.children), /一句話/);
-	let toggles = log.find(l => l.method === "PATCH" && l.path === "blocks/container-1/children").body.children;
-	assert.deepEqual(toggles.slice(0, 4).map(t => [t.toggle.rich_text[0].text.content, t.toggle.color]), [
+	let request = log.find(l => l.method === "PATCH" && l.path === "blocks/container-1/children");
+	let toggles = request.body.children;
+	let title = b => b[b.type].rich_text.map(r => r.text.content).join("");
+	assert.deepEqual(toggles.map(t => title(t)).map(t => t.replace(/（[^）]*）$/, "（…）")).filter(t => !/^文獻評讀表/.test(t)),
+		["我的劃線（…）", "AI 文獻筆記（…）", "摘要與書目"]);
+	let mine = toggles[0].toggle.children.filter(b => b.type === "heading_3").map(b => [title(b), b.heading_3.color]);
+	assert.deepEqual(mine, [["🟡 重要發現（1）", "yellow_background"], ["🔴 限制／疑問（1）", "red_background"], ["🔵 可引用句（1）", "blue_background"]]);
+	let ai = toggles.find(t => /^AI 文獻筆記/.test(title(t)));
+	assert.deepEqual(ai.toggle.children.filter(b => b.type === "heading_3").map(title).slice(-1), ["AI 標的重點（僅供參考）"], "the AI's quotes after its note");
+	assert.ok(toggles.every(t => t.toggle.children.every(b => !(b[b.type] && b[b.type].children))), "two levels: one request");
+	// The classic toggles when the setting is off
+	env.prefStore["extensions.zotero-bridge.notion.groupSections"] = false;
+	log.length = 0;
+	await ZB.main.run([item], { targets: ["notion"], ai: "reuse" });
+	let classic = log.find(l => l.method === "PATCH" && /^blocks\/container-\d+\/children$/.test(l.path)).body.children;
+	assert.deepEqual(classic.slice(0, 4).map(t => [title(t), t.toggle.color]), [
 		["🟡 重要發現（1）", "yellow_background"], ["🔴 限制／疑問（1）", "red_background"], ["🔵 可引用句（1）", "blue_background"],
 		["AI 標的重點（僅供參考）", "default"],
 	]);
+	delete env.prefStore["extensions.zotero-bridge.notion.groupSections"];
 	// No full-text child page unless asked for
 	assert.ok(!log.some(l => l.path === "pages" && l.body && l.body.parent.page_id));
 
