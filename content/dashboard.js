@@ -504,8 +504,10 @@
 			parts.push("還畫不出來：至少要兩篇文獻的 AI 筆記有「介入」和「結果指標」。產生 AI 筆記後再更新儀表板。");
 			return parts.join("\n\n");
 		}
-		parts.push(`列是介入（I）、欄是結果指標（O），取自 ${map.studied} 篇文獻 AI 筆記的 PICO。格子是篇數和最強的證據等級（CEBM，數字越小越強）；⬜ 是還沒有研究的組合，可能就是研究缺口。`
-			+ "名稱只做字面合併，同一件事寫法不同時，到 設定 → 概念卡片 → 別名 把它們合成一組。");
+		let howTo = `列是介入（I）、欄是結果指標（O），取自 ${map.studied} 篇文獻 AI 筆記的 PICO。格子是篇數和最強的證據等級（CEBM，數字越小越強）；⬜ 是還沒有研究的組合，可能就是研究缺口。`
+			+ "名稱只做字面合併，同一件事寫法不同時，到 設定 → 概念卡片 → 別名 把它們合成一組。";
+		// The 看板 layout (opts.board) keeps the how-to in the folded note at the end, with the caveat
+		if (!opts.board) parts.push(howTo);
 		let head = ["介入 ＼ 結果", ...map.cols.map(c => `${c.name}（${c.count}）`)];
 		let lines = [`| ${head.map(cell).join(" | ")} |`, `|${head.map((h, i) => (i ? ":---:" : "---")).join("|")}|`];
 		let pairs = [];
@@ -530,7 +532,7 @@
 		}
 		// The caveat: a warning in the classic layout, a folded note in the 看板 layout (opts.board)
 		let caveat = "介入和結果指標是 AI 筆記從各篇摘出來的，寫法不一致時會分成不同列或欄。找缺口時請回到原文確認，也記得這裡只有你收進 Zotero 的文獻。";
-		parts.push(opts.board ? metaCallout("這是字詞層級的整理，不是系統性回顧", [caveat]) : `> [!warning] 這是字詞層級的整理，不是系統性回顧\n> ${caveat}`);
+		parts.push(opts.board ? metaCallout("怎麼讀這張表 · 字詞層級的整理，不是系統性回顧", [howTo, caveat]) : `> [!warning] 這是字詞層級的整理，不是系統性回顧\n> ${caveat}`);
 		return parts.join("\n\n");
 	}
 

@@ -393,6 +393,9 @@ test("the 看板 dashboard: the folded update note, 總覽, 圖表, 待處理 ca
 	// The gap map's caveat: folded in the 看板 layout, a warning in the classic one
 	let rec = (title, i, o) => d.noteRecord(noteFM({ title }, Object.assign({ study: { intervention: i, outcomes: o, evidence_level: "2", study_design: "RCT" } }, AI), "已讀"), `Zotero/${title}.md`);
 	let map = d.gapMap([rec("A", "運動", "跌倒"), rec("B", "運動", "跌倒")]);
-	assert.match(d.gapMapSection(map, { board: true }), /> \[!zm-meta\]- 這是字詞層級的整理，不是系統性回顧\n> 介入和結果指標/);
+	let boardMap = d.gapMapSection(map, { board: true });
+	assert.match(boardMap, /> \[!zm-meta\]- 怎麼讀這張表 · 字詞層級的整理，不是系統性回顧\n> 列是介入（I）[^\n]+ {2}\n> 介入和結果指標/, "the how-to and the caveat folded at the end");
+	assert.equal(boardMap.indexOf("列是介入"), boardMap.lastIndexOf("列是介入"), "the how-to only once");
+	assert.ok(boardMap.indexOf("| 介入 ＼ 結果") < boardMap.indexOf("列是介入"), "the table first");
 	assert.match(d.gapMapSection(map), /> \[!warning\] 這是字詞層級的整理/);
 });

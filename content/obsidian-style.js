@@ -31,7 +31,7 @@
 	const SNIPPET = "zotmax";
 	const FILE_NAME = `${SNIPPET}.css`;
 	// Bumped whenever the CSS changes, so installed copies are refreshed on the next sync
-	const VERSION = 4;
+	const VERSION = 5;
 	const HEADER_RE = /^\/\* ZotMax 看板樣式 v(\d+)\b/;
 
 	/**
@@ -441,6 +441,10 @@ ${hidden}
 	display: block;
 	max-width: 100%;
 	overflow-x: auto;
+}
+/* 格子不擠成一字一行（證據缺口地圖、文獻表）：太寬就左右滑 */
+.is-mobile .markdown-rendered:has(.callout[data-callout^="zm-"]) :is(th, td) {
+	min-width: 4.5em;
 }
 
 /* 每種卡片的圖示 */

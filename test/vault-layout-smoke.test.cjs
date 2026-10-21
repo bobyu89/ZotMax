@@ -481,7 +481,7 @@ test("a new vault is organized: the note in its collection's folder, the full te
 	let canvas = JSON.parse(read(dir, "00 文獻回顧 證據地圖.canvas"));
 	assert.equal(canvas.nodes.find(n => n.id === "zm-topic").file, "Zotero/10 文獻/碩論/文獻回顧/00 文獻回顧 總覽.md");
 	assert.ok(canvas.nodes.some(n => n.type === "text" && n.text.includes("[[Zotero/10 文獻/碩論/文獻回顧/lee2024|")));
-	assert.match(topic, /🗺️ \[\[Zotero\/10 文獻\/碩論\/文獻回顧\/00 文獻回顧 證據地圖\.canvas\|證據地圖（Canvas）\]\]/);
+	assert.match(topic, /\[\[Zotero\/10 文獻\/碩論\/文獻回顧\/00 文獻回顧 證據地圖\.canvas\|🗺️ 證據地圖\]\]/);
 	// 首頁 starts with what to open next
 	assert.match(home, /> \[!zm-board\] ▶️ 從這裡開始\n>\n> > \[!zm-reading\] 下一篇讀這個（2）\n/);
 	// A canvas the user added a card to is left alone
