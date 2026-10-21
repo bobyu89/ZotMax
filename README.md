@@ -877,6 +877,7 @@ PRISMA 2020 要求報告「其他方法」找到的文獻，最常見的就是�
 
 **4. 產生 PRISMA 流程圖與證據表**：分類右鍵 → **ZotMax ▸ 產生 PRISMA 流程圖與證據表（目前分類）**（或 ZotMax 按鈕或快速指令）。
 - **Obsidian** `Zotero/30 評讀與綜整/<分類>.md`：PRISMA 2020 計數（Records identified 分資料庫、Duplicate records removed、Records screened／excluded、Reports sought／not retrieved／assessed／excluded 分原因、Studies included；frontmatter 也有 `prisma_identified`、`prisma_included` 等）、Mermaid 流程圖（還沒篩完的以虛線框標出）、**一致性檢查**（例如全文排除沒有原因、重複文獻卻有篩選決定，每項可點回 Zotero）、**證據表**（研究設計、樣本數、場域／國家、族群、介入／對照、結果指標、證據等級、評讀，取自各篇 AI 筆記；還沒有 AI 筆記的欄位留空並列在一致性檢查）。
+- **看板版**（預設）：上面是辨識、標題摘要篩選、全文評估、納入四張數字卡，接著是「篩選進度」卡片（兩個階段已決定的比例、全文排除原因、納入研究的設計與證據等級的長條，以及一致性檢查），流程圖保持展開，計數表和證據表收在摺疊區塊。Notion 頁面照舊。
 - **CSV** `Zotero/30 評讀與綜整/<分類> 證據表.csv`（UTF-8 BOM，Excel 不亂碼），欄位更多。
 - **Notion**（選用）：填「PRISMA 頁面的 Notion 父頁面」（留空用文獻比較表的父頁面），同一個分類一直更新同一頁。
 - 重新產生只覆寫自動區塊與外掛的 frontmatter；「✍️ 我的筆記」保留。
@@ -965,6 +966,7 @@ PRISMA 2020 要求報告「其他方法」找到的文獻，最常見的就是�
 - **欄位**：文獻（Obsidian 筆記的連結）、研究設計與樣本數、P 族群、I 介入、C 對照、O 結果、主要結果（AI 筆記「主要結果」的前三點）、證據等級（CEBM／JBI）、評讀（結果、工具，加上「已核對」「評讀中」或「AI 初評」）、對照本題（有問題卡時）。
 - **對照本題**只是字詞比對：✓ 這篇的該要素和問題卡有共同字詞（英文單字或中文兩字詞），？ 沒有共同字詞（換個說法也可能是同一件事），— 這篇沒有該要素的資料。符不符合，由你讀原文判斷。
 - **🔎 檢索詞建議**：筆記裡表格下方多一張「從這些文獻反推」的檢索詞表：詞、幾篇有（長條）、是否已在問題卡（✓）。文獻 4 篇以上時只列至少 2 篇共有的詞。沒打勾的就是可以補進檢索式的候選，記得到 MeSH Database 確認。
+- **看板版**（預設）：表格上面多兩排卡片：「本題 PICO」（研究問題、P／I／C／O、各要素有幾篇和問題卡有共同字詞、檢索式）和「文獻」（篇數、最強證據、研究設計、前 8 個檢索詞建議）；PICO 表本身保持展開，說明和完整的檢索詞表收在摺疊區塊。Notion 頁面照舊。
 - **放在哪裡**：有 Obsidian vault 時放 `Zotero/30 評讀與綜整/<分類> PICO 表.md`（和 PRISMA 筆記一起，可用 `[[ ]]` 連到各篇筆記）；沒有 vault 時放設定裡指定的資料夾，再沒有就放「下載」。重新匯出只覆寫自動區塊，「✍️ 我的筆記」保留。
 - **也產生**：`<分類> PICO 表.csv`（Excel 直接開，欄位更多：作者、DOI、場域、測量工具、評讀狀態…）、`<分類> PICO 表.html`（用 Word 開啟就是表格，可另存 .docx）；填了「PRISMA 頁面的 Notion 父頁面」時可一併更新 Notion 頁面。
 - **匯出之後**：對話框列出寫了什麼、幾篇沒有資料；按 **複製成表格** 把本題 PICO 和整張表以 HTML 放到剪貼簿，到 Word 直接貼上就是表格；**打開資料夾** 打開輸出位置。
@@ -999,7 +1001,7 @@ GRADE 評的不是單篇文獻，而是**某個結果指標的整體證據**有�
 
 評等即時顯示（例如「⊕⊕◯◯ 低（從「高」開始；偏誤風險 −1、不精確性 −1）」），下面列出還要補的地方（降級沒寫理由、效果沒填）。**儲存**把評等存在這個分類（之後加了研究可以回來改）；**儲存並匯出證據摘要表**再產生：
 
-- `<分類> GRADE 證據摘要.md`（有 Obsidian vault 時在 `30 評讀與綜整/`，和 PRISMA 筆記、PICO 表一起；沒有 vault 時放 PICO 表的資料夾或「下載」）：證據摘要表（Summary of Findings：結果指標、重要性、研究數與設計、參與人數、效果、證據確定性加註腳）、證據剖面（每個結果在五個面向的判斷）、納入研究的評讀、備註。重新匯出只覆寫自動區塊。
+- `<分類> GRADE 證據摘要.md`（有 Obsidian vault 時在 `30 評讀與綜整/`，和 PRISMA 筆記、PICO 表一起；沒有 vault 時放 PICO 表的資料夾或「下載」）：證據摘要表（Summary of Findings：結果指標、重要性、研究數與設計、參與人數、效果、證據確定性加註腳）、證據剖面（每個結果在五個面向的判斷）、納入研究的評讀、備註。重新匯出只覆寫自動區塊。看板版（預設）上面是每個結果指標一張卡片（⊕⊕⊕◯ 中、重要性與研究數、效果）和證據確定性分布，各張表格收在摺疊區塊。
 - `.csv`（每個面向和理由一欄，Excel 直接開）、`.html`（用 Word 開就是表格）。匯出後按 **複製成表格**，把證據摘要表貼進 Word。
 
 > ⚠️ 評等是你的判斷，ZotMax 的提示只是依現有資料的提醒，不是評等。AI 筆記的結論方向和樣本數是 AI 初填，效果值請從原文或統合分析抄寫並核對。正式的系統性回顧通常由兩位研究者分別評等再討論。
@@ -1275,6 +1277,37 @@ pandoc 論文.md --citeproc --bibliography "Zotero/90 系統/references.json" --
 **重新同步會蓋掉我寫的東西嗎？** 不會。外掛只改自己的區塊（見[收集與同步](#收集與同步)）。直接改 AI 子筆記也沒問題，下次同步會沿用你改過的內容。
 
 **更新後 Obsidian 的筆記還是舊樣子，或卡片上下排、沒有排成格狀？** 版面在下次同步時才會換，先在 Zotero 同步一次（研究儀表板和首頁可以用 ZotMax 按鈕 → 更新研究儀表板）。卡片要排成格狀需要 ZotMax 的 CSS 片段：Obsidian 開著時到 設定 → 外觀 → CSS 片段 按重新整理，確認 `zotmax` 是打開的；被關掉或刪掉的話，到 Zotero 設定 → 同步 → Obsidian 按 **安裝看板樣式到 Obsidian**。
+
+**可以在平板（iPad）上看嗎？** 可以。ZotMax 在電腦的 Zotero 裡產生筆記，平板負責看和劃線；要做的是把 Obsidian vault 同步到平板，三種方式擇一：
+
+<details>
+<summary>Windows 電腦配 iPad：Obsidian Sync、iCloud、Notion 三種做法</summary>
+
+| 方式 | 費用 | 優點 | 缺點 |
+|---|---|---|---|
+| **Obsidian Sync**（推薦） | 付費（以 Obsidian 官網為準） | 穩定，CSS 片段和設定也能同步 | 電腦的 Obsidian 開著時才會上傳 |
+| **iCloud for Windows** | 免費 | 不開 Obsidian 也在背景同步 | 在 Windows 上偶爾變慢或產生「(1)」衝突檔 |
+| **Notion** | 免費 | 不用處理 Obsidian 同步，iPad 裝 Notion app 就能看 | 是 Notion 的版面，不是 Obsidian 看板 |
+
+**Obsidian Sync**
+1. 到 obsidian.md 登入並購買 Sync。
+2. Windows 的 Obsidian：設定 → 核心外掛 → 打開「同步」→ 建立新的遠端 vault（設一組加密密碼並記住）；同步設定裡勾「主題與 CSS 片段」和「外觀設定」。
+3. iPad：App Store 裝 Obsidian → 建立一個**不存在 iCloud** 的空 vault → 設定 → 同步 → 連到剛才的遠端 vault，等下載完。
+4. iPad 的 設定 → 外觀 → CSS 片段，確認 `zotmax` 是打開的。
+5. ZotMax 的 vault 路徑不用改。ZotMax 同步完後，打開一下電腦的 Obsidian，iPad 才會收到新筆記。
+
+**iCloud for Windows**
+1. iPad：裝 Obsidian，建立 vault 時勾「存在 iCloud」，iCloud Drive 會出現 `Obsidian` 資料夾。
+2. Windows：從 Microsoft Store 裝 iCloud，登入並打開 iCloud Drive。
+3. **先關掉 Zotero 和 Obsidian**，把原本的 vault 整個資料夾搬進 `iCloud Drive\Obsidian\`，在資料夾上按右鍵 →「一律保留在此裝置上」（沒有這一步，ZotMax 可能讀不到檔案）。
+4. Windows 的 Obsidian 改開新位置的 vault；Zotero → ZotMax 設定 → 同步 → Obsidian，把 vault 路徑改到新位置（有分流規則的話一起檢查）。
+5. 不要在電腦和 iPad 同時改同一篇筆記；你的想法寫在「✍️ 我的筆記」裡。
+
+**在 iPad 讀 PDF、劃線**：裝 Zotero 官方 app、登入同一個帳號（PDF 要同步需要 Zotero 檔案同步：官方空間或 WebDAV），在 iPad 上用顏色劃線，劃線會同步回電腦；電腦的 Zotero 下次同步時，ZotMax 把新劃線寫進文獻筆記，iPad 的 Obsidian 也跟著更新。
+
+**還要知道**：看板在平板和手機上會自動改成兩欄或一欄，寬表格可以左右滑；文獻總表和研究儀表板的 Bases 檢視需要 iPad 的 Obsidian 也是 1.14 以上；筆記裡點回 PDF 的 `zotero://` 連結是給電腦用的，在 iPad 上可能打不開。Mac 配 iPad 時，直接把 vault 放在 iCloud Drive 最簡單。
+
+</details>
 
 **文獻筆記最上面的屬性區少了研究設計、PICO 等欄位？** 看板版預設只顯示閱讀狀態、標籤和你自己加的屬性，其他資料已經在卡片上；它們仍在 frontmatter，Bases、Dataview 和搜尋都讀得到。想全部顯示：設定 → 同步 → Obsidian，取消「看板：文獻筆記最上面的屬性區只顯示…」，下次同步生效。
 

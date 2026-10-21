@@ -31,7 +31,7 @@
 	const SNIPPET = "zotmax";
 	const FILE_NAME = `${SNIPPET}.css`;
 	// Bumped whenever the CSS changes, so installed copies are refreshed on the next sync
-	const VERSION = 6;
+	const VERSION = 7;
 	const HEADER_RE = /^\/\* ZotMax 看板樣式 v(\d+)\b/;
 
 	/**
@@ -76,6 +76,11 @@
 	];
 	// A concept card's and the 概念索引's own properties (concepts.js); the aliases and the user's keys stay
 	const CONCEPT_PROPERTIES = ["type", "concept", "concept_types", "papers", "concepts", "updated", "ai_synthesis", "cssclasses"];
+	// The review pages' own properties (screening.js, pico.js, grade.js): these keys, and every prisma_*, pico_* and
+	// grade_* key; the tags and the user's keys stay
+	const REVIEW_PROPERTIES = ["title", "type", "zotero_collection", "collection_path", "zotero", "notion", "last_generated",
+		"evidence_csv", "studies", "studies_without_data", "outcomes", "certainty", "cssclasses"];
+	const REVIEW_PREFIXES = ["prisma_", "pico_", "grade_"];
 
 	function header() {
 		return `/* ZotMax 看板樣式 v${VERSION} — 由 ZotMax 寫入，更新時會整個覆寫。想自己改，請另存成別的檔名再修改。 */`;
@@ -88,6 +93,7 @@
 		let groups = GROUPS.map(([type]) => `.callout[data-callout="${type}"]`).join(",\n");
 		let hidden = HIDDEN_PROPERTIES.map(k => `\t[data-property-key="${k}"]`).join(",\n");
 		let conceptHidden = CONCEPT_PROPERTIES.map(k => `\t[data-property-key="${k}"]`).join(",\n");
+		let reviewHidden = [...REVIEW_PROPERTIES.map(k => `\t[data-property-key="${k}"]`), ...REVIEW_PREFIXES.map(k => `\t[data-property-key^="${k}"]`)].join(",\n");
 		return `${header()}
 
 /* 共用：一個中性色加上你在 Obsidian 選的強調色；有意義的顏色（劃線、閱讀狀態、下一步）才另外上色 */
@@ -415,6 +421,12 @@ ${conceptHidden}
 )))) {
 	display: none;
 }
+/* PRISMA、PICO 表、GRADE：屬性區只留標籤和你自己加的屬性 */
+.zm-review .metadata-property:is(
+${reviewHidden}
+) {
+	display: none;
+}
 /* 全文筆記：沒有屬性區，行距放寬好讀，AI 標的重點的底線用強調色 */
 .zm-fulltext .metadata-container {
 	display: none;
@@ -597,5 +609,5 @@ ${icons}
 		return `看板樣式 ${what}：.obsidian/snippets/${FILE_NAME}${tail}`;
 	}
 
-	return { SNIPPET, FILE_NAME, VERSION, CARDS, GROUPS, HIDDEN_PROPERTIES, CONCEPT_PROPERTIES, header, css, versionOf, enableIn, install, afterSync, describe };
+	return { SNIPPET, FILE_NAME, VERSION, CARDS, GROUPS, HIDDEN_PROPERTIES, CONCEPT_PROPERTIES, REVIEW_PROPERTIES, REVIEW_PREFIXES, header, css, versionOf, enableIn, install, afterSync, describe };
 });

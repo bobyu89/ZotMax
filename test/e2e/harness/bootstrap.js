@@ -1936,7 +1936,8 @@ const TESTS = [
 				let out = await ZB.screening.generateReport(ctx.collection);
 				check(out && !out.errors.length, `generateReport errors: ${out && out.errors.join("; ")}`);
 				let prisma = await IOUtils.readUTF8(PathUtils.join(ctx.noteDir, "Reviews", "E2E Review.md"));
-				check(prisma.includes("## 本題 PICO") && prisma.indexOf("## 本題 PICO") < prisma.indexOf("## PRISMA 2020 計數"), "the PRISMA note heads with 本題 PICO");
+				check(prisma.includes("## 本題 PICO") && prisma.indexOf("## 本題 PICO") < prisma.indexOf("> [!zm-board] PRISMA 2020"), "the PRISMA note heads with 本題 PICO, then the 看板");
+				check(/^cssclasses:\n {2}- "zotmax-note"\n {2}- "zm-review"$/m.test(prisma), "the PRISMA note has the 看板 classes");
 				// The table: the collection's full-text-included studies (english and chinese), english has an AI note
 				let noticed = [];
 				let info = null;
@@ -1962,10 +1963,10 @@ const TESTS = [
 				let note = await IOUtils.readUTF8(PathUtils.join(result.dir, "E2E Review PICO 表.md"));
 				d.noteHead = note.slice(0, 400);
 				check(/^---\ntitle: "E2E Review：PICO 表"\ntype: "pico-table"\n/.test(note), "frontmatter");
-				check(note.includes("## 本題 PICO") && note.includes("## PICO 表（2 篇）"), "the card and the table");
+				check(note.includes("> [!zm-board] 本題 PICO") && note.includes("## PICO 表（2 篇）"), "the card (看板) and the table");
 				check(/\| \[\[Zotero\/[^\]|]+\\\|Lee & 陳, 2021\]\] \| /.test(note) || /\| Lee & 陳, 2021 \| /.test(note), `the English item's row: ${note.split("## PICO 表")[1]}`);
 				check(/\| 對照本題 \|/.test(note), "the 對照本題 column (no row has data, so it only holds —)");
-				check(note.includes("## 沒有結構化資料的文獻"), "both papers are listed without data");
+				check(note.includes("> [!zm-ref]- 沒有結構化資料的文獻（2）"), "both papers are listed without data (folded on the 看板)");
 				check(note.trimEnd().endsWith("## ✍️ 我的筆記"), "the user's section at the end");
 				// IOUtils.readUTF8 drops a BOM, so the bytes say whether it is there
 				let csvBytes = await IOUtils.read(PathUtils.join(result.dir, "E2E Review PICO 表.csv"));

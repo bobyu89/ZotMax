@@ -175,6 +175,19 @@ test("HTML for Word and the clipboard: the question, the SoF table, footnotes, t
 	assert.equal(tsv.split("\n").length, 3);
 });
 
+test("the note (看板): one card per outcome with its certainty, the levels' spread, every table folded", () => {
+	let t = sampleTable();
+	let md = G.noteSection(t, STUDIES, { scopeName: "跌倒預防", generatedAt: "2026-10-14T01:00:00.000Z", links: true, layout: "board" });
+	assert.ok(md.startsWith("> [!zm-meta]- 🧭 GRADE · 跌倒預防 · 2 個結果指標 · 2026-10-14 產生\n"), md.slice(0, 80));
+	assert.match(md, /\n> \[!zm-board\] 證據確定性\n> 研究問題：住院長者的運動能減少跌倒嗎？\n>\n> > \[!zm-kpi\] 跌倒發生率\n> > \*\*⊕⊕◯◯ 低\*\* {2}\n> > [^\n]+ · \d 篇[^\n]* {2}\n> > RR /);
+	assert.match(md, /> > \[!zm-kpi\] 骨折\n> > \*\*⊕⊕⊕◯ 中\*\*/);
+	assert.match(md, /> > \[!zm-chart\] 證據確定性分布\n> > ⊕⊕⊕◯ 中 ▰{8} 1 {2}\n> > ⊕⊕◯◯ 低 ▰{8} 1\n/);
+	let order = ["> [!zm-ref]- 證據摘要表（Summary of Findings，可複製到報告）", "> [!zm-ref]- 證據剖面（Evidence profile）", "> [!zm-ref]- 納入研究的評讀", "> [!zm-ref]- 備註"].map(h => md.indexOf(h));
+	assert.ok(order.every((at, k) => at > 0 && (!k || at > order[k - 1])), JSON.stringify(order));
+	assert.doesNotMatch(md, /^## /m, "no open section");
+	assert.match(G.noteSection({ outcomes: [] }, STUDIES, { scopeName: "x", layout: "board" }), /還沒有結果指標/);
+});
+
 test("the note: info, question, SoF, profile, studies, notes; frontmatter; file names; the dialog text", () => {
 	let t = sampleTable();
 	let meta = { title: "跌倒預防：GRADE 證據摘要", scopeName: "跌倒預防", generatedAt: "2026-10-14T01:00:00.000Z", uri: "zotero://select/library/collections/C1",

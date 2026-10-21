@@ -575,6 +575,7 @@
 	 * links, query, screened: { included, total } | null }
 	 */
 	function noteSection(rows, card, meta) {
+		if (meta.layout === "board") return boardSection(rows, card, meta);
 		let withCard = !!(card && cardHasContent(card));
 		let info = [
 			`> [!info] 由 ZotMax 依「${meta.scopeName}」的 ${rows.length} 篇文獻於 ${String(meta.generatedAt || "").slice(0, 10)} 產生；重新產生只會覆寫這個區塊。`,
@@ -594,6 +595,64 @@
 				+ "\n\n這幾篇還沒有 AI 筆記（或筆記裡沒有結構化資料）：先同步產生 AI 筆記，或自己在表裡補上。");
 		}
 		return out.join("\n\n");
+	}
+
+	/**
+	 * The 看板 layout's PICO 表 (Obsidian only; Notion keeps the sections): the update note (folded), 本題 PICO (the
+	 * question across the board, the card's elements, how many papers share their words, the search string), 文獻 at a
+	 * glance (papers with data, the strongest level, designs, the search terms the papers carry), the table open (it is
+	 * the page's point), then the legend and the rest folded.
+	 */
+	function boardSection(rows, card, meta) {
+		let withCard = !!(card && cardHasContent(card));
+		let withData = rows.filter(r => r.hasData);
+		let parts = [core.metaFold(`🧭 PICO 表 · ${meta.scopeName} · ${rows.length} 篇 · ${String(meta.generatedAt || "").slice(0, 10)} 產生`, [
+			`由 ZotMax 依「${meta.scopeName}」的 ${rows.length} 篇文獻產生；重新產生只會覆寫這個區塊。`,
+			meta.screened ? `篩選已開始，所以只列全文納入的 ${meta.screened.included} 篇（分類共 ${meta.screened.total} 篇）。` : "",
+			meta.uri ? `Zotero：[開啟](${meta.uri})` + (meta.csvPath ? ` · CSV：\`${meta.csvPath}\`` : "") + (meta.htmlPath ? ` · Word 版：\`${meta.htmlPath}\`` : "") : "",
+			SOURCE_NOTE,
+		])];
+		if (withCard) {
+			let c = normalizeCard(card);
+			let labels = fieldLabels(c);
+			let keys = ["p", "i", "c", "o"].filter(k => oneLine(c[k]));
+			let cards = [core.plainCard("zm-pico", typeOf(c).label, keys.map(k => `- **${k.toUpperCase()}** ${oneLine(c[k])}`).join("\n"))];
+			if (withData.length) {
+				cards.push(core.chartCard(`和問題卡有共同字詞（${withData.length} 篇有資料）`, keys.map(k => {
+					let yes = withData.filter(r => r.match && r.match[k] === "yes").length;
+					return `${k.toUpperCase()} ${labels[k].replace(/（[A-Z]）$/, "")} ${core.bar(yes, withData.length)} ${yes}`;
+				})));
+			}
+			let q = meta.query;
+			if (q && (q.en || q.all)) {
+				let lines = [q.en ? `- 英文詞：\`${q.en}\`` : "", q.all && q.all !== q.en ? `- 原文詞彙：\`${q.all}\`` : ""].filter(Boolean);
+				cards.push(core.plainCard("zm-reading|wide", "檢索式", lines.join("\n")));
+			}
+			parts.push(core.boardBlock("本題 PICO", cards, c.question ? `研究問題：${cell(c.question)}` : "還沒寫問題句"));
+		}
+		let levels = withData.map(r => Number.parseInt(r.evidenceLevel, 10)).filter(n => n >= 1 && n <= 5);
+		let best = levels.length ? Math.min(...levels) : 0;
+		let designs = [...withData.reduce((m, r) => (r.design ? m.set(r.design, (m.get(r.design) || 0) + 1) : m), new Map())].sort((a, b) => b[1] - a[1]);
+		let cards = [
+			core.kpiCard("文獻", `${rows.length} 篇`, `有 AI 研讀資料 ${withData.length} 篇`),
+			core.kpiCard("最強證據", best ? `CEBM ${best}` : "—", best ? `${levels.filter(n => n === best).length} 篇` : "還沒有證據等級資料"),
+		];
+		if (designs.length) cards.push(core.chartCard("研究設計", core.barRows(designs, 5)));
+		let kw = (meta.keywords || []).slice(0, 8);
+		if (kw.length) {
+			cards.push(core.chartCard("檢索詞建議（從這些文獻反推）", kw.map(k => `${k.term} ${core.bar(k.papers, rows.length, 6)} ${k.papers}${withCard && k.inSearch ? " ✓" : ""}`)));
+		}
+		parts.push(core.boardBlock("文獻", cards));
+		parts.push(`## PICO 表（${rows.length} 篇）`, tableMarkdown(rows, { links: meta.links, match: withCard }));
+		if (withCard) parts.push(core.metaFold("怎麼讀「對照本題」", [MATCH_LEGEND]));
+		let kwFull = keywordSection(meta.keywords, rows.length, withCard);
+		if (kwFull) parts.push(core.foldBlock("檢索詞建議（完整）", kwFull.replace(/^## [^\n]+\n\n/, "")));
+		let none = rows.filter(r => !r.hasData);
+		if (none.length) {
+			parts.push(core.foldBlock(`沒有結構化資料的文獻（${none.length}）`, none.map(r => `- ${meta.links && r.link ? `[[${r.link}\\|${cell(r.citation)}]]` : cell(r.citation)}`).join("\n")
+				+ "\n\n這幾篇還沒有 AI 筆記（或筆記裡沒有結構化資料）：先同步產生 AI 筆記，或自己在表裡補上。"));
+		}
+		return parts.join("\n\n");
 	}
 
 	function noteFrontmatter(rows, card, meta) {
@@ -619,8 +678,8 @@
 	}
 
 	/** The whole note: a new one, or the existing one with its managed block and frontmatter replaced (screening.js). */
-	function buildNote(existing, fm, title, section) {
-		return screening.buildReviewNote(existing, fm, title, section, ["PICO"]);
+	function buildNote(existing, fm, title, section, opts) {
+		return screening.buildReviewNote(existing, fm, title, section, ["PICO"], opts);
 	}
 
 	/** File names for a scope: `<name> PICO 表.md`, `.csv`, `.html`. */
@@ -1478,7 +1537,8 @@
 		}
 		let notePath = PathUtils.join(o.folder, names.note);
 		let existing = (await IOUtils.exists(notePath)) ? await IOUtils.readUTF8(notePath) : null;
-		let textOut = buildNote(existing, noteFrontmatter(o.rows, o.card, meta), meta.title, noteSection(o.rows, o.card, meta));
+		let layout = core.layoutPref();
+		let textOut = buildNote(existing, noteFrontmatter(o.rows, o.card, meta), meta.title, noteSection(o.rows, o.card, Object.assign({}, meta, { layout })), { layout });
 		if (textOut !== existing) await IOUtils.writeUTF8(notePath, textOut);
 		r.files.push(names.note);
 		if (o.csv) {

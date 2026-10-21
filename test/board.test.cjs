@@ -201,7 +201,9 @@ test("boardInfo: the tool, one light per scored item in order, counts and state 
 test("CSS snippet: header with the version, a grid board, one look for every card, tiles, the PICO grid, the folded groups, compact properties, phones", () => {
 	let css = style.css();
 	assert.equal(style.versionOf(css), style.VERSION);
-	assert.equal(style.VERSION, 6);
+	assert.equal(style.VERSION, 7);
+	assert.match(css, /\.zm-review \.metadata-property:is\([^)]*\[data-property-key\^="prisma_"\][^)]*\[data-property-key\^="grade_"\]\n\) \{\n\tdisplay: none;/, "the review pages hide their own keys");
+	assert.doesNotMatch(css.slice(css.indexOf(".zm-review .metadata-property")).split("}")[0], /"tags"/);
 	assert.match(css, /\.zm-concept \.metadata-property:is\([^)]*\[data-property-key="concept_types"\][^)]*\) \{\n\tdisplay: none;/, "a concept card keeps only its aliases and the user's properties");
 	assert.doesNotMatch(css.slice(css.indexOf(".zm-concept .metadata-property")).split("}")[0], /aliases/);
 	assert.match(css, /\.zm-fulltext \.metadata-container \{\n\tdisplay: none;/, "the full-text note has no properties area");

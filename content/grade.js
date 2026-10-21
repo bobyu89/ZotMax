@@ -537,6 +537,7 @@
 
 	/** The note's managed region. meta: { scopeName, generatedAt, uri, csvPath, htmlPath, links } */
 	function noteSection(table, studies, meta) {
+		if (meta.layout === "board") return boardSection(table, studies, meta);
 		let t = normalizeTable(table);
 		let info = [
 			`> [!info] 由 ZotMax 依「${meta.scopeName}」的 GRADE 評等於 ${String(meta.generatedAt || "").slice(0, 10)} 產生；重新匯出只會覆寫這個區塊。`,
@@ -555,6 +556,38 @@
 		return out.join("\n\n");
 	}
 
+	/**
+	 * The 看板 layout's GRADE note: the update note (folded), one card per outcome (its certainty as ⊕ symbols, then
+	 * importance · studies and the effect), how many outcomes at each level, then every table folded — the Summary of
+	 * Findings (to copy into a report), the evidence profile, the studies' appraisal and the notes.
+	 */
+	function boardSection(table, studies, meta) {
+		let t = normalizeTable(table);
+		let s = summary(table, studies);
+		let parts = [core.metaFold(`🧭 GRADE · ${meta.scopeName} · ${s.rows.length} 個結果指標 · ${String(meta.generatedAt || "").slice(0, 10)} 產生`, [
+			`由 ZotMax 依「${meta.scopeName}」的 GRADE 評等產生；重新匯出只會覆寫這個區塊。`,
+			meta.uri ? `Zotero：[開啟](${meta.uri})` + (meta.csvPath ? ` · CSV：\`${meta.csvPath}\`` : "") + (meta.htmlPath ? ` · Word 版：\`${meta.htmlPath}\`` : "") : "",
+			NOTE_TEXT,
+		])];
+		if (s.rows.length) {
+			let cards = s.rows.map(r => core.kpiCard(cell(r.outcome), r.rating, `${r.importance} · ${r.studies}`, r.effect ? cell(r.effect) : "效果未填"));
+			let counts = LEVELS.map(l => [`${l.symbol} ${l.label}`, s.rows.filter(r => r.certainty.score === l.score).length]);
+			cards.push(core.chartCard("證據確定性分布", core.barRows(counts, 4, 8)));
+			parts.push(core.boardBlock("證據確定性", cards, t.question ? `研究問題：${cell(t.question)}` : ""));
+		}
+		else {
+			parts.push("還沒有結果指標：在 GRADE 視窗新增結果指標並評等後重新匯出。");
+		}
+		parts.push(core.foldBlock("證據摘要表（Summary of Findings，可複製到報告）", sofMarkdown(table, studies)));
+		let profile = profileMarkdown(table, studies);
+		if (profile) parts.push(core.foldBlock("證據剖面（Evidence profile）", "每個結果指標在五個降級面向和升級條件上的判斷。\n\n" + profile));
+		let st = studiesMarkdown(table, studies, { links: meta.links });
+		if (st) parts.push(core.foldBlock("納入研究的評讀", "偏誤風險的判斷依據：各篇的評讀結果（標「已核對」的是你在文獻評讀表核對過的）。\n\n" + st));
+		let withNotes = t.outcomes.filter(o => o.name && o.notes);
+		if (withNotes.length) parts.push(core.foldBlock("備註", withNotes.map(o => `- **${cell(o.name)}**：${o.notes.replace(/\n/g, "  \n  ")}`).join("\n")));
+		return parts.join("\n\n");
+	}
+
 	function noteFrontmatter(table, studies, meta) {
 		let s = summary(table, studies);
 		return {
@@ -571,8 +604,8 @@
 		};
 	}
 
-	function buildNote(existing, fm, title, section) {
-		return screening.buildReviewNote(existing, fm, title, section, ["GRADE"]);
+	function buildNote(existing, fm, title, section, opts) {
+		return screening.buildReviewNote(existing, fm, title, section, ["GRADE"], opts);
 	}
 
 	/** `<name> GRADE 證據摘要.md`, `.csv`, `.html` */
@@ -1051,7 +1084,8 @@
 		await IOUtils.makeDirectory(o.folder, { createAncestors: true, ignoreExisting: true });
 		let notePath = PathUtils.join(o.folder, names.note);
 		let existing = (await IOUtils.exists(notePath)) ? await IOUtils.readUTF8(notePath) : null;
-		let textOut = buildNote(existing, noteFrontmatter(o.table, o.studies, meta), meta.title, noteSection(o.table, o.studies, meta));
+		let layout = core.layoutPref();
+		let textOut = buildNote(existing, noteFrontmatter(o.table, o.studies, meta), meta.title, noteSection(o.table, o.studies, Object.assign({}, meta, { layout })), { layout });
 		if (textOut !== existing) await IOUtils.writeUTF8(notePath, textOut);
 		await IOUtils.writeUTF8(PathUtils.join(o.folder, names.csv), sofCSV(o.table, o.studies));
 		await IOUtils.writeUTF8(PathUtils.join(o.folder, names.html), sofHTML(o.table, o.studies, meta));

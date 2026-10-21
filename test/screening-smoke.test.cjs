@@ -72,7 +72,7 @@ function makeEnv({ prefs, fetch, confirm = () => true }) {
 
 	let collections = new Map();
 	// The suites below were written for the flat vault layout; vault-layout-smoke covers the organized one
-	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat" }, prefs);
+	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat", "extensions.zotero-bridge.obsidian.layout": "classic" }, prefs);
 	let activeCollection = null;
 	let Zotero = {
 		Prefs: { get: k => prefStore[k], set: (k, v) => { prefStore[k] = v; }, clear: (k) => { delete prefStore[k]; } },
@@ -507,6 +507,19 @@ test("PRISMA note, CSV and Notion page for a collection; a rerun keeps the user'
 	await ZB.screening.generateReport(collection);
 	assert.equal(env.notion.pages.size, 3);
 	assert.equal(rev2.children.length, before);
+	assert.deepEqual(env.errors, []);
+
+	// The 看板 layout: the Obsidian note becomes cards (the user's part kept); Notion keeps its sections
+	env.prefStore["extensions.zotero-bridge.obsidian.layout"] = "board";
+	await ZB.screening.generateReport(collection);
+	let board = fs.readFileSync(notePath, "utf8");
+	assert.match(board, /\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-review"\n/);
+	assert.match(board, /%%\n\n> \[!zm-meta\]- 🧭 PRISMA 2020 · 跌倒預防 SR · 7 筆 · /);
+	assert.match(board, /> \[!zm-board\] PRISMA 2020\n> > \[!zm-kpi\] 辨識\n> > \*\*7 筆\*\*/);
+	assert.match(board, /> \[!zm-ref\]- 證據表（納入研究 2 篇）\n/);
+	assert.match(board, /與第二位審查者討論\n$/);
+	let latest = [...env.notion.pages.values()].at(-1);
+	assert.equal(latest.children.filter(b => b.type === "table").length, 2, "Notion: the tables as before");
 	assert.deepEqual(env.errors, []);
 });
 
