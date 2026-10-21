@@ -383,7 +383,13 @@
 	 * cfg: searchLinks.normalizeConfig() (sources the user turned off are left out).
 	 */
 	function searchLine(concept, cfg) {
-		if (!searchLinks || !cfg) return "";
+		let links = searchLinksFor(concept, cfg);
+		return links.length ? `🔎 ${links.join(" · ")}` : "";
+	}
+
+	/** The search links of a card as Markdown links ([] without the search-links module or config). */
+	function searchLinksFor(concept, cfg) {
+		if (!searchLinks || !cfg) return [];
 		let links = [];
 		let en = englishName(concept);
 		if (en) {
@@ -394,7 +400,7 @@
 		let zh = [concept.name, ...concept.aliases].find(isChinese);
 		let scholar = searchLinks.findSource(cfg, "scholar");
 		if (scholar && (zh || en)) links.push(mdLink(`Google Scholar：${zh || en}`, searchLinks.buildTarget(scholar, zh || en, cfg).url));
-		return links.length ? `🔎 ${links.join(" · ")}` : "";
+		return links;
 	}
 
 	function yearRange(papers) {
@@ -405,8 +411,92 @@
 		return lo === hi ? String(lo) : `${lo}–${hi}`;
 	}
 
-	/** The managed region of a card. meta: { indexLink, cfg, total } */
+	const BOARD_ROWS = 5;
+	const BOARD_COOCCUR = 6;
+	const REFRESH = "重新整理：ZotMax 按鈕或快速指令 → 更新概念卡片（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。";
+
+	/** The strongest CEBM level among the papers ("" when none has one). */
+	function bestLevel(papers) {
+		let levels = papers.map(p => Number.parseInt(p.level, 10)).filter(n => n >= 1 && n <= 5);
+		return levels.length ? String(Math.min(...levels)) : "";
+	}
+
+	/** [name, count] pairs as bar lines, the largest first (at most `max`). */
+	function barLines(pairs, max, width = 10) {
+		let rows = pairs.slice(0, max);
+		let top = Math.max(1, ...rows.map(([, n]) => n));
+		return rows.map(([name, n]) => `${name} ${core.bar(n, top, width)} ${n}`);
+	}
+
+	// The card's charts sit three to a row: shorter bars keep a long name and its bar on one line
+	const CARD_BAR = 6;
+
+	function chartCard(title, lines, wide) {
+		return [`> [!zm-chart${wide ? "|wide" : ""}] ${title}`, ...lines.map((l, k) => `> ${l}${k < lines.length - 1 ? "  " : ""}`)].join("\n");
+	}
+
+	function boardOf(title, cards, head) {
+		let body = [...(head ? [head] : []), ...cards].join("\n\n").split("\n").map(l => (l.trim() ? `> ${l}` : ">"));
+		return [`> [!zm-board] ${title}`, ...body].join("\n");
+	}
+
+	/**
+	 * The 看板 layout's card: the update note (folded), the index and search links as buttons, 概念總覽 (types and
+	 * aliases, 文獻 and 最強證據 numbers, research designs, the concepts it appears with, the papers strongest first),
+	 * then the full table and list folded.
+	 */
+	function boardConceptSection(concept, meta = {}) {
+		let papers = concept.papers;
+		let parts = [dashboard.metaCallout(`🧠 概念卡片 · ${papers.length} 篇文獻`, [
+			"由 ZotMax 依文獻筆記「關鍵概念」的連結" + (concept.types.some(t => t !== TYPES.concept) ? "與研讀資料（測量工具／結果指標）" : "") + "整理。",
+			REFRESH,
+		])];
+		let links = [...(meta.indexLink ? [wikilink(meta.indexLink, `🧠 ${INDEX_NAME}`)] : []), ...searchLinksFor(concept, meta.cfg)];
+		if (links.length) parts.push(`> [!zm-links] 前往\n> ${links.join(" · ")}`);
+		let head = [`類型：${concept.types.join("、") || TYPES.concept}`, concept.aliases.length ? `別名：${concept.aliases.join("、")}` : ""].filter(Boolean).join(" · ");
+		let designs = new Map();
+		for (let p of papers) if (p.design) designs.set(p.design, (designs.get(p.design) || 0) + 1);
+		let designRows = [...designs.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+		let byLevel = papers.slice().sort((a, b) => (Number.parseInt(a.level, 10) || 9) - (Number.parseInt(b.level, 10) || 9) || byYearDesc(a, b));
+		let best = bestLevel(papers);
+		let top = best ? byLevel[0] : null;
+		let cards = [
+			dashboard.kpi("文獻", `${papers.length} 篇`, yearRange(papers)),
+			// The strongest paper's design and year (its link is first in the list below)
+			dashboard.kpi("最強證據", best ? `CEBM ${best}` : "—", top ? [top.design, top.year].filter(Boolean).join(" · ") : "還沒有證據等級資料"),
+		];
+		if (designRows.length) cards.push(chartCard("研究設計", barLines(designRows, BOARD_ROWS, CARD_BAR)));
+		let co = concept.cooccur.slice(0, BOARD_COOCCUR);
+		if (co.length) cards.push(chartCard("常一起出現", barLines(co.map(({ concept: c, count }) => [wikilink(c.link, c.name), count]), BOARD_COOCCUR, CARD_BAR)));
+		cards.push(dashboard.listCard("zm-reading|wide", `提到這個概念的文獻（${papers.length}）`, byLevel.map(p =>
+			`- ${wikilink(p.link, label(p.title, 60))} · ${[p.year, p.design, p.level ? `CEBM ${p.level}` : ""].filter(Boolean).join(" · ")}`)));
+		parts.push(boardOf("概念總覽", cards, head));
+		parts.push(dashboard.foldSection(`## 文獻與一句話摘要（${papers.length} 篇）\n\n` + paperTable(papers)));
+		if (concept.cooccur.length > BOARD_COOCCUR) {
+			parts.push(dashboard.foldSection(`## 常一起出現的概念（${concept.cooccur.length}）\n\n` + cooccurList(concept)));
+		}
+		return parts.join("\n\n");
+	}
+
+	function paperTable(papers) {
+		return [
+			"| 文獻 | 年份 | 研究設計 | 證據等級 | 一句話摘要 |",
+			"| --- | ---: | --- | --- | --- |",
+			...papers.map(p => `| ${wikilink(p.link, p.title, true)} | ${cell(p.year)} | ${cell(p.design)} | ${cell(p.level)} | ${cell(shorten(p.summary, MAX_SUMMARY))} |`),
+		].join("\n");
+	}
+
+	function cooccurList(concept) {
+		let co = concept.cooccur.slice(0, MAX_COOCCUR);
+		return co.length
+			? co.map(({ concept: c, count }) => `- ${wikilink(c.link, c.name)}（${count} 篇）`).join("\n")
+				+ (concept.cooccur.length > MAX_COOCCUR ? `\n\n（另有 ${concept.cooccur.length - MAX_COOCCUR} 個概念未列出）` : "")
+			: "沒有和其他概念一起出現在同一篇文獻。";
+	}
+
+	/** The managed region of a card. meta: { indexLink, cfg, total, layout } */
 	function buildConceptSection(concept, meta = {}) {
+		if (meta.layout === "board") return boardConceptSection(concept, meta);
 		let parts = [];
 		parts.push("> [!info] 概念卡片：由 ZotMax 依文獻筆記「關鍵概念」的連結"
 			+ (concept.types.some(t => t !== TYPES.concept) ? "與研讀資料（測量工具／結果指標）" : "")
@@ -422,23 +512,21 @@
 		let search = searchLine(concept, meta.cfg);
 		if (search) parts.push(search);
 		parts.push(`## 📚 提到這個概念的文獻（${concept.papers.length}）`);
-		parts.push([
-			"| 文獻 | 年份 | 研究設計 | 證據等級 | 一句話摘要 |",
-			"| --- | ---: | --- | --- | --- |",
-			...concept.papers.map(p => `| ${wikilink(p.link, p.title, true)} | ${cell(p.year)} | ${cell(p.design)} | ${cell(p.level)} | ${cell(shorten(p.summary, MAX_SUMMARY))} |`),
-		].join("\n"));
+		parts.push(paperTable(concept.papers));
 		parts.push("## 🔗 常一起出現的概念");
-		let co = concept.cooccur.slice(0, MAX_COOCCUR);
-		parts.push(co.length
-			? co.map(({ concept: c, count }) => `- ${wikilink(c.link, c.name)}（${count} 篇）`).join("\n")
-				+ (concept.cooccur.length > MAX_COOCCUR ? `\n\n（另有 ${concept.cooccur.length - MAX_COOCCUR} 個概念未列出）` : "")
-			: "沒有和其他概念一起出現在同一篇文獻。");
+		parts.push(cooccurList(concept));
 		if (meta.indexLink) parts.push(`← ${wikilink(meta.indexLink, INDEX_NAME)}`);
 		return parts.join("\n\n");
 	}
 
 	/** The managed region of a card no paper mentions any more (the note itself is kept). */
 	function buildOrphanSection(meta = {}) {
+		if (meta.layout === "board") {
+			return [
+				"> [!zm-meta] 目前沒有文獻筆記提到這個概念\n> 可能已改名、合併到別名，或文獻已刪除；這份筆記不會被刪除，不需要時可以自行刪除。",
+				meta.indexLink ? `> [!zm-links] 前往\n> ${wikilink(meta.indexLink, `🧠 ${INDEX_NAME}`)}` : "",
+			].filter(Boolean).join("\n\n");
+		}
 		return [
 			"> [!info] 概念卡片：由 ZotMax 整理。目前沒有文獻筆記提到這個概念（可能已改名、合併到別名，或文獻已刪除）；"
 				+ "這份筆記不會被刪除，不需要時可以自行刪除。",
@@ -502,7 +590,19 @@
 			concept_types: concept.types,
 			papers: concept.papers.length,
 			aliases: aliases.length ? aliases : undefined,
+			cssclasses: cardClasses(existing, meta),
 		}, buildConceptSection(concept, meta), { title: concept.name, intro: DEFINITION_SECTION, now: meta.now });
+	}
+
+	/**
+	 * cssclasses of a card or the index: the snippet's (看板) and the user's own; undefined leaves a note that has none
+	 * as it is.
+	 */
+	function cardClasses(existing, meta) {
+		let fm = existing ? core.splitFrontmatter(existing).frontmatter : null;
+		let classes = core.pageClasses(fm, meta.layout === "board" ? [core.NOTE_CLASS, core.CONCEPT_CLASS] : []);
+		if (classes) return classes;
+		return core.frontmatterList(fm, "cssclasses").length ? [] : undefined;
 	}
 
 	function mermaidLabel(s) {
@@ -540,6 +640,7 @@
 
 	/** The managed region of 概念索引. */
 	function buildIndexSection(result, meta = {}) {
+		if (meta.layout === "board") return boardIndexSection(result, meta);
 		let { concepts, papers } = result;
 		let parts = ["> [!info] 由 ZotMax 依文獻筆記的「關鍵概念」連結（與研讀資料的測量工具／結果指標）整理；"
 			+ "重新整理：ZotMax 按鈕或快速指令 → 更新概念卡片（手動同步後也會自動更新）。這個區塊以外的內容不會被覆寫。"];
@@ -563,8 +664,41 @@
 		return parts.join("\n\n");
 	}
 
+	/**
+	 * The 看板 layout's 概念索引: the update note (folded), 總覽 (concepts and papers, by type, the most mentioned with
+	 * bars), the co-occurrence graph open, the full table folded.
+	 */
+	function boardIndexSection(result, meta = {}) {
+		let { concepts, papers } = result;
+		let withConcepts = papers.filter(p => p.mentions.length).length;
+		let parts = [dashboard.metaCallout(`🧠 ${concepts.length} 個概念 · 來自 ${withConcepts} 篇文獻筆記`, [
+			"由 ZotMax 依文獻筆記的「關鍵概念」連結（與研讀資料的測量工具／結果指標）整理。", REFRESH,
+		])];
+		if (meta.aliasErrors && meta.aliasErrors.length) {
+			parts.push("> [!warning] 別名設定有問題\n" + meta.aliasErrors.map(e => `> - ${e}`).join("\n"));
+		}
+		if (!concepts.length) {
+			parts.push("還沒有概念：產生 AI 文獻筆記後，「關鍵概念」中的雙中括號連結會整理成概念卡片。");
+			return parts.join("\n\n");
+		}
+		let byType = TYPE_ORDER.map(t => [t, concepts.filter(c => c.types.includes(t)).length]).filter(([, n]) => n);
+		parts.push(boardOf("總覽", [
+			dashboard.kpi("概念", `${concepts.length} 個`, `來自 ${withConcepts} 篇文獻筆記`),
+			chartCard("依類型", barLines(byType, byType.length)),
+			chartCard(`出現最多（前 ${Math.min(DASHBOARD_TOP, concepts.length)}）`, barLines(concepts.map(c => [wikilink(c.link, c.name), c.papers.length]), DASHBOARD_TOP), true),
+		]));
+		parts.push(`## 🕸️ 前 ${Math.min(MAX_GRAPH_NODES, concepts.length)} 個概念與共同出現`);
+		parts.push(buildMermaid(concepts));
+		parts.push("括號內是文獻數，連線上的數字是兩個概念出現在同一篇文獻的篇數。方框＝概念、圓角＝測量工具、六角形＝結果指標。");
+		let rows = concepts.slice(0, MAX_INDEX_ROWS).map(c => `| ${wikilink(c.link, c.name, true)} | ${cell(c.types.join("、"))} | ${c.papers.length} | `
+			+ `${c.cooccur.slice(0, 3).map(o => wikilink(o.concept.link, o.concept.name, true)).join("、")} |`);
+		parts.push(dashboard.foldSection(`## 全部概念（${concepts.length}）\n\n` + ["| 概念 | 類型 | 文獻數 | 常一起出現 |", "| --- | --- | ---: | --- |", ...rows].join("\n")
+			+ (concepts.length > MAX_INDEX_ROWS ? `\n\n（另有 ${concepts.length - MAX_INDEX_ROWS} 個概念未列出）` : "")));
+		return parts.join("\n\n");
+	}
+
 	function buildIndexNote(existing, result, meta = {}) {
-		return buildManagedNote(existing, { type: "concept-index", concepts: result.concepts.length },
+		return buildManagedNote(existing, { type: "concept-index", concepts: result.concepts.length, cssclasses: cardClasses(existing, meta) },
 			buildIndexSection(result, meta), { title: INDEX_NAME, now: meta.now });
 	}
 
@@ -767,12 +901,13 @@
 		if (!result.concepts.length && !existingFiles.length) return out;
 		await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
 		let cfg = searchConfig();
+		let layout = pref("obsidian.layout") === "classic" ? "classic" : "board";
 		let planned = new Set(result.concepts.map(c => c.fileName.toLowerCase()));
 		for (let c of result.concepts) {
 			let path = PathUtils.join(dir, c.fileName);
 			try {
 				let existing = (await IOUtils.exists(path)) ? await IOUtils.readUTF8(path) : null;
-				if (await writeIfChanged(path, buildConceptNote(existing, c, { indexLink, cfg, now }), existing)) out.written++;
+				if (await writeIfChanged(path, buildConceptNote(existing, c, { indexLink, cfg, now, layout }), existing)) out.written++;
 			}
 			catch (e) {
 				Zotero.logError(e);
@@ -786,7 +921,7 @@
 				let fm = dashboard.parseFrontmatter(core.splitFrontmatter(existing).frontmatter || "");
 				if (asText(fm.type) !== "concept" || !MARK_START_RE.test(existing)) continue;
 				out.orphans++;
-				let text = buildManagedNote(existing, { papers: 0 }, buildOrphanSection({ indexLink }), { now });
+				let text = buildManagedNote(existing, { papers: 0 }, buildOrphanSection({ indexLink, layout }), { now });
 				if (await writeIfChanged(f.path, text, existing)) out.written++;
 			}
 			catch (e) {
@@ -795,7 +930,7 @@
 		}
 		let indexPath = PathUtils.join(dir, INDEX_NAME + ".md");
 		let existingIndex = (await IOUtils.exists(indexPath)) ? await IOUtils.readUTF8(indexPath) : null;
-		if (await writeIfChanged(indexPath, buildIndexNote(existingIndex, result, { now, aliasErrors: options.aliases.errors }), existingIndex)) out.written++;
+		if (await writeIfChanged(indexPath, buildIndexNote(existingIndex, result, { now, aliasErrors: options.aliases.errors, layout }), existingIndex)) out.written++;
 		return out;
 	}
 
@@ -981,7 +1116,8 @@
 			let path = PathUtils.join(settings.vaultPath, ...concept.relPath.split("/"));
 			// The card was written by update() just before; rebuild it if it went missing meanwhile
 			let existing = (await IOUtils.exists(path)) ? await IOUtils.readUTF8(path)
-				: buildConceptNote(null, concept, { indexLink: [...concept.link.split("/").slice(0, -1), INDEX_NAME].join("/"), cfg: searchConfig() });
+				: buildConceptNote(null, concept, { indexLink: [...concept.link.split("/").slice(0, -1), INDEX_NAME].join("/"), cfg: searchConfig(),
+					layout: pref("obsidian.layout") === "classic" ? "classic" : "board" });
 			await IOUtils.writeUTF8(path, insertAIBlock(existing, block, { generatedAt }));
 			line.setText(`${concept.name} — 已寫入 ${concept.relPath}`);
 			line.setProgress(100);

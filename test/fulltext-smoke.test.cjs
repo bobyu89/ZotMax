@@ -470,14 +470,14 @@ test("sync writes the full-text note with coloured highlights and the compact li
 
 	// The full-text note: managed, linked both ways, highlights in their colours, the AI's quote marked apart
 	let ft = fs.readFileSync(fullTextPath(vault), "utf8");
-	assert.match(ft, /^---\nfulltext_of: "library\/KEY\d+"\nfulltext_source: "built-in"\n---\n/);
+	assert.match(ft, /^---\nfulltext_of: "library\/KEY\d+"\nfulltext_source: "built-in"\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-fulltext"\n---\n/);
 	assert.doesNotMatch(ft, /zotero_key/);
-	assert.match(ft, /^> \[!info\] 全文・由 ZotMax 產生\n> 每次同步都會重新產生，請不要在這裡寫字；想法寫在文獻筆記 \[\[Zotero\/lee2024\|文獻筆記\]\]。\n> 劃線：🟡 重要發現 · 🔴 限制／疑問 · 🤖 底線＝AI 標的重點（僅供參考）$/m);
+	assert.match(ft, /^> \[!zm-nav\] \[\[Zotero\/lee2024\|← 文獻筆記\]\] · 全文（每次同步重新產生，想法寫在文獻筆記）\n> 劃線：🟡 重要發現 · 🔴 限制／疑問 · 🤖 底線＝AI 標的重點（僅供參考）$/m);
 	assert.match(ft, /^The intervention ==🟡reduced the rate of falls by thirty percent== compared with usual care\.$/m);
 	assert.match(ft, /^Adherence was high and ==🔴no serious adverse events were reported==\.$/m);
 	assert.match(ft, /^🤖<u>Nurses can deliver structured exercise safely in hospital wards<\/u>\.$/m);
 	assert.doesNotMatch(ft, /invented by the model/);
-	assert.match(ft, /## 沒有在全文中找到位置的劃線\n\n.*\n\n- ==🔵a sentence the PDF text doesn't have== — 可引用句 · p\. 3\n$/);
+	assert.match(ft, /> \[!zm-ref\]- 沒有在全文中找到位置的劃線（1）\n> .*\n>\n> - ==🔵a sentence the PDF text doesn't have== — 可引用句 · p\. 3\n$/);
 	assert.match(ft, /^1\. Smith J\./m, "the full-text note keeps the reference list");
 
 	// The literature note: 重點 first, links to the full text, the AI's quotes listed apart
@@ -525,7 +525,7 @@ test("sync writes the full-text note with coloured highlights and the compact li
 	assert.equal(fs.readdirSync(path.join(vault, "Zotero")).filter(f => f.endsWith(".md")).length, 1, "the full-text note isn't taken for a literature note");
 
 	// A full-text note written by Zotero Bridge (≤ 0.10): still ours (fulltext_of), rebuilt under the new name
-	fs.writeFileSync(fullTextPath(vault), before.split("ZotMax").join("Zotero Bridge"));
+	fs.writeFileSync(fullTextPath(vault), before.replace(/^> \[!zm-nav\][^\n]*\n/m, "> [!info] 全文・由 Zotero Bridge 產生\n").split("ZotMax").join("Zotero Bridge"));
 	assert.match(fs.readFileSync(fullTextPath(vault), "utf8"), /^> \[!info\] 全文・由 Zotero Bridge 產生$/m);
 	await ZB.main.run([item], { targets: ["obsidian"], ai: "reuse" });
 	assert.deepEqual(env.errors, []);

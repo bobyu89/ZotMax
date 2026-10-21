@@ -31,7 +31,7 @@
 	const SNIPPET = "zotmax";
 	const FILE_NAME = `${SNIPPET}.css`;
 	// Bumped whenever the CSS changes, so installed copies are refreshed on the next sync
-	const VERSION = 5;
+	const VERSION = 6;
 	const HEADER_RE = /^\/\* ZotMax 看板樣式 v(\d+)\b/;
 
 	/**
@@ -74,6 +74,8 @@
 		"appraisal_verified", "ai_model", "ai_generated", "fulltext_truncated", "date_added", "last_synced",
 		"full_text", "fulltext", "zotero_deleted", "status_before_delete", "cssclasses", "status_synced",
 	];
+	// A concept card's and the 概念索引's own properties (concepts.js); the aliases and the user's keys stay
+	const CONCEPT_PROPERTIES = ["type", "concept", "concept_types", "papers", "concepts", "updated", "ai_synthesis", "cssclasses"];
 
 	function header() {
 		return `/* ZotMax 看板樣式 v${VERSION} — 由 ZotMax 寫入，更新時會整個覆寫。想自己改，請另存成別的檔名再修改。 */`;
@@ -85,6 +87,7 @@
 		let cards = CARDS.map(([type]) => `.callout[data-callout="${type}"]`).join(",\n");
 		let groups = GROUPS.map(([type]) => `.callout[data-callout="${type}"]`).join(",\n");
 		let hidden = HIDDEN_PROPERTIES.map(k => `\t[data-property-key="${k}"]`).join(",\n");
+		let conceptHidden = CONCEPT_PROPERTIES.map(k => `\t[data-property-key="${k}"]`).join(",\n");
 		return `${header()}
 
 /* 共用：一個中性色加上你在 Obsidian 選的強調色；有意義的顏色（劃線、閱讀狀態、下一步）才另外上色 */
@@ -400,6 +403,30 @@ ${hidden}
 ) {
 	display: none;
 }
+/* 概念卡片與概念索引：屬性區只留別名和你自己加的屬性 */
+.zm-concept .metadata-property:is(
+${conceptHidden}
+) {
+	display: none;
+}
+/* 全部都藏起來時（沒有別名、也沒有自己的屬性），連「屬性」標題一起收掉 */
+.zm-concept .metadata-container:not(:has(.metadata-property:not(:is(
+${conceptHidden}
+)))) {
+	display: none;
+}
+/* 全文筆記：沒有屬性區，行距放寬好讀，AI 標的重點的底線用強調色 */
+.zm-fulltext .metadata-container {
+	display: none;
+}
+.zm-fulltext p {
+	line-height: 1.75;
+}
+.zm-fulltext u {
+	text-decoration-color: var(--text-accent);
+	text-decoration-thickness: 2px;
+	text-underline-offset: 3px;
+}
 
 /* 手機與平板：外框和卡片的內距縮小，數字小一點，數字磚兩個一排，寬表格可以左右滑 */
 .is-mobile .callout[data-callout="zm-board"] {
@@ -570,5 +597,5 @@ ${icons}
 		return `看板樣式 ${what}：.obsidian/snippets/${FILE_NAME}${tail}`;
 	}
 
-	return { SNIPPET, FILE_NAME, VERSION, CARDS, GROUPS, HIDDEN_PROPERTIES, header, css, versionOf, enableIn, install, afterSync, describe };
+	return { SNIPPET, FILE_NAME, VERSION, CARDS, GROUPS, HIDDEN_PROPERTIES, CONCEPT_PROPERTIES, header, css, versionOf, enableIn, install, afterSync, describe };
 });

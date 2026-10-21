@@ -307,13 +307,14 @@ test("a manual sync writes the cards and the index; the dashboard links them; �
 		"Accidental Falls.md", "Fall prevention.md", "Morse Fall Scale.md", "Self-efficacy.md", "概念索引.md", "自我效能.md", "跌倒.md",
 	]);
 	let se = read(env, "Self-efficacy.md");
-	assert.match(se, /^---\ntype: "concept"\nconcept: "Self-efficacy"\nconcept_types:\n {2}- "概念"\npapers: 2\naliases:\n {2}- "self efficacy"\nupdated: "[^"]+"\n---\n\n# Self-efficacy\n\n## 📖 我的定義\n/);
-	assert.match(se, /\| \[\[Zotero\/author2\\\|長期照護機構住民跌倒預防\]\] \| 2022 \| cohort \| {2}\| 長期照護機構住民跌倒預防 的摘要。 \|\n\| \[\[Zotero\/author1\\\|Study 1 of fall prevention\]\] \| 2021 \| RCT \| 2 \| Study 1 of fall prevention 的摘要。 \|/);
+	assert.match(se, /^---\ntype: "concept"\nconcept: "Self-efficacy"\nconcept_types:\n {2}- "概念"\npapers: 2\naliases:\n {2}- "self efficacy"\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-concept"\nupdated: "[^"]+"\n---\n\n# Self-efficacy\n\n## 📖 我的定義\n/);
+	assert.match(se, /> \[!zm-board\] 概念總覽\n/, "the 看板 card (the default layout)");
+	assert.match(se, /> \| \[\[Zotero\/author2\\\|長期照護機構住民跌倒預防\]\] \| 2022 \| cohort \| {2}\| 長期照護機構住民跌倒預防 的摘要。 \|\n> \| \[\[Zotero\/author1\\\|Study 1 of fall prevention\]\] \| 2021 \| RCT \| 2 \| Study 1 of fall prevention 的摘要。 \|/);
 	assert.match(se, /\[MeSH：Self-efficacy\]\(https:\/\/www\.ncbi\.nlm\.nih\.gov\/mesh\/\?term=Self-efficacy\)/);
-	assert.match(se, /- \[\[Zotero\/概念\/Morse Fall Scale\|Morse Fall Scale\]\]（2 篇）/);
+	assert.match(se, /> > \[!zm-chart\] 常一起出現\n> > \[\[Zotero\/概念\/Morse Fall Scale\|Morse Fall Scale\]\] ▰{6} 2/);
 	assert.match(read(env, "Morse Fall Scale.md"), /concept_types:\n {2}- "測量工具"\npapers: 2/);
 	let index = read(env, "概念索引.md");
-	assert.match(index, /共 \*\*6\*\* 個概念，來自 \*\*3\*\* 篇文獻筆記。/);
+	assert.match(index, /> \[!zm-meta\]- 🧠 6 個概念 · 來自 3 篇文獻筆記\n/);
 	// Measures are drawn as stadiums; equal counts by name
 	assert.match(index, /```mermaid\ngraph LR\n {4}c1\(\["Morse Fall Scale（2）"\]\)\n {4}c2\["Self-efficacy（2）"\]\n/);
 	assert.match(index, /\n {4}c1 ---\|2\| c2\n/);

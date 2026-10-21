@@ -219,6 +219,19 @@ test("buildFullTextNote: managed note without zotero_key, a small callout, legen
 	assert.equal(F.missingSection([]), "");
 });
 
+test("buildFullTextNote (看板): the snippet's classes, the bar back to the note, the unplaced highlights folded", () => {
+	let note = F.buildFullTextNote({
+		zoteroKey: "library/ABCD1234", title: "Falls RCT", md: "## Results\n\n==🟡Falls decreased==.", board: true,
+		noteLink: "Zotero/chen2024", legend: [{ emoji: "🟡", meaning: "重要發現" }], aiLegend: true,
+		missing: [{ text: "lost  text", emoji: "🔴", meaning: "限制／疑問", page: "7" }],
+	});
+	assert.match(note, /^---\nfulltext_of: "library\/ABCD1234"\nfulltext_source: "built-in"\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-fulltext"\n---\n/);
+	assert.match(note, /\n\n> \[!zm-nav\] \[\[Zotero\/chen2024\|← 文獻筆記\]\] · 全文（每次同步重新產生，想法寫在文獻筆記）\n> 劃線：🟡 重要發現 · 🤖 底線＝AI 標的重點（僅供參考）\n\n# Falls RCT\n/);
+	assert.doesNotMatch(note, /\[!info\]|## 沒有在全文中/);
+	assert.match(note, /\n> \[!zm-ref\]- 沒有在全文中找到位置的劃線（1）\n> 這些劃線[^\n]+\n>\n> - ==🔴lost text== — 限制／疑問 · p\. 7\n$/);
+	assert.equal(F.missingSection([{ text: "x" }]).split("\n")[0], "## 沒有在全文中找到位置的劃線", "Notion keeps the heading");
+});
+
 test("notionChunks and the full text's blocks respect Notion's limits", () => {
 	let long = "長".repeat(4500);
 	let md = Array.from({ length: 250 }, (_, i) => (i % 50 === 0 ? `## Section ${i}` : `Paragraph ${i} ==🟡marked== ${i === 7 ? long : ""}`)).join("\n\n");

@@ -456,7 +456,7 @@ test("a new vault is organized: the note in its collection's folder, the full te
 	let dir = path.join(vault, ...LIT, "碩論", "文獻回顧");
 	let note = read(dir, "lee2024.md");
 	assert.match(note, /^fulltext: "\[\[Zotero\/10 文獻\/碩論\/文獻回顧\/lee2024 · 全文\]\]"$/m);
-	assert.match(read(dir, "lee2024 · 全文.md"), /\[\[Zotero\/10 文獻\/碩論\/文獻回顧\/lee2024\|文獻筆記\]\]/);
+	assert.match(read(dir, "lee2024 · 全文.md"), /\[\[Zotero\/10 文獻\/碩論\/文獻回顧\/lee2024\|← 文獻筆記\]\]/);
 	assert.ok(!exists(dir, "全文"), "no 全文 subfolder in the organized layout");
 	// 研究儀表板 off after syncs here: no pages yet, so the bar has no links but still jumps
 	assert.match(note, /^> \[!zm-nav\] 📄 文獻筆記\n> 跳到：.*\[\[Zotero\/10 文獻\/碩論\/文獻回顧\/lee2024 · 全文\|全文\]\]/m);

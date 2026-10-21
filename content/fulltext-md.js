@@ -543,32 +543,35 @@
 			"---",
 			`fulltext_of: ${yaml(o.zoteroKey)}`,
 			`fulltext_source: ${yaml(o.source || "built-in")}`,
+			// 看板 (o.board): the snippet's classes — the note's look, no properties area (core.js FULLTEXT_CLASS)
+			...(o.board ? ["cssclasses:", '  - "zotmax-note"', '  - "zm-fulltext"'] : []),
 			"---",
 		].join("\n");
-		let callout = [
-			"> [!info] 全文・由 ZotMax 產生",
-			`> 每次同步都會重新產生，請不要在這裡寫字；想法寫在文獻筆記 [[${o.noteLink}|${o.noteLabel || "文獻筆記"}]]。`,
-		];
 		let legend = (o.legend || []).map(l => `${l.emoji} ${l.meaning}`);
 		if (o.aiLegend) legend.push("🤖 底線＝AI 標的重點（僅供參考）");
+		let link = `[[${o.noteLink}|${o.board ? "← " : ""}${o.noteLabel || "文獻筆記"}]]`;
+		let callout = o.board
+			? [`> [!zm-nav] ${link} · 全文（每次同步重新產生，想法寫在文獻筆記）`]
+			: ["> [!info] 全文・由 ZotMax 產生", `> 每次同步都會重新產生，請不要在這裡寫字；想法寫在文獻筆記 ${link}。`];
 		if (legend.length) callout.push(`> 劃線：${legend.join(" · ")}`);
 		let parts = [fm, "", callout.join("\n"), "", `# ${o.title || "Untitled"}`, "", String(o.md || "").trim()];
-		let missing = missingSection(o.missing);
+		let missing = missingSection(o.missing, o.board);
 		if (missing) parts.push("", missing);
 		return parts.join("\n").replace(/\n{3,}/g, "\n\n") + "\n";
 	}
 
 	/** 「沒有在全文中找到位置的劃線」: highlights that couldn't be placed, so none is lost. */
-	function missingSection(missing) {
+	function missingSection(missing, folded) {
 		if (!missing || !missing.length) return "";
 		let lines = missing.map((m) => {
 			let text = String(m.text || "").replace(/\s+/g, " ").trim().replace(/==/g, "=\\=");
 			let mark = m.emoji !== undefined ? `==${m.emoji}${text}==` : text;
 			return `- ${mark}${m.meaning ? ` — ${m.meaning}` : ""}${m.page ? ` · p. ${m.page}` : ""}`;
 		});
-		return "## 沒有在全文中找到位置的劃線\n\n"
-			+ "這些劃線的文字跟抽出的全文對不上（常見原因：跨頁、圖表裡的字、掃描檔），所以列在這裡。\n\n"
-			+ lines.join("\n");
+		let why = "這些劃線的文字跟抽出的全文對不上（常見原因：跨頁、圖表裡的字、掃描檔），所以列在這裡。";
+		// 看板: folded at the end, like the literature note's groups
+		if (folded) return [`> [!zm-ref]- 沒有在全文中找到位置的劃線（${missing.length}）`, `> ${why}`, ">", ...lines.map(l => `> ${l}`)].join("\n");
+		return "## 沒有在全文中找到位置的劃線\n\n" + why + "\n\n" + lines.join("\n");
 	}
 
 	/**

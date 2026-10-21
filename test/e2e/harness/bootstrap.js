@@ -1028,6 +1028,8 @@ const TESTS = [
 				d.fullTextHead = ft.slice(0, 600);
 				if (!ft.includes(`fulltext_of: "library/${ctx.english.key}"`)) problems.push("full-text note lacks fulltext_of");
 				if (/zotero_key:/.test(ft)) problems.push("full-text note has a zotero_key (it would be indexed as a literature note)");
+				if (!/^cssclasses:\n {2}- "zotmax-note"\n {2}- "zm-fulltext"$/m.test(ft)) problems.push("full-text note lacks the 看板 classes");
+				if (!/^> \[!zm-nav\] \[\[[^\]|]+\|← 文獻筆記\]\]/m.test(ft)) problems.push("full-text note lacks the bar back to its literature note");
 				if (!/==🔴The intervention reduced the rate of falls by thirty percent compared with usual care==/.test(ft)) {
 					problems.push(`full-text note does not colour the highlight in place: ${(/^.*thirty percent.*$/m.exec(ft) || ["(sentence not found)"])[0]}`);
 				}
