@@ -309,7 +309,7 @@ test("a manual sync writes the dashboard and its .base; 快速指令 or the tool
 	assert.match(topic, /\n# 跌倒\n\n%% zotero-bridge:start/);
 	assert.match(topic, /依 Zotero 分類「碩論\/跌倒」的 2 篇文獻筆記/);
 	assert.match(topic, /> \[!zm-board\] 主題總覽\n/);
-	for (let h of ["## 🧭 證據說什麼", "## 📈 趨勢", "## 🕳️ 研究缺口與下一步", "### 🗺️ 證據缺口地圖", "## 📚 文獻（2 篇）"]) assert.ok(topic.includes(h), h);
+	for (let h of ["> [!zm-board] 證據", "> [!zm-board] 研究缺口與下一步", "## 🗺️ 證據缺口地圖", "> [!zm-ref]- 結論方向與介入", "> [!zm-ref]- 趨勢與常見詞", "> [!zm-ref]- 文獻（2 篇）"]) assert.ok(topic.includes(h), h);
 	assert.match(topic, /\| \[\[Zotero\/Author1 2024 - Study 1 of fall prevention in hospitals\\\|Study 1 of fall prevention in hospitals\]\] \| 2024 \| RCT \| L2 \|/);
 	assert.match(topic, /\*\*1 篇還沒有 AI 筆記\*\*/);
 	for (let [, target] of (home + topic).matchAll(/\[\[([^|\]\\]+)(?:\\?\||\]\])/g)) {

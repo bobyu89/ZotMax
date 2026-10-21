@@ -184,7 +184,8 @@ test("boardInfo: the tool, one light per scored item in order, counts and state 
 test("CSS snippet: header with the version, a grid board, one look for every card, tiles, the PICO grid, the folded groups, compact properties, phones", () => {
 	let css = style.css();
 	assert.equal(style.versionOf(css), style.VERSION);
-	assert.equal(style.VERSION, 4);
+	assert.equal(style.VERSION, 5);
+	assert.match(css, /\.is-mobile [^{]*:is\(th, td\) \{\n\tmin-width: 4\.5em;/, "phone tables scroll instead of one character a line");
 	assert.ok(css.startsWith(style.header()));
 	assert.match(css, /\.callout\[data-callout="zm-board"\] > \.callout-content \{\n\tdisplay: grid;\n\tgrid-template-columns: repeat\(auto-fit, minmax\(min\(100%, 230px\), 1fr\)\);/);
 	assert.match(css, /\[data-callout-metadata~="wide"\] \{\n\tgrid-column: 1 \/ -1;/);

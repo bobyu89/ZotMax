@@ -4,7 +4,8 @@
  *   00 首頁.md (首頁.md flat)      the front page: ▶️ 從這裡開始 (繼續閱讀, 待核對的評讀, 最近加入), the 總覽 number
  *                                  cards, one card per topic (a Zotero collection that has literature notes), quick links.
  *   10 文獻/<collection>/00 <name> 總覽.md (主題/<collection>.md flat)
- *                                  one page per topic: 總覽 cards, 🧭 證據說什麼 (the notes' effect_direction by
+ *                                  one page per topic (看板: links, 主題總覽, the 證據 cards, 下一步 and the gap map open,
+ *                                  the tables below folded): 總覽 cards, 🧭 證據說什麼 (the notes' effect_direction by
  *                                  intervention), 📈 趨勢 (the last five publication years against the five before,
  *                                  common interventions and outcomes), 🕳️ 研究缺口與下一步 (rules and the evidence gap
  *                                  map) and 📚 文獻 (every paper with its design, level, direction and status).
@@ -345,8 +346,113 @@
 		return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 	}
 
+	// ---------- the 看板 topic page ----------
+
+	// One square per paper by conclusion direction (the canvas groups' colours), the legend's dot for each
+	const DIRECTION_SQUARES = { "有效": "🟩", "無差異": "🟦", "有害": "🟥", "不一致": "🟧", [UNJUDGED]: "⬜" };
+	const DIRECTION_DOTS = { "有效": "🟢", "無差異": "🔵", "有害": "🔴", "不一致": "🟠", [UNJUDGED]: "⚪" };
+	const DIRECTION_ORDER = [...DIRECTIONS, UNJUDGED];
+	const TOPIC_SQUARES = 10;
+	const ROW_SQUARES = 8;
+	const TOPIC_YEARS = 8;
+
+	/** A tally as squares, `scale` squares per paper; every direction with papers keeps at least one. */
+	function directionSquares(t, scale = 1) {
+		return DIRECTION_ORDER.filter(k => t[k]).map(k => DIRECTION_SQUARES[k].repeat(Math.max(1, Math.round(t[k] * scale)))).join("");
+	}
+
+	function directionLegend(t) {
+		return DIRECTION_ORDER.filter(k => t[k]).map(k => `${DIRECTION_DOTS[k]} ${k} ${t[k]}`).join(" · ");
+	}
+
+	/** A chart card: lines with hard breaks between them. */
+	function chart(title, lines, wide) {
+		let rows = lines.filter(Boolean);
+		return [`> [!zm-chart${wide ? "|wide" : ""}] ${title}`, ...rows.map((l, k) => `> ${l}${k < rows.length - 1 ? "  " : ""}`)].join("\n");
+	}
+
+	/**
+	 * 「證據」: what the topic's papers say, as cards — 結論方向 (one square per paper by direction; the verdict itself is
+	 * on 主題總覽), 依介入 (the same squares per intervention, with the best CEBM level), 研究量 (papers per year) and
+	 * the strongest papers. Only the cards with data; the outcomes are the gap map's columns.
+	 */
+	function evidenceBoard(topic, s) {
+		let cards = [];
+		let d = s.directions;
+		let all = DIRECTION_ORDER.reduce((n, k) => n + (d[k] || 0), 0);
+		if (all) {
+			cards.push(chart("結論方向", [
+				directionSquares(d, all > TOPIC_SQUARES ? TOPIC_SQUARES / all : 1),
+				directionLegend(d),
+				d.judged ? "AI 初判，不是 GRADE" : "等新版 AI 筆記判斷結論方向",
+			]));
+		}
+		let rows = s.interventions.slice(0, TOP_TERMS).filter(g => g.records.length);
+		if (rows.length) {
+			let max = Math.max(...rows.map(g => g.records.length));
+			let scale = max > ROW_SQUARES ? ROW_SQUARES / max : 1;
+			cards.push(chart("依介入", rows.map(g => `${g.name} ${directionSquares(g.tally, scale)} ${g.records.length}${g.best ? ` · L${g.best}` : ""}`)));
+		}
+		let t = s.trend;
+		if (t.dated) {
+			let years = dashboard.lastRows(t.rows, TOPIC_YEARS);
+			let max = Math.max(1, ...years.map(([, n]) => n));
+			cards.push(chart("研究量", [
+				t.oldest === t.newest ? `都是 ${t.newest} 年` : `最早 ${t.oldest} · 最新 ${t.newest}`,
+				...years.map(([y, n]) => `${y} ${core.bar(n, max, 10)} ${n}`),
+			]));
+		}
+		let strong = topic.records.filter(r => r.evidenceLevel || r.studyDesign).sort(sortForList);
+		if (strong.length) {
+			cards.push(dashboard.listCard("zm-reading|wide", `證據等級最高的文獻（${strong.length}）`, strong.map(r => {
+				let facts = [yearOf(r), designLabel(r.studyDesign), r.evidenceLevel ? `CEBM ${r.evidenceLevel}` : "", directionOf(r) === UNJUDGED ? "" : r.direction];
+				return `- ${wikilink(r.link, shortTitle(r))} · ${facts.filter(Boolean).join(" · ")}`;
+			})));
+		}
+		return cards.length ? board("證據", cards) : "";
+	}
+
+	/** 「研究缺口與下一步」 as the amber card, the steps in their priority. */
+	function stepsBoard(s) {
+		return board("研究缺口與下一步", [[`> [!zm-next|wide] 下一步（${s.steps.length}）`, ...s.steps.map(x => `> - ${x.text}`)].join("\n")]);
+	}
+
+	/** A section folded under a title of its own (its "## …" heading dropped). */
+	function foldAs(title, md) {
+		return dashboard.foldSection(String(md).replace(/^##[ \t]+.+/, `## ${title}`));
+	}
+
+	/**
+	 * The 看板 layout's topic page: the update note (folded), the links as buttons, 主題總覽, 證據, 研究缺口與下一步,
+	 * the evidence gap map, then the full tables folded — 結論方向與介入, 趨勢, 文獻.
+	 */
+	function boardTopic(topic, s, meta = {}) {
+		let links = [
+			meta.homeLink ? wikilink(meta.homeLink, `🏠 ${HOME_NAME}`) : "",
+			meta.dashboardLink ? wikilink(meta.dashboardLink, "📊 研究儀表板") : "",
+			meta.canvasLink ? wikilink(meta.canvasLink, "🗺️ 證據地圖") : "",
+		].filter(Boolean);
+		return [
+			dashboard.metaCallout(`🧭 ${topic.path} · ${s.total} 篇 · ${stamp(meta.now)} 更新`, [
+				`由 ZotMax 依 Zotero 分類「${topic.path}」的 ${s.total} 篇文獻筆記產生；只讀筆記的 frontmatter，不連網、不呼叫 AI。`,
+				meta.organized
+					? "這個分類的文獻筆記就在這頁所在的資料夾；同時屬於幾個分類的，放在最深的那個分類，其他主題頁連過去。"
+					: "筆記沒有搬動，一篇在幾個分類，就會出現在幾個主題頁。",
+			]),
+			links.length ? `> [!zm-links] 前往\n> ${links.join(" · ")}` : "",
+			topicOverview(s, "board"),
+			evidenceBoard(topic, s),
+			stepsBoard(s),
+			gapMapSection(s.map, { level: 2, board: true }),
+			foldAs("結論方向與介入", directionSection(s)),
+			foldAs("趨勢與常見詞", trendSection(s)),
+			foldAs(`文獻（${topic.records.length} 篇）`, paperSection(topic.records)),
+		].filter(Boolean).join("\n\n");
+	}
+
 	/** A topic page's managed region. meta: { now, layout, homeLink, dashboardLink, organized, canvasLink } */
 	function topicSection(topic, s, meta = {}) {
+		if (meta.layout === "board") return boardTopic(topic, s, meta);
 		let links = [
 			meta.homeLink ? `← ${wikilink(meta.homeLink, HOME_NAME)}` : "",
 			meta.dashboardLink ? wikilink(meta.dashboardLink, "研究儀表板") : "",
@@ -755,7 +861,7 @@
 	return {
 		HOME_NAME, TOPIC_FOLDER, DIRECTIONS, UNJUDGED, MAX_CARDS,
 		topicFileName, groupTopics, tally, verdict, termGroups, trendOf, topicStats, nextSteps,
-		topicOverview, topicSection, staleSection, topicCard, topicsBlock, quickLinks, quickLinkBar, homeSection, boardHome, startHere, evidenceCanvas, canvasIsOurs, buildPage, assignFiles,
+		topicOverview, topicSection, boardTopic, evidenceBoard, directionSquares, staleSection, topicCard, topicsBlock, quickLinks, quickLinkBar, homeSection, boardHome, startHere, evidenceCanvas, canvasIsOurs, buildPage, assignFiles,
 		writeAll, afterDashboard,
 	};
 });

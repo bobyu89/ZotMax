@@ -105,16 +105,14 @@ test("verdict and nextSteps: split results, nothing judged yet, one study, old a
 	assert.deepEqual(done.steps.map(x => x.short), ["資料都齊了"]);
 });
 
-test("topicSection: info with links, the 總覽 cards (看板) or one line (classic), 證據說什麼, 趨勢, 研究缺口與下一步 with the gap map, 文獻", () => {
+test("topicSection (classic): info with links, one summary line, 證據說什麼, 趨勢, 研究缺口與下一步 with the gap map, 文獻", () => {
 	let topic = T.groupTopics(falls())[0];
 	let s = T.topicStats(topic, { now: NOW });
-	let md = T.topicSection(topic, s, { now: NOW, layout: "board", homeLink: "Zotero/首頁", dashboardLink: "Zotero/研究儀表板" });
+	let md = T.topicSection(topic, s, { now: NOW, layout: "classic", homeLink: "Zotero/首頁", dashboardLink: "Zotero/研究儀表板" });
 	assert.ok(md.startsWith("> [!info] 由 ZotMax 依 Zotero 分類「碩論/跌倒」的 5 篇文獻筆記於 2026-10-14 09:00 產生；只讀筆記的 frontmatter，不連網、不呼叫 AI。\n"));
 	assert.match(md, /\n> ← \[\[Zotero\/首頁\|首頁\]\] · \[\[Zotero\/研究儀表板\|研究儀表板\]\]\n/);
-	let kpis = [...md.matchAll(/^> > \[!zm-kpi\] (.+)$/gm)].map(m => m[1]);
-	assert.deepEqual(kpis, ["文獻", "已讀", "最強證據", "證據說什麼"]);
-	assert.match(md, /> > \[!zm-kpi\] 證據說什麼\n> > \*\*多數有效\*\* {2}\n> > 有效 3／4 篇（AI 初判）/);
-	assert.match(md, /> > \[!zm-kpi\] 最強證據\n> > \*\*CEBM 1\*\* {2}\n> > RCT 4/);
+	assert.doesNotMatch(md, /zm-board|zm-kpi/);
+	assert.match(md, /\*\*5 篇\*\*｜已讀 40%｜最強證據 CEBM 1｜證據：多數有效（3／4）（AI 初判）｜近 5 年 2 篇 →/);
 	let order = ["## 🧭 證據說什麼", "### 依介入", "## 📈 趨勢", "## 🕳️ 研究缺口與下一步", "### 🗺️ 證據缺口地圖", "#### 證據最多的組合", "## 📚 文獻（5 篇）"].map(h => md.indexOf(h));
 	assert.ok(order.every((at, k) => at > 0 && (!k || at > order[k - 1])), JSON.stringify(order));
 	assert.match(md, /\| 運動訓練 \| 2 \| 2 \| {2}\| {2}\| {2}\| {2}\| L2 \|/);
@@ -124,9 +122,37 @@ test("topicSection: info with links, the 總覽 cards (看板) or one line (clas
 	assert.match(md, /\*\*常見的介入\*\*：運動訓練（2）、衛教（2）/);
 	assert.match(md, /\| \[\[Zotero\/D\\\|D\]\] \| 2024 \| RCT \| L1 \| 有效 \| 待讀 \|\n\| \[\[Zotero\/A\\\|A\]\] \| 2023 \|/, "strongest evidence first, then newest");
 	assert.match(md, /\| \[\[Zotero\/E\\\|E\]\] \| 2016 \| 世代研究 \| L3 \| {2}\| 待讀 \|/);
-	let classic = T.topicSection(topic, s, { now: NOW, layout: "classic" });
-	assert.doesNotMatch(classic, /zm-board|← \[\[/);
-	assert.match(classic, /\*\*5 篇\*\*｜已讀 40%｜最強證據 CEBM 1｜證據：多數有效（3／4）（AI 初判）｜近 5 年 2 篇 →/);
+});
+
+test("topicSection (看板): folded update note, links as buttons, 主題總覽, 證據 cards, 下一步, the gap map, the tables folded", () => {
+	let topic = T.groupTopics(falls())[0];
+	let s = T.topicStats(topic, { now: NOW });
+	let md = T.topicSection(topic, s, { now: NOW, layout: "board", homeLink: "Zotero/首頁", dashboardLink: "Zotero/研究儀表板", organized: true,
+		canvasLink: "Zotero/10 文獻/碩論/跌倒/00 跌倒 證據地圖.canvas" });
+	assert.ok(md.startsWith("> [!zm-meta]- 🧭 碩論/跌倒 · 5 篇 · 2026-10-14 09:00 更新\n> 由 ZotMax 依 Zotero 分類「碩論/跌倒」的 5 篇文獻筆記產生；"), md.slice(0, 120));
+	assert.match(md, /\n> \[!zm-links\] 前往\n> \[\[Zotero\/首頁\|🏠 首頁\]\] · \[\[Zotero\/研究儀表板\|📊 研究儀表板\]\] · \[\[Zotero\/10 文獻\/碩論\/跌倒\/00 跌倒 證據地圖\.canvas\|🗺️ 證據地圖\]\]\n/);
+	assert.deepEqual([...md.matchAll(/^> > \[!zm-kpi\] (.+)$/gm)].map(m => m[1]), ["文獻", "已讀", "最強證據", "證據說什麼"]);
+	assert.match(md, /> > \[!zm-kpi\] 證據說什麼\n> > \*\*多數有效\*\* {2}\n> > 有效 3／4 篇（AI 初判）/);
+	assert.match(md, /> > \[!zm-kpi\] 最強證據\n> > \*\*CEBM 1\*\* {2}\n> > RCT 4/);
+	// 證據: one square per paper by direction, the same per intervention, papers per year, the strongest papers
+	let cards = [...md.matchAll(/^> > \[!(zm-[a-z]+)(?:\|wide)?\] (.+)$/gm)].map(m => `${m[1]} ${m[2]}`).filter(c => !c.startsWith("zm-kpi"));
+	assert.deepEqual(cards, ["zm-chart 結論方向", "zm-chart 依介入", "zm-chart 研究量", "zm-reading 證據等級最高的文獻（5）", "zm-next 下一步（" + s.steps.length + "）"]);
+	assert.match(md, /> > \[!zm-chart\] 結論方向\n> > 🟩🟩🟩🟦⬜ {2}\n> > 🟢 有效 3 · 🔵 無差異 1 · ⚪ 未判定 1 {2}\n> > AI 初判，不是 GRADE\n/);
+	assert.match(md, /> > 運動訓練 🟩🟩 2 · L2 {2}\n/);
+	assert.match(md, /> > \[!zm-chart\] 研究量\n> > 最早 2016 · 最新 2024 {2}\n> > 2016 ▰+▱* 1/);
+	assert.match(md, /> > - \[\[Zotero\/D\|D\]\] · 2024 · RCT · CEBM 1 · 有效\n/, "strongest first");
+	assert.match(md, /> > \[!zm-next\|wide\] 下一步（\d）\n> > - \*\*已有 4 篇 RCT/);
+	// Then the gap map, and the full tables folded (no emoji in their titles: the snippet adds the icon)
+	let order = ["> [!zm-board] 主題總覽", "> [!zm-board] 證據", "> [!zm-board] 研究缺口與下一步", "## 🗺️ 證據缺口地圖", "> [!zm-ref]- 結論方向與介入", "> [!zm-ref]- 趨勢與常見詞", "> [!zm-ref]- 文獻（5 篇）"].map(h => md.indexOf(h));
+	assert.ok(order.every((at, k) => at > 0 && (!k || at > order[k - 1])), JSON.stringify(order));
+	assert.match(md, /> > \[!warning\] 結論方向是 AI 初判，不是 GRADE/, "the caveat stays with the table");
+	assert.match(md, /> \| \[\[Zotero\/D\\\|D\]\] \| 2024 \| RCT \| L1 \| 有效 \| 待讀 \|/);
+	assert.doesNotMatch(md, /^## (?!🗺️)/m, "no open section but the gap map");
+});
+
+test("directionSquares: one square per paper, scaled, every direction at least one", () => {
+	assert.equal(T.directionSquares({ "有效": 2, "無差異": 1, "有害": 0, "不一致": 0, "未判定": 1 }), "🟩🟩🟦⬜");
+	assert.equal(T.directionSquares({ "有效": 18, "有害": 1, "未判定": 1 }, 0.5), "🟩🟩🟩🟩🟩🟩🟩🟩🟩🟥⬜");
 });
 
 test("homeSection: the folded update note, four number cards, a card per topic linking to its page (or a table with classic), the unfiled count, quick links as buttons", () => {
