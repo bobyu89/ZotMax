@@ -948,9 +948,14 @@ async function runOpenAlex(report) {
 		firstPage = r.json;
 	});
 
-	await s.check("cursor paging (meta.next_cursor → page 2 has different works)", async ({ note }) => {
+	await s.check("cursor paging (meta.next_cursor → page 2 has different works)", async ({ note, warn }) => {
 		expect(firstPage && firstPage.meta.next_cursor, "no next_cursor on page 1 (fewer than one page of references?)");
 		let r = await getJSON(SEED.listURL(`cited_by:${key()}`, firstPage.meta.next_cursor, { email: CONTACT, perPage: 10 }));
+		// Since 2026-10 OpenAlex refuses deeper pages without a key; listWorks keeps page 1 then (checked below)
+		if (r.status === 401 || r.status === 403) {
+			warn(`page 2 refused (HTTP ${r.status}) — without an API key a list stops at its first page (200 works)`);
+			return;
+		}
 		expect(r.status === 200 && r.json, `HTTP ${r.status}`);
 		let ids1 = new Set(firstPage.results.map(w => w.id));
 		let overlap = r.json.results.filter(w => ids1.has(w.id)).length;
@@ -989,6 +994,15 @@ async function runOpenAlex(report) {
 		let pm = cands.filter(c => c.pmid).length;
 		note(`${cands.length} candidates: ${titles} with title, ${journals} with journal, ${pm} with PMID`);
 		expect(titles === cands.length, "candidates without a title");
+	});
+
+	await s.check("listWorks() past one page keeps what it got (cap 250 on citing works)", async ({ note, warn }) => {
+		let client = new citationChase.OpenAlexClient({ fetch: (u, init) => fetch(u, init), email: CONTACT, maxRequests: 3 });
+		let list = await citationChase.listWorks(client, `cites:${key()}`, 250);
+		note(`${list.works.length} of ${list.total} works in ${client.requests} requests${list.cut ? `; cut: ${list.cut}` : ""}`);
+		expect(list.works.length >= 200, `${list.works.length} works`);
+		if (list.cut) warn(`stopped after page 1: ${list.cut}`);
+		else expect(list.works.length === 250, `${list.works.length} works without a cut`);
 	});
 }
 

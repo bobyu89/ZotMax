@@ -285,3 +285,41 @@ test("collection summary: counts, traffic lights per tool, per-study tables, kap
 	// Nothing appraised yet
 	assert.match(form.summaryBody([entries[2]], meta), /（還沒有任何評讀資料）/);
 });
+
+test("collection summary (看板): 評讀概況 cards, weak items, the traffic lights open, the rest folded", () => {
+	let entries = [
+		{ citation: "Chen, 2024", title: "Fall prevention RCT", link: "Zotero/chen2024", record: verifiedRecord(), source: "form" },
+		{ citation: "Lee, 2021", title: "Falls", link: "", record: form.prefill(AI_MD, AI_DATA), source: "ai" },
+		{ citation: "Wu, 2020", title: "Nothing", link: "", record: null, source: "none" },
+	];
+	let paths = form.summaryPaths(["Zotero", "30 評讀與綜整"], "跌倒實證 評讀總表");
+	let meta = { name: "跌倒實證", generatedAt: "2026-10-08T00:00:00Z", uri: "zotero://select/library/collections/C1", title: "跌倒實證：文獻評讀總表", paths, collectionKey: "1/C1" };
+	let body = form.summaryBody(entries, meta, { layout: "board" });
+	assert.match(body, /^> \[!zm-meta\]- 🧭 評讀總表 · 跌倒實證 · 3 篇 · 2026-10-08 產生\n> 由 ZotMax 依分類「跌倒實證」/);
+	assert.match(body, /\n> \[!zm-board\] 評讀概況\n> > \[!zm-kpi\] 文獻\n> > \*\*3 篇\*\* {2}\n> > 用了 2 種評讀工具 {2}\n> > 沒有評讀資料 1 篇/);
+	assert.match(body, /> > \[!zm-kpi\] 已核對\n> > \*\*1／2 篇\*\* {2}\n> > ▰▰▰▰▰▱▱▱▱▱ {2}\n> > AI 初評或評讀中 1 篇/);
+	assert.match(body, /> > \[!zm-kpi\] 雙人一致性\n> > \*\*κ 0\.50\*\* {2}\n> > 中等一致 {2}\n> > 1 篇雙人評讀，不一致 1 題/);
+	assert.match(body, /> > \[!zm-chart\] 整體評價\n> > 納入 ▰▰▰▰▰▰▰▰▰▰ 2/);
+	// Chen answered 否 on 3 and 4a: weak items, the tool named when there are two tools
+	assert.match(body, /> > \[!zm-chart\|wide\] 常見弱點（否／不清楚）\n> > CASP 隨機對照試驗評讀表 3\. /);
+	let weak = form.weakItems(entries);
+	assert.ok(weak.length >= 2 && weak.every(w => w.weak > 0 && w.weak <= w.answered));
+	// The traffic lights stay open, the forms and the rest folded
+	assert.match(body, /\n## 評讀燈號總表\n/);
+	assert.match(body, /\| \[\[Zotero\/chen2024\\\|Chen, 2024\]\] \| ✅ \| ✅ \| ❌ \| ❌ \| ⬜ /);
+	assert.match(body, /> \[!zm-meta\]- 題號對照\n> 1 = /);
+	assert.match(body, /\n> \[!zm-ref\]- 各篇評讀表（2 篇）\n> \*\*\[\[Zotero\/chen2024\\\|Chen, 2024\]\]\*\* · 已核對（2026-10-08）｜CASP/);
+	assert.match(body, /\n> \[!zm-ref\]- 雙人評讀一致性（Cohen's κ）\n> Cohen's κ = /);
+	assert.match(body, /\n> \[!zm-ref\]- 沒有評讀資料的文獻（1）\n> - Wu, 2020/);
+	assert.match(body, /\n> \[!zm-ref\]- 轉成 Word（Pandoc）\n> 在 `Zotero\/30 評讀與綜整` 資料夾/);
+	assert.doesNotMatch(body, /\n## (評讀概況|各篇評讀表|Pandoc 指令)/);
+	// The Word version is the same as before
+	assert.equal(form.wordDocument(entries, meta), `# ${meta.title}\n\n${form.summaryBody(entries, meta, { word: true })}\n`);
+	// Frontmatter: classes after tags; back to classic clears them
+	let fm = Object.assign(form.summaryFrontmatter(entries, meta), { cssclasses: [core.NOTE_CLASS, core.REVIEW_CLASS] });
+	let note = form.buildSummaryNote(null, fm, meta.title, body);
+	assert.match(note, /\ntags:\n {2}- "文獻評讀"\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-review"\n---\n/);
+	let classic = form.buildSummaryNote(note, Object.assign(form.summaryFrontmatter(entries, meta), { cssclasses: [] }), meta.title, form.summaryBody(entries, meta));
+	assert.match(classic, /\ncssclasses: \[\]\n/);
+	assert.match(classic, /\n> \[!info\] 由 ZotMax 依分類/);
+});

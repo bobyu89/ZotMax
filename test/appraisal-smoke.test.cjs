@@ -440,12 +440,16 @@ test("文獻評讀表: pane prefilled from the AI note → answers, B reviewer, 
 	let summary = fs.readFileSync(path.join(dir, "跌倒實證 評讀總表.md"), "utf8");
 	assert.match(summary, /^---\ntitle: "跌倒實證：文獻評讀總表"\ntype: "appraisal-summary"\nzotero_collection: "1\/COLL0001"/);
 	assert.match(summary, /\nappraisal_verified: 1\nappraisal_unverified: 1\n/);
-	assert.match(summary, /\| 已核對（研究者確認） \| 1 \|\n\| 尚未核對（AI 初評或評讀中） \| 1 \|\n\| 沒有評讀資料 \| 1 \|/);
+	// 看板 (the default): cards first, classes after tags
+	assert.match(summary, /\ntags:\n {2}- "文獻評讀"\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-review"\n---\n/);
+	assert.match(summary, /> \[!zm-board\] 評讀概況\n> > \[!zm-kpi\] 文獻\n> > \*\*3 篇\*\*/);
+	assert.match(summary, /> > \[!zm-kpi\] 已核對\n> > \*\*1／2 篇\*\*/);
+	assert.match(summary, /> > \[!zm-chart\|wide\] 常見弱點（否／不清楚）\n/);
 	assert.match(summary, /\| \[\[Zotero\/chen2024\\\|Chen, 2024\]\] \| ✅ \| ✅ \| ❌ \| ❌ \| ❌ \| ✅ \| ✅ \| ✅ \| ✅ \| ✅ \| ❓ \| ✅ \| ➖ \| 需更多資訊 \| 已核對 \|/);
 	assert.match(summary, /\| \[\[Zotero\/lee2021\\\|Lee, 2021\]\] \| ✅ \| ✅ \| ✅ \| ❌ \| ❌ \| ✅ \| ❓ \| ✅ \| ✅ \| ✅ \| ✅ \| ✅ \| ✅ \| 納入 \| 未核對 \|/);
-	assert.match(summary, /## 各篇評讀表[\s\S]*### \[\[Zotero\/chen2024\\\|Chen, 2024\]\]\n\n> \[!success\]/);
-	assert.match(summary, /\| \*\*合計\*\* \| {2}\| 4 \| 3 \| 75% \| 0\.50 \| 中等一致 \|/);
-	assert.match(summary, /## 沒有評讀資料的文獻\n\n- Wu, 2020/);
+	assert.match(summary, /> \[!zm-ref\]- 各篇評讀表（2 篇）\n[\s\S]*> \*\*\[\[Zotero\/chen2024\\\|Chen, 2024\]\]\*\* · 已核對/);
+	assert.match(summary, /> \| \*\*合計\*\* \| {2}\| 4 \| 3 \| 75% \| 0\.50 \| 中等一致 \|/);
+	assert.match(summary, /> \[!zm-ref\]- 沒有評讀資料的文獻（1）\n> - Wu, 2020/);
 	assert.match(summary, /pandoc "跌倒實證 評讀總表（Word）\.md" -o "跌倒實證 評讀總表\.docx"/);
 	let csv = fs.readFileSync(path.join(dir, "跌倒實證 評讀總表.csv"), "utf8");
 	assert.ok(csv.startsWith("﻿文獻,標題,評讀工具,題號"));

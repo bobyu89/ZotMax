@@ -338,12 +338,38 @@
 		return (/pubmed\.ncbi\.nlm\.nih\.gov\/(\d+)/.exec(line) || [])[1] || "";
 	}
 
+	function lineJournal(line) {
+		return (/\*\*.*\*\* — \*([^*]+)\*/.exec(line) || [])[1] || "";
+	}
+
+	/**
+	 * 看板: the day's papers as cards above the lists — how many, from how many watches, by watch
+	 * and by journal. Read from the lines themselves, so papers added later the same day count.
+	 */
+	function digestBoard(merged) {
+		let papers = merged.flatMap(g => g.lines);
+		let journals = new Map();
+		for (let l of papers) {
+			let j = lineJournal(l);
+			if (j) journals.set(j, (journals.get(j) || 0) + 1);
+		}
+		let cards = [
+			core.kpiCard("新文獻", `${papers.length} 篇`, `來自 ${merged.length} 個追蹤`),
+			core.chartCard("依追蹤", core.barRows(merged.map(g => [g.name, g.lines.length]).sort((a, b) => b[1] - a[1]), 6)),
+		];
+		let top = [...journals].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 5);
+		if (top.length) cards.push(core.chartCard("期刊（前 5）", core.barRows(top, 5, 6)));
+		return core.boardBlock("今日新文獻", cards);
+	}
+
 	/**
 	 * The day's digest note. `groups` is [{ name, entries }] from this check. With `existing`, the
 	 * plugin's region keeps its lines (and their checkboxes) and gains the papers it doesn't list
-	 * yet; everything outside the region is the user's.
+	 * yet; everything outside the region is the user's. opts.layout "board": cards above the lists
+	 * (the lists stay open to tick) and the 看板 classes on a new note.
 	 */
-	function buildDigestNote(existing, date, groups) {
+	function buildDigestNote(existing, date, groups, opts = {}) {
+		let board = opts.layout === "board";
 		let body = existing || "";
 		let start = existing ? MARK_START_RE.exec(body) : null;
 		let end = existing ? MARK_END_RE.exec(body) : null;
@@ -364,9 +390,10 @@
 			else merged.push({ name: g.name, lines });
 		}
 		let section = merged.map(g => `## ${g.name}\n\n${g.lines.join("\n")}`).join("\n\n");
+		if (board && merged.length) section = `${digestBoard(merged)}\n\n${section}`;
 		let block = `${MARK_START}\n\n${section}\n\n%% zotero-bridge:end %%`;
 		if (!existing) {
-			return core.buildFrontmatter({ type: "pubmed-digest", date, tags: [NEW_TAG] }, null)
+			return core.buildFrontmatter({ type: "pubmed-digest", date, tags: [NEW_TAG], cssclasses: board ? [core.NOTE_CLASS, core.REVIEW_CLASS] : "" }, null)
 				+ `\n# 新文獻 ${date}\n\n勾選看過的文獻；要細讀的在 Zotero 改閱讀狀態或標為篩選納入。\n\n${block}\n\n## ${USER_HEADING}\n\n`;
 		}
 		if (hasRegion) return body.slice(0, start.index) + block + body.slice(end.index + end[0].length);
@@ -676,7 +703,7 @@
 		let path = PathUtils.join(dir, `${date}.md`);
 		await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
 		let existing = (await IOUtils.exists(path)) ? await IOUtils.readUTF8(path) : null;
-		let text = buildDigestNote(existing, date, groups);
+		let text = buildDigestNote(existing, date, groups, { layout: core.layoutPref() });
 		if (text !== existing) await IOUtils.writeUTF8(path, text);
 		return [...parts, `${date}.md`].join("/");
 	}
@@ -984,7 +1011,7 @@
 		STARTUP_DELAY_MS, TICK_MS,
 		defaultCollection, normalizeSince, normalizeWatch, parseWatches, watchTerm, ncbiDate, searchWindow,
 		eutilsURL, esearchURL, esummaryURL, parseESearch, parseESummary, createThrottle, planCandidates, pmidFromExtra, normalizeDOI,
-		describeResult, digestLine, buildDigestNote, localDate,
+		describeResult, digestLine, digestBoard, buildDigestNote, localDate,
 		runtime, config, readWatches, readState, ncbiSettings, getJSON, findExisting, ensureCollection, checkWatch, runAll, dueWatches,
 		init, shutdown, testQuery, addWatch, renderPrefs,
 		get timerActive() { return !!timer; },
