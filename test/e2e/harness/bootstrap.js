@@ -17,7 +17,7 @@ const PANE_TABS = {
 	features: ["features"],
 	sync: ["obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography"],
 	organize: ["fulltext", "colors", "concepts", "classify"],
-	search: ["searchLinks", "ncbi", "pubmedWatch", "citationChase"],
+	search: ["searchLinks", "ncbi", "pubmedWatch", "citationChase", "topicBot"],
 	appraise: ["screening", "pico"],
 	ai: ["ai", "usage", "geminiNotebook"],
 };
@@ -388,6 +388,7 @@ const TESTS = [
 				pico: ["normalizeCard", "composeQuestion", "checkCard", "matchCard", "cardMarkdown", "tableRow", "tableMarkdown", "tableCSV", "tableHTML", "noteSection", "renderCard", "renderTable",
 					"cardFor", "saveCard", "deleteCard", "prismaSection", "openCard", "exportTable", "cardDialog", "tableDialog"],
 				citationChase: ["chaseCollection", "chaseItems", "importChecked"],
+				topicBot: ["parseEFetch", "scoreCandidate", "buildBotNote", "readBots", "botFor", "setup", "run", "runAll", "importChecked", "init", "shutdown"],
 				searchLinks: ["buildTarget", "itemTargets", "noteCallout", "calloutFor", "renderPaneRow", "quickSearch", "menuTargets", "relatedFor", "showMore", "openTarget"],
 				aiBatch: ["submit", "check", "cancelAll", "init", "shutdown", "batchParams", "parseResults"],
 				appraisalForm: ["renderPaneRow", "syncInfo", "saveRecord", "stateFor", "exportSummary", "exportCollections"],
@@ -2797,6 +2798,7 @@ const TESTS = [
 			const GATED = [
 				"zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft",
 				"zotero-bridge-toolbar-chase-items", "zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
+				"zotero-bridge-cmd-topic-bot-setup", "zotero-bridge-cmd-topic-bot-run", "zotero-bridge-cmd-topic-bot-import",
 				"zotero-bridge-cmd-appraisal-coach",
 			];
 			// On in both presets
@@ -2815,7 +2817,7 @@ const TESTS = [
 				return visible;
 			};
 			// The toolbar menu's entries (content/toolbar.js), off in 研究生引導 / on in both
-			const TOOLBAR_GATED = ["pubmed-watch", "chase-items", "chase-included", "chase-import", "synthesis", "review-draft",
+			const TOOLBAR_GATED = ["pubmed-watch", "chase-items", "chase-included", "chase-import", "topic-bot-setup", "topic-bot-run", "topic-bot-import", "synthesis", "review-draft",
 				"progress-report", "concepts-ai", "appraisal-coach"];
 			const TOOLBAR_ALWAYS = ["palette", "sync", "sync-no-ai", "sync-obsidian", "sync-notion", "status", "classify", "dashboard", "concepts",
 				"bibliography", "export-collection", "quick-search", "search-item", "screen", "dedup", "prisma", "appraisal-summary", "regenerate", "settings"];

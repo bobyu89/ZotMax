@@ -916,5 +916,7 @@
 		libraryIndex, buildCandidates, candidateKey, doiURL, candidateLine, candidateTable, buildChaseSection, buildChaseCSV, frontmatterFor,
 		parseChecked, markImported,
 		config, chaseCollection, chaseItems, importChecked,
+		// shared with topic-bot.js
+		itemIdentity, libraryRecords, translateIdentifier,
 	};
 });

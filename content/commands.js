@@ -446,6 +446,22 @@
 				}
 				return ZB().citationChase.importChecked(c);
 			} },
+		{ id: "topic-bot-setup", group: "search", l10n: "zotero-bridge-cmd-topic-bot-setup", label: "主題搜尋機器人：建立或修改（目前分類）…",
+			features: ["topicBot"], needs: null, menus: ["collection"],
+			keywords: ["搜尋機器人", "機器人", "bot", "alert", "主題", "topic", "新文獻", "追蹤", "pubmed", "openalex", "被引用", "cited by", "檢索式", "自動搜尋", "訂閱"],
+			run: sel => ZB().topicBot.setup(targetCollections(sel)[0] || null) },
+		// Without a selected collection: every bot
+		{ id: "topic-bot-run", group: "search", l10n: "zotero-bridge-cmd-topic-bot-run", label: "主題搜尋機器人：立即搜尋",
+			features: ["topicBot"], needs: null, menus: ["collection"],
+			keywords: ["搜尋機器人", "機器人", "bot", "立即搜尋", "run", "新文獻", "pubmed", "openalex"],
+			run: (sel) => {
+				let c = targetCollections(sel)[0] || null;
+				return c ? ZB().topicBot.run(c, { manual: true }) : ZB().topicBot.runAll({ manual: true });
+			} },
+		{ id: "topic-bot-import", group: "search", l10n: "zotero-bridge-cmd-topic-bot-import", label: "匯入主題搜尋機器人勾選的文獻",
+			features: ["topicBot"], needs: null, menus: ["collection"],
+			keywords: ["搜尋機器人", "機器人", "bot", "匯入", "import", "勾選", "候選", "新文獻"],
+			run: sel => ZB().topicBot.importChecked(targetCollections(sel)[0] || null) },
 
 		// ---------- 篩選與評讀 ----------
 		{ id: "screen", group: "appraise", l10n: "zotero-bridge-toolbar-screen", label: "篩選所選文獻",
@@ -624,9 +640,10 @@
 		{ id: "colors", label: "劃線顏色與意義", features: ["sync"], keywords: ["顏色", "劃線", "highlight", "color", "colour", "annotation", "標註"] },
 		{ id: "classify", label: "文獻自動分類", features: ["autoClassify"], keywords: ["分類", "classify", "規則", "rules", "主題", "topics", "pico"] },
 		{ id: "searchLinks", label: "醫學文獻快速搜尋", features: ["searchLinks"], keywords: ["搜尋", "search", "資料庫", "database", "ezproxy", "proxy", "mesh"] },
-		{ id: "ncbi", label: "NCBI（PubMed）連線", features: ["pubmedWatch", "searchLinks"], keywords: ["ncbi", "pubmed", "api key", "email", "e-utilities"] },
+		{ id: "ncbi", label: "NCBI（PubMed）連線", features: ["pubmedWatch", "searchLinks", "topicBot"], keywords: ["ncbi", "pubmed", "api key", "email", "e-utilities"] },
 		{ id: "pubmedWatch", label: "PubMed 新文獻追蹤", features: ["pubmedWatch"], keywords: ["pubmed", "追蹤", "watch", "新文獻", "檢索式"] },
 		{ id: "citationChase", label: "引文追蹤", features: ["citationChase"], keywords: ["引文追蹤", "citation", "openalex"] },
+		{ id: "topicBot", label: "主題搜尋機器人", features: ["topicBot"], keywords: ["搜尋機器人", "機器人", "bot", "alert", "自動搜尋", "新文獻"] },
 		{ id: "screening", label: "篩選", features: ["screening"], keywords: ["篩選", "screening", "prisma", "排除原因", "exclusion reasons"] },
 		{ id: "pico", label: "PICO", features: ["pico"], keywords: ["pico", "picot", "問題卡", "pico 表", "證據表", "evidence table", "臨床問題", "clinical question", "word", "csv"] },
 		{ id: "ai", label: "AI 服務", features: ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "progressReport", "conceptsAI"],

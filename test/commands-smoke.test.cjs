@@ -386,7 +386,7 @@ test("catalog: unique IDs, every command and variant runnable, real switches, ke
 	same(C.GROUPS.map(g => g.label), ["同步", "整理", "找文獻", "篩選與評讀", "AI 輔助與寫作"]);
 	for (let g of C.GROUPS) assert.equal(ftlText(zh, g.l10n), g.label);
 	same(C.SECTIONS.map(s => s.id), ["features", "sync", "obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography",
-		"concepts", "fulltext", "colors", "classify", "searchLinks", "ncbi", "pubmedWatch", "citationChase", "screening", "pico", "ai", "usage", "geminiNotebook"]);
+		"concepts", "fulltext", "colors", "classify", "searchLinks", "ncbi", "pubmedWatch", "citationChase", "topicBot", "screening", "pico", "ai", "usage", "geminiNotebook"]);
 	for (let s of C.SECTIONS) {
 		assert.equal(ftlText(zh, s.l10n), s.label, `section ${s.id}`);
 		assert.ok(ftlText(en, s.l10n), `en-US section ${s.id}`);
@@ -489,6 +489,7 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"zotero-bridge-classify-tools", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
 		"zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
+		"zotero-bridge-cmd-topic-bot-setup", "zotero-bridge-cmd-topic-bot-run", "zotero-bridge-cmd-topic-bot-import",
 		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary", "zotero-bridge-cmd-pico-card", "zotero-bridge-cmd-pico-table", "zotero-bridge-cmd-grade",
 		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-cmd-gemini-export",
 	]);
@@ -557,6 +558,7 @@ test("right-click commands act on what was right-clicked, as the old entries did
 	let { a, b, note, collection, other } = papers(env);
 	let calls = spies(env, ["main.run", "main.runSynthesis", "reviewDraft.run", "classify.run", "zhMeta.run", "geminiExport.run", "screening.setDecision", "screening.dedupCollection",
 		"screening.generateReport", "citationChase.chaseItems", "citationChase.chaseCollection", "citationChase.importChecked",
+		"topicBot.setup", "topicBot.run", "topicBot.importChecked",
 		"bibliography.exportCollections", "appraisalForm.exportCollections", "searchLinks.showMore", "searchLinks.openTarget"]);
 	let itemMenu = zbSubmenu(env, "zotero-bridge-item");
 	let collMenu = zbSubmenu(env, "zotero-bridge-collection");
@@ -587,6 +589,9 @@ test("right-click commands act on what was right-clicked, as the old entries did
 	same(await fire(entry(itemMenu, "zotero-bridge-toolbar-chase-items"), ctx), ["citationChase.chaseItems", [a, note, b], collection]);
 	same(await fire(entry(collMenu, "zotero-bridge-chase-tools-included"), cctx), ["citationChase.chaseCollection", collection]);
 	same(await fire(entry(collMenu, "zotero-bridge-chase-tools-import"), cctx), ["citationChase.importChecked", collection]);
+	same(await fire(entry(collMenu, "zotero-bridge-cmd-topic-bot-setup"), cctx), ["topicBot.setup", collection]);
+	same(await fire(entry(collMenu, "zotero-bridge-cmd-topic-bot-run"), cctx), ["topicBot.run", collection, { manual: true }]);
+	same(await fire(entry(collMenu, "zotero-bridge-cmd-topic-bot-import"), cctx), ["topicBot.importChecked", collection]);
 	same(await fire(entry(collMenu, "zotero-bridge-cmd-export-collection"), cctx), ["bibliography.exportCollections", [collection, other]]);
 	same(await fire(entry(collMenu, "zotero-bridge-appraisal-tools-summary"), cctx), ["appraisalForm.exportCollections", [collection, other]]);
 	// Each right-clicked review project

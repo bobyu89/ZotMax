@@ -33,7 +33,7 @@
 	const PREF = "extensions.zotero-bridge.";
 	// Bumped when a later version needs another one-time migration (see MIGRATIONS)
 	const MIGRATION_PREF = "features.version";
-	const MIGRATION_VERSION = 7;
+	const MIGRATION_VERSION = 8;
 
 	const GROUPS = [
 		{ id: "organize", label: "整理與同步", l10n: "zotero-bridge-feature-group-organize" },
@@ -112,6 +112,9 @@
 		{ id: "citationChase", group: "search", pref: "feature.citationChase", presets: { guided: false, advanced: true }, usesNetwork: true,
 			label: "引文追蹤",
 			desc: "用 OpenAlex 找納入研究的參考文獻和引用它的文獻，列成候選清單給你勾選。" },
+		{ id: "topicBot", group: "search", pref: "feature.topicBot", presets: { guided: false, advanced: true }, usesNetwork: true, since: 8,
+			label: "主題搜尋機器人",
+			desc: "替一個主題（Zotero 分類）存好檢索式和核心文獻，定期查 PubMed 和引用核心文獻的新研究，依你的 PICO 排序並寫出理由，列成清單；你勾選的才匯入。不用 AI。" },
 		// 篩選與評讀
 		{ id: "screening", group: "appraise", pref: "feature.screening", presets: { guided: true, advanced: true },
 			label: "篩選與 PRISMA",
@@ -345,6 +348,8 @@
 		{ version: 6, run: s => ({ added: FEATURES.filter(f => f.since === 6).map(f => f.id), newSwitches: migrateNewSwitches(s, 6) }) },
 		// v0.22.0: GRADE 證據確定性 (every switch marked since: 7), the same way as step 2
 		{ version: 7, run: s => ({ added: FEATURES.filter(f => f.since === 7).map(f => f.id), newSwitches: migrateNewSwitches(s, 7) }) },
+		// v0.32.0: 主題搜尋機器人 (every switch marked since: 8), the same way as step 2
+		{ version: 8, run: s => ({ added: FEATURES.filter(f => f.since === 8).map(f => f.id), newSwitches: migrateNewSwitches(s, 8) }) },
 	];
 
 	/**
