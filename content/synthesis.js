@@ -6,12 +6,12 @@
  */
 (function (root, factory) {
 	if (typeof module === "object" && module.exports) {
-		module.exports = factory(require("./apa-zh.js"));
+		module.exports = factory(require("./apa-zh.js"), require("./core.js"));
 	}
 	else {
-		(root.ZB = root.ZB || {}).synthesis = factory(root.ZB.apaZh);
+		(root.ZB = root.ZB || {}).synthesis = factory(root.ZB.apaZh, root.ZB.core);
 	}
-})(this, function (apaZh) {
+})(this, function (apaZh, core) {
 	const MAX_CHARS_PER_SOURCE = 8000;
 
 	const DEFAULT_SYNTHESIS_PROMPT = `你是護理與醫學領域的研究助理，負責把多篇文獻整理成「文獻比較與綜合分析」，供研究生撰寫碩士論文的文獻探討。
@@ -178,10 +178,32 @@
 	}
 
 	/**
+	 * The 看板 layout's head of a synthesis note: the papers at a glance (count and years, the strongest level, the
+	 * designs and levels as bars) from the sources' structured data (meta.studies, in the entries' order).
+	 */
+	function synthesisBoard(entries, meta) {
+		let studies = (meta.studies || []).filter(Boolean);
+		let years = entries.map(e => Number.parseInt(e.data.year || String(e.data.date || "").slice(0, 4), 10)).filter(y => y > 1000);
+		let span = years.length ? (Math.min(...years) === Math.max(...years) ? String(years[0]) : `${Math.min(...years)}–${Math.max(...years)}`) : "";
+		let levels = studies.map(s => Number.parseInt(s.evidence_level, 10)).filter(n => n >= 1 && n <= 5);
+		let count = list => [...list.reduce((m, k) => (k ? m.set(k, (m.get(k) || 0) + 1) : m), new Map())];
+		let cards = [
+			core.kpiCard("文獻", `${entries.length} 篇`, span, studies.length < entries.length ? `有 AI 研讀資料 ${studies.length} 篇` : ""),
+			core.kpiCard("最強證據", levels.length ? `CEBM ${Math.min(...levels)}` : "—", levels.length ? "" : "還沒有證據等級資料"),
+		];
+		let designs = count(studies.map(s => s.study_design)).sort((a, b) => b[1] - a[1]);
+		if (designs.length) cards.push(core.chartCard("研究設計", core.barRows(designs, 5)));
+		let byLevel = count(levels.map(String)).sort((a, b) => a[0].localeCompare(b[0])).map(([l, n]) => [`L${l}`, n]);
+		if (byLevel.length) cards.push(core.chartCard("證據等級（CEBM，1 最強）", core.barRows(byLevel, 5)));
+		return core.boardBlock("比較的文獻", cards);
+	}
+
+	/**
 	 * Obsidian note for a synthesis.
-	 * meta: { title, scope, model, generatedAt, notionUrl, linkTargets }
+	 * meta: { title, scope, model, generatedAt, notionUrl, linkTargets, layout, studies }
 	 */
 	function buildSynthesisNote(md, entries, meta) {
+		let board = meta.layout === "board";
 		let fm = [
 			"---",
 			`title: ${yamlScalar(meta.title)}`,
@@ -194,9 +216,24 @@
 			meta.notionUrl ? `notion: ${yamlScalar(meta.notionUrl)}` : null,
 			"tags:",
 			"  - \"文獻比較\"",
+			...(board ? ["cssclasses:", `  - ${yamlScalar(core.NOTE_CLASS)}`, `  - ${yamlScalar(core.REVIEW_CLASS)}`] : []),
 			"---",
 		].filter(l => l !== null).join("\n");
 		let truncated = entries.filter(e => e.truncated).map(e => e.citation);
+		if (board) {
+			return [
+				fm,
+				`# ${meta.title}`,
+				core.metaFold(`🧭 文獻比較 · ${entries.length} 篇 · ${String(meta.generatedAt || "").slice(0, 10)} · ${meta.model || "AI"}`, [
+					`由 ${meta.model || "AI"} 依 ${entries.length} 篇文獻產生；文獻代號已轉換為引文與筆記連結。AI 的比較請回原文確認。`,
+					truncated.length ? `以下文獻內容過長、只使用了前段：${truncated.join("; ")}` : "",
+				]),
+				synthesisBoard(entries, meta),
+				resolveCitations(md, entries, "obsidian", meta.linkTargets || {}).trim(),
+				core.foldBlock(`參考文獻（${entries.length} 篇）`, referenceList(entries).replace(/^## [^\n]+\n\n/, "")),
+				"## ✍️ 我的筆記\n",
+			].join("\n\n");
+		}
 		let parts = [
 			fm,
 			`# ${meta.title}`,
@@ -217,6 +254,6 @@
 	return {
 		DEFAULT_SYNTHESIS_PROMPT, MAX_CHARS_PER_SOURCE,
 		shortCitation, buildSynthesisPrompt, resolveCitations, parseCitation, CITATION_RE, referenceList,
-		buildSynthesisNote, buildSynthesisPlain,
+		buildSynthesisNote, buildSynthesisPlain, synthesisBoard,
 	};
 });

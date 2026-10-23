@@ -740,10 +740,66 @@ end
 	}
 
 	/**
-	 * The managed region. meta: { period, previous: { date, link } | null, paths, generatedAt }
+	 * The 看板 layout's head of the report: the period's numbers as cards (papers read and added, AI notes, verified
+	 * appraisals), then how the last goals went, the reviews' included counts and the writing. Callouts only, so the
+	 * Pandoc filter leaves them out of the Word file; the sections below stay as they were. facts: collectFacts().
+	 */
+	function reportBoard(facts, sections = {}) {
+		let on = k => sections[k] !== false;
+		let parts = [];
+		let r = facts.reading;
+		if (on("reading") && r) {
+			parts.push(core.boardBlock("本期進度", [
+				core.kpiCard("讀完", `${r.finished.length} 篇`, `狀態改為${READ_STATUSES.join("／")}`),
+				core.kpiCard("新加入", `${r.added.length} 篇`, ""),
+				core.kpiCard("AI 文獻筆記", `${r.aiNotes.length} 篇`, ""),
+				core.kpiCard("評讀已核對", `${r.appraisals.length} 篇`, ""),
+			]));
+		}
+		let cards = [];
+		let g = facts.goals;
+		if (on("goals") && g && g.previous.length) {
+			let done = g.previous.filter(x => x.done).length;
+			cards.push(core.chartCard("上次目標", [`${core.bar(done, g.previous.length)} ${done}／${g.previous.length} 完成`, ...g.previous.filter(x => !x.done).slice(0, 3).map(x => `⬜ ${x.text}`)]));
+		}
+		let rows = on("reviews") ? (facts.reviews || []) : [];
+		if (rows.length) {
+			cards.push(core.chartCard("系統性回顧（納入）", rows.slice(0, 5).map(row => {
+				let n = row.review.included;
+				let d = row.delta && row.delta.included;
+				return `${row.review.title} · ${n === null || n === undefined ? "—" : fmtNumber(n)} 篇${d ? `（${signed(d)}）` : ""}`;
+			})));
+		}
+		let w = facts.writing;
+		if (on("writing") && w && w.total) {
+			let delta = w.updated.reduce((t, d) => t + (d.wordsDelta || 0), 0);
+			cards.push(core.chartCard("寫作", [`本期更新 **${w.updated.length}**／${w.total} 份草稿`, delta ? `我的文字 ${signed(delta)} 字` : ""]));
+		}
+		if (on("pubmed") && facts.pubmed && facts.pubmed.total) cards.push(core.chartCard("新文獻追蹤", [`PubMed 匯入 **${facts.pubmed.total}** 篇`, `看過 ${facts.pubmed.checked} 篇`]));
+		if (cards.length) parts.push(core.boardBlock("本期重點", cards));
+		return parts.join("\n\n");
+	}
+
+	/**
+	 * The managed region. meta: { period, previous: { date, link } | null, paths, generatedAt, layout, facts, sections }
 	 */
 	function buildRegion(sectionsMd, summary, meta) {
 		let p = meta.period;
+		if (meta.layout === "board") {
+			return [
+				MARK_START,
+				core.metaFold(`📝 進度報告 · ${p.start} 至 ${p.end}`, [
+					(meta.previous ? `上次報告：${link(meta.previous.link, meta.previous.date)}` : "第一份報告")
+						+ `。由 ZotMax 於 ${String(meta.generatedAt || "").slice(0, 10)} 依 Zotero 與 vault 的資料產生${summary ? "，「本期摘要」由 AI 依這些資料整理" : "，沒有使用 AI"}。`,
+					"要修改內容請寫在「✍️ 我的筆記」或另存；同一天重新產生時，這個區塊會被覆寫。",
+				]),
+				meta.facts ? reportBoard(meta.facts, meta.sections) : "",
+				summary ? summarySection(summary) : "",
+				sectionsMd,
+				core.foldBlock("轉成 Word（Pandoc）", pandocSection(meta.paths).replace(/^## [^\n]+\n\n/, "")),
+				core.MARK_END,
+			].filter(Boolean).join("\n\n");
+		}
 		let info = [`> [!info] 報告期間 ${p.start} 至 ${p.end}`
 			+ (meta.previous ? `（上次報告：${link(meta.previous.link, meta.previous.date)}）` : "（第一份報告）")
 			+ `。由 ZotMax 於 ${String(meta.generatedAt || "").slice(0, 10)} 依 Zotero 與 vault 的資料產生${summary ? "，「本期摘要」由 AI 依這些資料整理" : "，沒有使用 AI"}。`,
@@ -775,6 +831,11 @@ end
 		];
 		if (meta.notionUrl) managed.push(["notion", meta.notionUrl]);
 		let split = existing ? core.splitFrontmatter(existing) : { frontmatter: null, body: null };
+		// 看板: the snippet's classes with the user's own (switching back drops ours)
+		if (meta.layout) {
+			let classes = core.pageClasses(split.frontmatter, meta.layout === "board" ? [core.NOTE_CLASS, core.REVIEW_CLASS] : []);
+			if (classes || core.frontmatterList(split.frontmatter, "cssclasses").length) managed.push(["cssclasses", classes || []]);
+		}
 		// An empty value is written only to clear a key an earlier build set
 		let has = k => core.parseFrontmatterBlocks(split.frontmatter || "").some(b => b.key === k);
 		let fm = managed.filter(([k, v]) => v !== "" || has(k))
@@ -1436,7 +1497,8 @@ end
 			await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
 			let path = PathUtils.join(dir, paths.fileName);
 			let existing = (await IOUtils.exists(path)) ? await IOUtils.readUTF8(path) : null;
-			let text = buildReportNote(existing, buildRegion(sectionsMd, summary, meta), meta);
+			let layout = core.layoutPref();
+			let text = buildReportNote(existing, buildRegion(sectionsMd, summary, Object.assign({}, meta, { layout, facts, sections: answer.sections })), Object.assign({}, meta, { layout }));
 			await IOUtils.writeUTF8(path, text);
 			await writeIfChanged(PathUtils.join(dir, FILTER_FILE), PANDOC_FILTER);
 			outputs.unshift(`Obsidian（${paths.relPath}）`);
@@ -1507,7 +1569,7 @@ end
 		userText, countWords, draftRecord, digestSummary,
 		parseLines, extractSection, parseChecklist, carryOverGoals,
 		buildSections, toPlainText, stripWikilinks, buildSummaryPrompt, estimateSummaryCost, processSummary,
-		reportPaths, pickReferenceDoc, buildRegion, buildReportNote, buildPlainReport, buildNotionMarkdown,
+		reportPaths, pickReferenceDoc, buildRegion, reportBoard, buildReportNote, buildPlainReport, buildNotionMarkdown,
 		// Zotero
 		runtime, logStatusChange, latestReport, collectFacts, askOptions, askWithPrompts, run,
 	};

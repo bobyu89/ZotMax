@@ -192,6 +192,28 @@ const META = {
 	question: "探討衛教\n對跌倒的成效", paths: rd.draftPaths(["Zotero"], "碩論"), withoutAI: ["Lee, 2021"], truncatedSources: [],
 };
 
+test("buildDraftNote (看板): 草稿狀態 cards with the checklist, the draft as it was, the lists folded — all callouts, so Word stays clean", () => {
+	let { p, result } = draftFor("## 一\n降低 30% [S1]，另有 99% [S2]。");
+	let meta = Object.assign({}, META, { layout: "board" });
+	let note = rd.buildDraftNote(null, result, p.entries, meta);
+	assert.match(note, /\nmodel: "claude-opus-5-5"\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-review"\n---\n/);
+	assert.match(note, /%%\n\n> \[!zm-meta\]- 🤖 文獻探討草稿 · 2 篇 · 2026-10-08 · claude-opus-5-5\n> AI 產生的文獻探討草稿，不可直接當作定稿/);
+	assert.match(note, /\n> \[!zm-board\] 草稿狀態\n> 研究問題／目的：探討衛教 對跌倒的成效\n/);
+	assert.match(note, /> > \[!zm-kpi\] 文獻\n> > \*\*2 篇\*\* {2}\n> > 草稿引用 2 篇 {2}\n> > 1 篇沒有 AI 筆記\n/);
+	assert.match(note, /> > \[!zm-kpi\] 篇幅\n> > \*\*約 \d+ 字\*\*/);
+	assert.match(note, /> > \[!zm-kpi\] 要回原文確認\n> > \*\*1 項\*\*/);
+	assert.match(note, /> > \[!zm-next\|wide\] ⚠️ 查核清單（1 項）\n> > - \*\*數字\*\*/);
+	assert.match(note, /\n\n## 一\n降低 30% \[@chen2024effects\]/, "the draft open, with Pandoc citations");
+	assert.match(note, /\n## 參考文獻\n\n::: \{#refs\}\n:::\n/);
+	assert.match(note, /\n> \[!zm-ref\]- 引用對照（citekey → APA 7；Word 版的參考文獻由 Pandoc 產生）\n> - `@/);
+	assert.match(note, /\n> \[!zm-ref\]- 轉成 Word（Pandoc）\n> 在這份筆記所在的資料夾/);
+	// Outside the draft, only callouts (the Pandoc filter drops them) and the reference placeholder
+	let region = note.slice(note.indexOf("%% zotero-bridge:start"), note.indexOf("%% zotero-bridge:end"));
+	let open = region.split("\n\n").filter(b => b && !b.startsWith(">") && !b.startsWith("%%"));
+	assert.ok(open.every(b => /^## (一|參考文獻)|^降低|^::: /.test(b)), JSON.stringify(open));
+	assert.match(rd.buildDraftNote(note, result, p.entries, Object.assign({}, META, { layout: "classic" })), /\ncssclasses: \[\]\n/, "back to classic drops ours");
+});
+
 test("buildDraftNote: frontmatter, managed region, checklist; re-running keeps the user's edits", () => {
 	let { p, result } = draftFor("## 一\n降低 30% [S1]，另有 99% [S2]。");
 	let note = rd.buildDraftNote(null, result, p.entries, META);

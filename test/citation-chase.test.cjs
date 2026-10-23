@@ -198,6 +198,23 @@ function sampleRun() {
 	};
 }
 
+test("note (看板): the run as cards, the candidates' directions and years, the list open and still read by 匯入, the tables folded", () => {
+	let run = sampleRun();
+	let meta = { name: "跌倒預防 SR", uri: "zotero://select/library/collections/C1", generatedAt: "2026-10-08T00:00:00Z", csvPath: "x.csv", email: "", layout: "board" };
+	let section = cc.buildChaseSection(run, Object.assign({ checked: new Set(["pmid:1212"]) }, meta));
+	assert.match(section, /^> \[!zm-meta\]- 🧭 引文追蹤 · 跌倒預防 SR · 2 篇研究 · 2026-10-08 查詢\n/);
+	assert.deepEqual([...section.matchAll(/^> > \[!zm-kpi\] (.+)$/gm)].map(m => m[1]), ["查詢的研究", "候選文獻", "已在文獻庫", "已勾選"]);
+	assert.match(section, /> > \[!zm-kpi\] 候選文獻\n> > \*\*3 篇\*\*/);
+	assert.match(section, /> > \[!zm-kpi\] 已勾選\n> > \*\*1 篇\*\*/);
+	assert.match(section, /> > \[!zm-chart\] 方向（新的候選）\n> > ← 參考文獻 ▰+▱* \d/);
+	assert.match(section, /\n## 候選文獻（3 篇不在文獻庫中）\n/);
+	assert.match(section, /\n> \[!zm-ref\]- 查詢結果（每篇研究）\n> \| 納入研究 \|/);
+	assert.match(section, /\n> \[!zm-ref\]- 總表（\d+ 篇，其中 \d+ 篇已在文獻庫）\n/);
+	// 匯入 reads the ticks from the open list, as before
+	let note = `${"%% zotero-bridge:start %%"}\n\n${section}\n\n%% zotero-bridge:end %%\n`;
+	assert.deepEqual(cc.parseChecked(note).map(c => c.key), ["pmid:1212"]);
+});
+
 test("note: task list of new candidates, full table with the library flag, checks kept on regeneration", () => {
 	let run = sampleRun();
 	let meta = { name: "跌倒預防 SR", uri: "zotero://select/library/collections/C1", generatedAt: "2026-10-08T00:00:00Z", csvPath: "Zotero/Reviews/跌倒預防 SR 引文追蹤.csv", email: "" };

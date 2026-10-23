@@ -271,6 +271,25 @@ test("the note: managed region rebuilt, the user's text and keys kept; plain tex
 	assert.match(notionMd, /- Falls \(RCT\) ｜ 2024 — 待讀 → 已讀/);
 });
 
+test("the note (看板): the period's numbers as cards, the goals and reviews, the sections as they were, Pandoc folded", () => {
+	let f = facts();
+	let sections = pr.buildSections(f, {});
+	let meta = { date: "2026-10-08", period: PERIOD, previous: { date: "2026-09-24", link: "Zotero/進度報告/2026-09-24" }, generatedAt: "2026-10-08T04:00:00Z", paths: PATHS, layout: "board" };
+	let region = pr.buildRegion(sections, null, Object.assign({}, meta, { facts: f }));
+	assert.match(region, /^%% zotero-bridge:start[^\n]*\n\n> \[!zm-meta\]- 📝 進度報告 · 2026-09-24 至 2026-10-08\n> 上次報告：\[\[Zotero\/進度報告\/2026-09-24\|2026-09-24\]\]/);
+	assert.deepEqual([...region.matchAll(/^> > \[!zm-kpi\] (.+)$/gm)].map(m => m[1]), ["讀完", "新加入", "AI 文獻筆記", "評讀已核對"]);
+	assert.match(region, /> > \[!zm-kpi\] 讀完\n> > \*\*\d+ 篇\*\*/);
+	assert.match(region, /\n> \[!zm-board\] 本期重點\n/);
+	assert.ok(region.includes(sections), "the sections as they were (the Word file and 上次目標回顧 read them)");
+	assert.match(region, /\n> \[!zm-ref\]- 轉成 Word（Pandoc）\n> /);
+	assert.doesNotMatch(region, /\[!info\]/);
+	let note = pr.buildReportNote(null, region, meta);
+	assert.match(note, /\ngenerated_at: "2026-10-08T04:00:00Z"\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-review"\n---\n/);
+	assert.doesNotMatch(pr.buildReportNote(null, region, Object.assign({}, meta, { layout: "classic" })), /cssclasses/, "classic, new note: no classes");
+	// Sections left out: no cards for them
+	assert.doesNotMatch(pr.reportBoard(f, { reading: false }), /本期進度/);
+});
+
 test("AI paragraph: prompt from the facts only; numbers not in the facts are flagged", () => {
 	let factsText = pr.toPlainText(pr.buildSections(facts(), {}));
 	let p = pr.buildSummaryPrompt(factsText, PERIOD);

@@ -62,7 +62,7 @@ function makeEnv({ prefs, fetch }) {
 	}
 
 	// The suites below were written for the flat vault layout; vault-layout-smoke covers the organized one
-	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat" }, prefs);
+	let prefStore = Object.assign({ "extensions.zotero-bridge.obsidian.structure": "flat", "extensions.zotero-bridge.obsidian.layout": "classic" }, prefs);
 	let Zotero = {
 		Prefs: { get: k => prefStore[k], set: (k, v) => { prefStore[k] = v; }, clear: (k) => { delete prefStore[k]; } },
 		MenuManager: { registerMenu: (o) => { menus.push(o); return o.menuID; }, unregisterMenu: () => true },

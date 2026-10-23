@@ -433,6 +433,7 @@
 	 * run: { reports, candidates, requests, stopped }; meta: { name, uri, generatedAt, csvPath, email, checked: Set }
 	 */
 	function buildChaseSection(run, meta) {
+		if (meta.layout === "board") return boardChaseSection(run, meta);
 		let fresh = run.candidates.filter(c => !c.inLibrary);
 		let known = run.candidates.length - fresh.length;
 		let checked = meta.checked || new Set();
@@ -460,6 +461,46 @@
 			`## 總表（${run.candidates.length} 篇，其中 ${known} 篇已在文獻庫）`,
 			candidateTable(run.candidates),
 		].join("\n\n");
+	}
+
+	/**
+	 * The 看板 layout's chase note: the update note (folded), the run as number cards, the candidates' years and
+	 * directions as bars, the warnings, the candidate list open (its check boxes are what 匯入 reads), the seed and
+	 * full tables folded.
+	 */
+	function boardChaseSection(run, meta) {
+		let fresh = run.candidates.filter(c => !c.inLibrary);
+		let known = run.candidates.length - fresh.length;
+		let checked = meta.checked || new Set();
+		let importable = fresh.filter(c => candidateKey(c));
+		let ticked = importable.filter(c => checked.has(candidateKey(c))).length;
+		let parts = [core.metaFold(`🧭 引文追蹤 · ${meta.name} · ${run.reports.length} 篇研究 · ${String(meta.generatedAt || "").slice(0, 10)} 查詢`, [
+			`由 ZotMax 查詢 OpenAlex（${run.requests} 次請求）產生；重新產生只會覆寫這個區塊（勾選會保留）。`,
+			[meta.uri ? `Zotero：[開啟分類](${meta.uri})` : "", meta.csvPath ? `CSV：\`${meta.csvPath}\`` : ""].filter(Boolean).join(" · "),
+			meta.email ? "" : "建議在 設定 → 引文追蹤 填入 email（OpenAlex 的 polite pool，回應較穩定）。",
+		])];
+		let direction = d => run.candidates.filter(c => !c.inLibrary && c.links.some(l => l.direction === d)).length;
+		let cards = [
+			core.kpiCard("查詢的研究", `${run.reports.length} 篇`, `完成 ${run.reports.filter(r => r.status === "完成").length} 篇`),
+			core.kpiCard("候選文獻", `${fresh.length} 篇`, `可匯入 ${importable.length} 篇`),
+			core.kpiCard("已在文獻庫", `${known} 篇`, ""),
+			core.kpiCard("已勾選", `${ticked} 篇`, ticked ? "可以匯入了" : "在下方清單勾選"),
+		];
+		parts.push(core.boardBlock("引文追蹤", cards));
+		let charts = [core.chartCard("方向（新的候選）", core.barRows([[DIRECTIONS.backward, direction("backward")], [DIRECTIONS.forward, direction("forward")]], 2))];
+		let years = [...fresh.reduce((m, c) => (c.year ? m.set(String(c.year), (m.get(String(c.year)) || 0) + 1) : m), new Map())].sort((a, b) => a[0].localeCompare(b[0]));
+		if (years.length) charts.push(core.chartCard("候選的出版年份", core.barRows(years.slice(-8), 8)));
+		parts.push(core.boardBlock("候選概況", charts));
+		if (run.stopped) parts.push(`> [!warning] ${run.stopped}：部分研究沒有查完。可在設定提高上限，或分批選取文獻後再查詢。`);
+		if (run.reports.some(r => (r.backward && r.backward.capped) || (r.forward && r.forward.capped))) {
+			parts.push("> [!note] 標示「已達上限」的研究只列出被引次數最高的部分文獻（設定 → 引文追蹤 → 每篇研究每個方向最多幾篇）。");
+		}
+		parts.push(`## 候選文獻（${fresh.length} 篇不在文獻庫中）`,
+			"勾選要加入的文獻（`- [x]`），再到 Zotero 的分類上按右鍵 → **ZotMax → 匯入引文追蹤勾選的文獻**。匯入的文獻會加上標籤 `來源/引文追蹤`，請照常篩選；PRISMA 流程圖會把它們算在右側「其他方法」欄。←：該研究引用的文獻；→：引用該研究的文獻。",
+			fresh.length ? fresh.map(c => candidateLine(c, checked.has(candidateKey(c)))).join("\n") : "（沒有新的候選文獻：找到的文獻都已在文獻庫中）");
+		parts.push(core.foldBlock("查詢結果（每篇研究）", seedTable(run.reports)));
+		parts.push(core.foldBlock(`總表（${run.candidates.length} 篇，其中 ${known} 篇已在文獻庫）`, candidateTable(run.candidates)));
+		return parts.join("\n\n");
 	}
 
 	const CSV_COLUMNS = [
@@ -719,8 +760,9 @@
 			};
 			await IOUtils.makeDirectory(target.dir, { createAncestors: true, ignoreExisting: true });
 			await IOUtils.writeUTF8(PathUtils.join(target.dir, `${target.name}.csv`), buildChaseCSV(run.candidates));
-			let section = buildChaseSection(run, meta);
-			let text = screening.buildReviewNote(target.existing, frontmatterFor(run, meta), meta.title, section);
+			let layout = core.layoutPref();
+			let section = buildChaseSection(run, Object.assign({}, meta, { layout }));
+			let text = screening.buildReviewNote(target.existing, frontmatterFor(run, meta), meta.title, section, undefined, { layout });
 			if (text !== target.existing) await IOUtils.writeUTF8(target.path, text);
 
 			let fresh = run.candidates.filter(c => !c.inLibrary).length;

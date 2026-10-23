@@ -448,13 +448,57 @@ end
 		].join("\n");
 	}
 
-	function referenceCallout(entries) {
-		let rows = entries.map(e => ({
+	function referenceRows(entries) {
+		return entries.map(e => ({
 			key: e.citekey,
 			ref: e.data.apa || `${e.citation}. ${e.data.title || ""}`.trim(),
-		})).sort((a, b) => a.ref.localeCompare(b.ref, "en"));
-		return ["> [!abstract]- 引用對照（citekey → APA 7；Word 版的參考文獻由 Pandoc 產生）",
-			...rows.map(r => `> - ${r.key ? `\`@${r.key}\`` : "（沒有 citekey）"}：${r.ref}`)].join("\n");
+		})).sort((a, b) => a.ref.localeCompare(b.ref, "en")).map(r => `- ${r.key ? `\`@${r.key}\`` : "（沒有 citekey）"}：${r.ref}`);
+	}
+
+	function referenceCallout(entries) {
+		return ["> [!abstract]- 引用對照（citekey → APA 7；Word 版的參考文獻由 Pandoc 產生）", ...referenceRows(entries).map(l => `> ${l}`)].join("\n");
+	}
+
+	/** The draft's length: Chinese characters plus other words, without the citations. */
+	function draftLength(md) {
+		let text = String(md || "").replace(/\[@[^\]]*\]/g, " ").replace(/^#+\s.*$/gm, " ");
+		let cjk = (text.match(/[\u3400-\u9fff]/g) || []).length;
+		let words = (text.replace(/[\u3400-\u9fff]/g, " ").match(/[A-Za-z0-9][A-Za-z0-9'’-]*/g) || []).length;
+		return cjk + words;
+	}
+
+	/**
+	 * The 看板 layout's managed region: the update note (folded), 草稿狀態 (papers and how many the draft cites, its
+	 * length, how many points to check, the checklist as the amber card), then the draft as it was, the reference
+	 * placeholder, and the citekey list and the Pandoc command folded. Every card is a callout, so the Pandoc filter
+	 * leaves it out of the Word file as it did the old info callout.
+	 */
+	function boardRegion(result, entries, meta) {
+		let count = issueCount(result.issues);
+		let lines = issueLines(result.issues, entries);
+		let cited = entries.length - result.issues.uncited.length;
+		let without = (meta.withoutAI || []).length;
+		let cards = [
+			core.kpiCard("文獻", `${entries.length} 篇`, `草稿引用 ${cited} 篇`, without ? `${without} 篇沒有 AI 筆記` : ""),
+			core.kpiCard("篇幅", `約 ${draftLength(result.pandoc).toLocaleString("en-US")} 字`, "不含標題與引文"),
+			core.kpiCard("要回原文確認", `${count} 項`, count ? "見查核清單" : "數字都對得上筆記與摘要"),
+		];
+		if (lines.length) cards.push(core.plainCard("zm-next|wide", count ? `⚠️ 查核清單（${count} 項）` : "查核清單", [...lines.map(l => `- ${l}`), "", CHECK_CAVEAT].join("\n")));
+		return [
+			MARK_START,
+			core.metaFold(`🤖 文獻探討草稿 · ${entries.length} 篇 · ${String(meta.generatedAt || "").slice(0, 10)} · ${meta.model || "AI"}`, [
+				"AI 產生的文獻探討草稿，不可直接當作定稿：每個論點、數字與引用都必須回原文確認。",
+				"引文是 Pandoc 格式 `[@citekey]`，轉成 Word 時才會變成 APA 引文。要修改內容請複製到標記外或論文檔：重新產生時，這個區塊會被覆寫。",
+				meta.withoutAI && meta.withoutAI.length ? `沒有 AI 筆記、改用摘要與劃線的文獻：${meta.withoutAI.join("; ")}` : "",
+				meta.truncatedSources && meta.truncatedSources.length ? `內容過長、只使用前段的文獻：${meta.truncatedSources.join("; ")}` : "",
+			]),
+			core.boardBlock("草稿狀態", cards, oneLine(meta.question) ? `研究問題／目的：${oneLine(meta.question)}` : ""),
+			result.pandoc.trim(),
+			"## 參考文獻\n\n::: {#refs}\n:::",
+			core.foldBlock(`引用對照（citekey → APA 7；Word 版的參考文獻由 Pandoc 產生）`, referenceRows(entries).join("\n")),
+			core.foldBlock("轉成 Word（Pandoc）", pandocSection(meta.paths).replace(/^## [^\n]+\n\n/, "")),
+			core.MARK_END,
+		].join("\n\n");
 	}
 
 	function oneLine(s) {
@@ -467,6 +511,7 @@ end
 	 * meta: { model, generatedAt, question, paths, withoutAI: [citation], truncatedSources: [citation] }
 	 */
 	function buildManagedRegion(result, entries, meta) {
+		if (meta.layout === "board") return boardRegion(result, entries, meta);
 		let info = [
 			"> [!info] AI 產生的文獻探討草稿（不可直接當作定稿）",
 			`> 由 ${meta.model || "AI"} 依 ${entries.length} 篇文獻於 ${String(meta.generatedAt || "").slice(0, 10)} 產生。研究問題／目的：${oneLine(meta.question) || "（未提供）"}`,
@@ -503,6 +548,11 @@ end
 		if (meta.notionUrl) managedKeys.push(["notion", meta.notionUrl]);
 		let region = buildManagedRegion(result, entries, meta);
 		let frontmatter = existing ? core.splitFrontmatter(existing).frontmatter : null;
+		// 看板: the snippet's classes with the user's own (switching back drops ours)
+		if (meta.layout) {
+			let classes = core.pageClasses(frontmatter, meta.layout === "board" ? [core.NOTE_CLASS, core.REVIEW_CLASS] : []);
+			if (classes || core.frontmatterList(frontmatter, "cssclasses").length) managedKeys.push(["cssclasses", classes || []]);
+		}
 		let body = existing ? core.splitFrontmatter(existing).body : null;
 		let fm = managedKeys.reduce((acc, [k, v]) => core.setFrontmatterValue(acc, k, v), frontmatter || "");
 		if (body === null) {
@@ -867,7 +917,7 @@ end
 					await IOUtils.makeDirectory(dir, { createAncestors: true, ignoreExisting: true });
 					let path = PathUtils.join(dir, meta.paths.fileName);
 					let existing = (await IOUtils.exists(path)) ? await IOUtils.readUTF8(path) : null;
-					await IOUtils.writeUTF8(path, buildDraftNote(existing, draft, entries, meta));
+					await IOUtils.writeUTF8(path, buildDraftNote(existing, draft, entries, Object.assign({}, meta, { layout: core.layoutPref() })));
 					await writeIfChanged(PathUtils.join(dir, FILTER_FILE), PANDOC_FILTER);
 					outputs.push(`Obsidian（${meta.paths.relPath}）`);
 					let missingKeys = entries.filter(e => !e.citekey).map(e => e.citation);

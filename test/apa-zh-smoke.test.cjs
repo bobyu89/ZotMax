@@ -326,7 +326,8 @@ test("sync, references.json and a synthesis with Chinese and English items", asy
 	let synDir = path.join(dir, "文獻比較");
 	let syn = fs.readFileSync(path.join(synDir, fs.readdirSync(synDir)[0]), "utf8");
 	assert.match(syn, /三篇結果一致 \[\[Zotero\/lee2021exercise\|Lee, 2021\]\]; \[\[Zotero\/陳 2023 - 護理人員跌倒預防衛教之成效\|陳美玲等，2023\]\]; \[\[Zotero\/大明 2020 - 加護病房護理人員之工作壓力\|王大明，2020\]\]。/);
-	let list = syn.split("## 參考文獻\n\n")[1].split("\n\n")[0].split("\n");
+	// The 看板 note (the default) folds the list: its lines start with "> "
+	let list = syn.split(/> \[!zm-ref\]- 參考文獻（3 篇）\n/)[1].split("\n\n")[0].split("\n").map(l => l.replace(/^> /, ""));
 	assert.deepEqual(list.map(l => l.slice(0, 5)), ["- 王大明", "- 陳美玲", "- Lee"]);
 	assert.match(list[1], /\*護理雜誌，70\*\(2\)/);
 	await vm.runInContext("shutdown()", env.context);
@@ -344,7 +345,8 @@ test("settings: 台灣護理學會 punctuation, English order, or Chinese APA of
 	await env.context.ZB.main.runSynthesis([article, thesis, english], { label: "x" });
 	let synDir = path.join(env.vault, "Zotero", "文獻比較");
 	let syn = fs.readFileSync(path.join(synDir, fs.readdirSync(synDir)[0]), "utf8");
-	let list = syn.split("## 參考文獻\n\n")[1].split("\n\n")[0].split("\n");
+	// The 看板 note (the default) folds the list: its lines start with "> "
+	let list = syn.split(/> \[!zm-ref\]- 參考文獻（3 篇）\n/)[1].split("\n\n")[0].split("\n").map(l => l.replace(/^> /, ""));
 	assert.deepEqual(list.map(l => l.slice(0, 5)), ["- Lee", "- 王大明", "- 陳美玲"]);
 	await vm.runInContext("shutdown()", env.context);
 
