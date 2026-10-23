@@ -278,6 +278,7 @@
 		let at = opts.now || new Date();
 		let stamp = at.toISOString();
 		let rows = plan.moves.slice(0, MAX_LOG_ROWS).map(m => `| ${KIND_LABELS[m.kind] || m.kind} | ${cellText(key(m.from))} | ${cellText(key(m.to))} |`);
+		if (opts.layout === "board") return boardLog(plan, result, at, rows);
 		return [
 			"---", "type: vault-reorganize", `date: ${stamp}`, `moved: ${result.moved}`, "---", "",
 			"# 整理 vault 資料夾紀錄", "",
@@ -288,6 +289,34 @@
 			...(plan.skipped.length ? ["## 留在原處（目標已有同名檔案）", "", ...plan.skipped.map(s => `- ${key(s.from)} → ${key(s.to)}`), ""] : []),
 			"## 搬動清單", "", "| 類型 | 原位置 | 新位置 |", "|---|---|---|", ...rows,
 			...(plan.moves.length > MAX_LOG_ROWS ? ["", `（另有 ${plan.moves.length - MAX_LOG_ROWS} 個未列出）`] : []),
+			"",
+		].join("\n");
+	}
+
+	/**
+	 * The 看板 layout's log: the run as number cards (moved, links, failed or left in place), the moves by kind as bars,
+	 * what went wrong open, the full table of moves folded.
+	 */
+	function boardLog(plan, result, at, rows) {
+		let byKind = [...plan.moves.reduce((m, x) => m.set(KIND_LABELS[x.kind] || x.kind, (m.get(KIND_LABELS[x.kind] || x.kind) || 0) + 1), new Map())].sort((a, b) => b[1] - a[1]);
+		let problems = result.failed.length + plan.skipped.length;
+		return [
+			"---", "type: vault-reorganize", `date: ${at.toISOString()}`, `moved: ${result.moved}`,
+			"cssclasses:", `  - "${core.NOTE_CLASS}"`, `  - "${core.REVIEW_CLASS}"`, "---", "",
+			"# 整理 vault 資料夾紀錄", "",
+			core.metaFold(`🗂️ 整理 vault · ${at.toLocaleString("zh-TW", { hour12: false })}`, [
+				"要還原：依下方「搬動清單」把「新位置」搬回「原位置」，並到 設定 → ZotMax → Obsidian 把資料夾結構改回「舊版（平鋪）」。",
+			]), "",
+			core.boardBlock("整理結果", [
+				core.kpiCard("搬動", `${result.moved} 個檔案`, ""),
+				core.kpiCard("更新連結", `${result.links} 個`, `在 ${result.files} 個檔案裡`),
+				core.kpiCard("沒有搬動", `${problems} 個`, problems ? "見下方" : "全部完成"),
+				core.chartCard("依類型", core.barRows(byKind, 8)),
+			]), "",
+			...(result.failed.length ? ["## 沒有搬成功", "", ...result.failed.map(f => `- ${key(f.from)}：${f.error}`), ""] : []),
+			...(plan.skipped.length ? ["## 留在原處（目標已有同名檔案）", "", ...plan.skipped.map(s => `- ${key(s.from)} → ${key(s.to)}`), ""] : []),
+			core.foldBlock(`搬動清單（${plan.moves.length}）`, ["| 類型 | 原位置 | 新位置 |", "|---|---|---|", ...rows,
+				...(plan.moves.length > MAX_LOG_ROWS ? ["", `（另有 ${plan.moves.length - MAX_LOG_ROWS} 個未列出）`] : [])].join("\n")),
 			"",
 		].join("\n");
 	}
@@ -601,7 +630,7 @@
 			let logParts = [...core.vaultFolder(settings, "system"), `整理紀錄 ${stamp(now)}.md`];
 			try {
 				await IOUtils.makeDirectory(PathUtils.join(settings.vaultPath, ...logParts.slice(0, -1)), { createAncestors: true, ignoreExisting: true });
-				await IOUtils.writeUTF8(PathUtils.join(settings.vaultPath, ...logParts), buildLog(thePlan, result, { now }));
+				await IOUtils.writeUTF8(PathUtils.join(settings.vaultPath, ...logParts), buildLog(thePlan, result, { now, layout: core.layoutPref() }));
 			}
 			catch (e) {
 				Zotero.logError(e);

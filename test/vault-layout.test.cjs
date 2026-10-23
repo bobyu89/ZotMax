@@ -168,6 +168,19 @@ test("describePlan, buildLog and looksFlat", () => {
 	assert.equal(L.looksFlat([], false), false);
 });
 
+test("buildLog (看板): the run as cards, the moves by kind, the table folded", () => {
+	let plan = L.planMigration(flatVault(), { defaults: { obsidianFolder: "Zotero" } });
+	let log = L.buildLog(plan, { moved: 20, links: 7, files: 3, failed: [] }, { now: new Date("2026-10-14T09:00:00Z"), layout: "board" });
+	assert.match(log, /^---\ntype: vault-reorganize\ndate: [^\n]+\nmoved: 20\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-review"\n---\n/);
+	assert.match(log, /\n> \[!zm-meta\]- 🗂️ 整理 vault · /);
+	assert.match(log, /> > \[!zm-kpi\] 搬動\n> > \*\*20 個檔案\*\*/);
+	assert.match(log, /> > \[!zm-kpi\] 更新連結\n> > \*\*7 個\*\* {2}\n> > 在 3 個檔案裡/);
+	assert.match(log, /> > \[!zm-chart\] 依類型\n> > 概念、評讀、寫作與新文獻 ▰+ 8  \n> > 系統檔 [▰▱]+ 4  \n/);
+	assert.match(log, /> > 文獻筆記 [▰▱]+ 2  \n/);
+	assert.match(log, /\n> \[!zm-ref\]- 搬動清單（20）\n> \| 類型 \| 原位置 \| 新位置 \|\n/);
+	assert.match(log, /> \| 文獻筆記 \| Zotero\/lee2024\.md \| Zotero\/10 文獻\/碩論\/跌倒\/lee2024\.md \|/);
+});
+
 test("the navigation bar: 首頁 › topics, 「跳到」 the folded sections (block IDs after them), the full text, 我的筆記", async () => {
 	let data = {
 		title: "Falls", key: "AAAA1111", libraryPath: "library", collections: ["碩論/跌倒", "碩論"], abstract: "Background.",

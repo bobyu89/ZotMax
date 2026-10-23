@@ -1426,9 +1426,10 @@
 			let withoutAI = 0;
 			for (let item of items) {
 				let data = await ZB.adapter.extractItemData(item, { fullTextLimit: 0 });
-				let aiMarkdown = data.aiNote ? readAINote(data.aiNote.html).md : "";
+				let ai = data.aiNote ? readAINote(data.aiNote.html) : null;
+				let aiMarkdown = ai ? ai.md : "";
 				if (!aiMarkdown) withoutAI++;
-				sources.push({ item, data, aiMarkdown, annotationsText: ZB.llm.formatAnnotationsForPrompt(data) });
+				sources.push({ item, data, aiMarkdown, study: ai ? ai.data : null, annotationsText: ZB.llm.formatAnnotationsForPrompt(data) });
 			}
 			let { system, user, entries } = ZB.synthesis.buildSynthesisPrompt(sources, {
 				systemPrompt: settings.llm.synthesisPrompt,
@@ -1477,6 +1478,7 @@
 					let path = PathUtils.join(dir, `${ZB.core.sanitizeFilename(title)} ${stamp()}.md`);
 					await IOUtils.writeUTF8(path, ZB.synthesis.buildSynthesisNote(md, entries, {
 						title, scope: scope.label, model, generatedAt, notionUrl, linkTargets,
+						layout: ZB.core.layoutPref(), studies: sources.map(src => src.study || null),
 					}));
 					outputs.push("Obsidian");
 				}

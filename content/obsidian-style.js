@@ -31,7 +31,7 @@
 	const SNIPPET = "zotmax";
 	const FILE_NAME = `${SNIPPET}.css`;
 	// Bumped whenever the CSS changes, so installed copies are refreshed on the next sync
-	const VERSION = 7;
+	const VERSION = 8;
 	const HEADER_RE = /^\/\* ZotMax 看板樣式 v(\d+)\b/;
 
 	/**
@@ -76,10 +76,14 @@
 	];
 	// A concept card's and the 概念索引's own properties (concepts.js); the aliases and the user's keys stay
 	const CONCEPT_PROPERTIES = ["type", "concept", "concept_types", "papers", "concepts", "updated", "ai_synthesis", "cssclasses"];
-	// The review pages' own properties (screening.js, pico.js, grade.js): these keys, and every prisma_*, pico_* and
+	// The review and writing pages' own properties (screening.js, pico.js, grade.js, synthesis.js, review-draft.js,
+	// progress-report.js, citation-chase.js, vault-layout.js): these keys, and every prisma_*, pico_* and
 	// grade_* key; the tags and the user's keys stay
 	const REVIEW_PROPERTIES = ["title", "type", "zotero_collection", "collection_path", "zotero", "notion", "last_generated",
-		"evidence_csv", "studies", "studies_without_data", "outcomes", "certainty", "cssclasses"];
+		"evidence_csv", "studies", "studies_without_data", "outcomes", "certainty", "cssclasses",
+		// 文獻比較, 文獻探討草稿, 進度報告, 引文追蹤 and 整理紀錄
+		"scope", "sources", "citekeys", "generated_at", "model", "ai_model", "ai_generated", "date", "period_start", "period_end",
+		"previous_report", "moved", "chase_candidates", "chase_new", "chase_seeds", "candidates_csv", "openalex_requests"];
 	const REVIEW_PREFIXES = ["prisma_", "pico_", "grade_"];
 
 	function header() {

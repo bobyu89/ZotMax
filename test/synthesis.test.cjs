@@ -80,6 +80,24 @@ test("buildSynthesisNote has frontmatter, links and an alphabetical APA list", (
 	assert.match(note, /## ✍️ 我的筆記/);
 });
 
+test("buildSynthesisNote (看板): folded update note, the papers as cards, the AI's text open, the references folded", () => {
+	let { entries } = syn.buildSynthesisPrompt([{ data: one }, { data: two }]);
+	let note = syn.buildSynthesisNote(OUTPUT, entries, {
+		title: "文獻比較：碩論（2 篇）", scope: "碩論", model: "claude-opus-5-5", generatedAt: "2026-10-07T00:00:00Z", linkTargets: { S2: "Zotero/lee" },
+		layout: "board", studies: [{ study_design: "RCT", evidence_level: "2" }, null],
+	});
+	assert.match(note, /\ntags:\n {2}- "文獻比較"\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-review"\n---\n/);
+	assert.match(note, /\n> \[!zm-meta\]- 🧭 文獻比較 · 2 篇 · 2026-10-07 · claude-opus-5-5\n/);
+	assert.match(note, /> > \[!zm-kpi\] 文獻\n> > \*\*2 篇\*\* {2}\n> > \d{4}(?:–\d{4})? {2}\n> > 有 AI 研讀資料 1 篇\n/);
+	assert.match(note, /> > \[!zm-kpi\] 最強證據\n> > \*\*CEBM 2\*\*/);
+	assert.match(note, /> > \[!zm-chart\] 研究設計\n> > RCT ▰{10} 1/);
+	assert.match(note, /\[\[Zotero\/lee\|Lee, 2021\]\]/, "the AI's text open, with links");
+	let refs = note.slice(note.indexOf("> [!zm-ref]- 參考文獻（2 篇）"));
+	assert.ok(refs.indexOf("> - Chen, M.") > 0 && refs.indexOf("> - Chen, M.") < refs.indexOf("> - Lee, A."), "the APA list folded, alphabetical");
+	assert.doesNotMatch(note, /\[!info\]|^## 參考文獻/m);
+	assert.match(note, /\n## ✍️ 我的筆記\n$/);
+});
+
 test("synthesis Markdown becomes a real Notion table and an HTML table", () => {
 	let { entries } = syn.buildSynthesisPrompt([{ data: one }, { data: two }]);
 	let plain = syn.buildSynthesisPlain(OUTPUT, entries);
