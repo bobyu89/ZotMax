@@ -339,3 +339,19 @@ test("the report converts with Pandoc and the Lua filter", { skip: !hasPandoc &&
 	execFileSync("pandoc", args, { cwd: dir });
 	assert.ok(fs.statSync(path.join(dir, PATHS.docx)).size > 1000);
 });
+
+test("新文獻追蹤 with the topic bots: imports in the period and what still waits, as text and as a card", () => {
+	let only = { reading: false, reviews: false, writing: false, goals: false };
+	let bots = [
+		{ path: "碩論/跌倒", name: "跌倒", link: "Zotero/50 新文獻/跌倒 搜尋機器人", pending: 12, high: 3, imported: 4 },
+		{ path: "壓傷", name: "壓傷", link: "Zotero/50 新文獻/壓傷 搜尋機器人", pending: 2, high: 0, imported: 0 },
+	];
+	let md = pr.buildSections({ pubmed: { days: [], total: 0, checked: 0, bots } }, only);
+	assert.equal(md, "## 新文獻追蹤\n\n主題搜尋機器人：本期匯入 **4** 篇，清單上還有 14 篇待看：\n\n"
+		+ "- [[Zotero/50 新文獻/跌倒 搜尋機器人|碩論/跌倒]]：匯入 4 篇，待看 12 篇（⭐⭐⭐ 3）\n- [[Zotero/50 新文獻/壓傷 搜尋機器人|壓傷]]：匯入 0 篇，待看 2 篇");
+	// No PubMed watch and no bot: the old sentence
+	assert.equal(pr.buildSections({ pubmed: { days: [], total: 0, checked: 0, bots: [] } }, only), "## 新文獻追蹤\n\n本期 PubMed 追蹤沒有匯入新文獻。");
+	let board = pr.reportBoard({ pubmed: { days: [], total: 0, checked: 0, bots } }, only);
+	assert.match(board, /> > \[!zm-chart\] 新文獻追蹤\n> > 🤖 機器人匯入 \*\*4\*\* 篇，待看 14 篇/);
+	assert.doesNotMatch(board, /PubMed 匯入/);
+});

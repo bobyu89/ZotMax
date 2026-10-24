@@ -265,11 +265,11 @@ test("主題搜尋機器人: set up from the PICO card, run PubMed + citations, 
 	let env = await setup();
 	let { ZB, collection } = env;
 	// A PICO card for the collection: its English query fills the dialog and its P, I, O rank the papers
-	ZB.pico.saveCard(collection, { type: "intervention", p: "older adults", i: "exercise", o: "falls" });
+	ZB.pico.saveCard(collection, { type: "intervention", p: "住院長者、older adults", i: "運動、exercise", o: "跌倒、falls" });
 	let asked = null;
 	ZB.topicBot.runtime.ask = (init) => {
 		asked = init;
-		return { action: "run", query: init.query, core: init.choices.filter(c => c.picked).map(c => c.key), sources: init.sources };
+		return { action: "run", query: init.query, exclude: ["hygiene"], core: init.choices.filter(c => c.picked).map(c => c.key), sources: init.sources };
 	};
 	let result = await ZB.topicBot.setup(collection);
 	same(env.errors, []);
@@ -287,7 +287,9 @@ test("主題搜尋機器人: set up from the PICO card, run PubMed + citations, 
 	assert.match(list, /^## 待看（3 篇）\n\n- \[ \] ⭐⭐⭐ \*\*Tai chi exercise and falls[^\n]*｜82 分：命中 P、I、O（標題有 P、I、O） · 系統性回顧 · 引用 1 篇核心文獻：Author1, 2021｜來源 被引用｜\[DOI\]\(https:\/\/doi\.org\/10\.5555\/oa1\)\n/);
 	assert.match(list, /\n- \[ \] ⭐⭐⭐ \*\*Nurse-led balance exercise[^\n]*｜\*J Adv Nurs\*｜78 分：[^\n]* · RCT · [^\n]*｜來源 PubMed＋被引用｜\[DOI\]\(https:\/\/doi\.org\/10\.5555\/pm1\) · \[PubMed\]/);
 	assert.match(list, /引用 1 篇核心文獻：Author1, 2021/);
-	assert.match(list, /Hand hygiene[^\n]*標題與摘要都沒有主題詞/);
+	assert.match(list, /Hand hygiene[^\n]*｜0 分：含排除詞：hygiene · 標題與摘要都沒有主題詞/);
+	// The Chinese databases with the card's Chinese terms, above the list
+	assert.match(note, /\n> \[!zm-links\] 中文文獻（機器人查不到，請自己查）\n> \[華藝線上圖書館\]\(https:\/\/www\.airitilibrary\.com\/\)（貼上 `住院長者 運動 跌倒`） · \[臺灣博碩士論文知識加值系統\]\([^)]+\)（貼上 `住院長者 運動 跌倒`） · \[Google Scholar\]\(https:\/\/scholar\.google\.com\/scholar\?hl=zh-TW&q=%E4%BD%8F[^)]*\)\n\n## 待看/);
 	assert.doesNotMatch(note, /A known paper/);
 	assert.ok(list.indexOf("Tai chi") < list.indexOf("Nurse-led") && list.indexOf("Nurse-led") < list.indexOf("Hand hygiene"));
 	// The requests: PubMed ESearch + EFetch, the seed lookup, the citing works since 30 days back
@@ -296,6 +298,8 @@ test("主題搜尋機器人: set up from the PICO card, run PubMed + citations, 
 	let bot = ZB.topicBot.botFor(collection);
 	assert.equal(bot.core[0].openalex, "W1", "the seed's OpenAlex ID is kept");
 	assert.equal(bot.lastPubmed, "2026-10-23T08:00:00.000Z");
+	// What the topic page, home page and progress report read
+	same([bot.path, bot.notePath, bot.stats, bot.exclude], ["跌倒", "Zotero/新文獻/跌倒 搜尋機器人", { pending: 3, high: 2, at: "2026-10-23T08:00:00.000Z" }, ["hygiene"]]);
 
 	// A day later: the scheduled run checks PubMed only (citations are weekly) and adds just the new paper
 	ZB.topicBot.runtime.now = () => new Date("2026-10-24T09:00:00Z");
@@ -318,6 +322,8 @@ test("主題搜尋機器人: set up from the PICO card, run PubMed + citations, 
 	// Import the ticked ones: tags, collection, ✅ 已匯入
 	let imported = await ZB.topicBot.importChecked(collection);
 	same(imported, { imported: 2, failed: [] });
+	let after = ZB.topicBot.botFor(collection);
+	same([after.imports, after.stats.pending], [[{ at: "2026-10-24T10:00:00.000Z", n: 2 }], 2]);
 	let items = collection.getChildItems().filter(i => /Tai chi|Nurse-led/.test(i.getField("title")));
 	assert.equal(items.length, 2);
 	let tags = Object.fromEntries(items.map(i => [/Tai chi/.test(i.getField("title")) ? "oa" : "pm", i.getTags().map(t => t.tag).sort()]));

@@ -508,12 +508,18 @@
 
 	function pubmedSection(p) {
 		let parts = ["## 新文獻追蹤"];
+		let bots = p.bots || [];
 		if (!p.days.length) {
-			parts.push("本期 PubMed 追蹤沒有匯入新文獻。");
-			return parts.join("\n\n");
+			if (!bots.length) parts.push("本期 PubMed 追蹤沒有匯入新文獻。");
 		}
-		parts.push(`PubMed 追蹤本期匯入 **${p.total}** 篇（勾選看過 ${p.checked} 篇）：`);
-		parts.push(p.days.map(d => `- ${link(d.link, d.date)}：${d.groups.map(g => `${g.name} ${g.total} 篇`).join("、")}`).join("\n"));
+		else {
+			parts.push(`PubMed 追蹤本期匯入 **${p.total}** 篇（勾選看過 ${p.checked} 篇）：`);
+			parts.push(p.days.map(d => `- ${link(d.link, d.date)}：${d.groups.map(g => `${g.name} ${g.total} 篇`).join("、")}`).join("\n"));
+		}
+		if (bots.length) {
+			parts.push(`主題搜尋機器人：本期匯入 **${bots.reduce((n, b) => n + b.imported, 0)}** 篇，清單上還有 ${bots.reduce((n, b) => n + b.pending, 0)} 篇待看：`);
+			parts.push(bots.map(b => `- ${link(b.link, b.path)}：匯入 ${b.imported} 篇，待看 ${b.pending} 篇${b.high ? `（⭐⭐⭐ ${b.high}）` : ""}`).join("\n"));
+		}
 		return parts.join("\n\n");
 	}
 
@@ -775,7 +781,14 @@ end
 			let delta = w.updated.reduce((t, d) => t + (d.wordsDelta || 0), 0);
 			cards.push(core.chartCard("寫作", [`本期更新 **${w.updated.length}**／${w.total} 份草稿`, delta ? `我的文字 ${signed(delta)} 字` : ""]));
 		}
-		if (on("pubmed") && facts.pubmed && facts.pubmed.total) cards.push(core.chartCard("新文獻追蹤", [`PubMed 匯入 **${facts.pubmed.total}** 篇`, `看過 ${facts.pubmed.checked} 篇`]));
+		let bots = (facts.pubmed && facts.pubmed.bots) || [];
+		if (on("pubmed") && facts.pubmed && (facts.pubmed.total || bots.length)) {
+			cards.push(core.chartCard("新文獻追蹤", [
+				facts.pubmed.total ? `PubMed 匯入 **${facts.pubmed.total}** 篇` : "",
+				facts.pubmed.total ? `看過 ${facts.pubmed.checked} 篇` : "",
+				bots.length ? `🤖 機器人匯入 **${bots.reduce((n, b) => n + b.imported, 0)}** 篇，待看 ${bots.reduce((n, b) => n + b.pending, 0)} 篇` : "",
+			].filter(Boolean)));
+		}
 		if (cards.length) parts.push(core.boardBlock("本期重點", cards));
 		return parts.join("\n\n");
 	}
@@ -1129,6 +1142,20 @@ end
 		return out.sort((a, b) => a.date.localeCompare(b.date));
 	}
 
+	/** The topic bots (topic-bot.js) with their imports in the period, while the switch is on; [] otherwise. */
+	function topicBots(period) {
+		let ZB = scope.ZB;
+		try {
+			if (!ZB || !ZB.topicBot || (ZB.features && !ZB.features.isEnabled("topicBot"))) return [];
+			return ZB.topicBot.botSummaries(ZB.topicBot.readBots(), at => inPeriod(at, period))
+				.filter(b => b.imported || b.pending);
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return [];
+		}
+	}
+
 	/**
 	 * Everything the report shows, read from the vault, the prefs and Zotero.
 	 * ctx: { period, previous: { date, link, path } | null, previousEntry, answer, currentNote }
@@ -1188,6 +1215,7 @@ end
 				days,
 				total: days.reduce((n, d) => n + d.groups.reduce((m, g) => m + g.total, 0), 0),
 				checked: days.reduce((n, d) => n + d.groups.reduce((m, g) => m + g.checked, 0), 0),
+				bots: topicBots(period),
 			},
 			goals: {
 				hasPrevious: !!ctx.previous,
