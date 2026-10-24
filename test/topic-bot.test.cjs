@@ -188,3 +188,52 @@ test("buildBotSection: the list is capped, unticked lowest scores drop off and a
 	assert.equal(built.dropped.length, 5);
 	assert.ok(built.dropped.every(k => many.find(c => c.key === k).rank.score <= 4));
 });
+
+test("排除詞: parsed from what the user types; a paper with one loses points, and the reason names the word", () => {
+	assert.deepEqual(bot.parseExclude("children, pediatric\nanimal、 rat；x"), ["children", "pediatric", "animal", "rat"]);
+	let profile = bot.profileFrom({ cardBlocks: CARD_BLOCKS });
+	let paper = { title: "Exercise and falls in hospitalized children", abstract: "Balance training for older adults and children.", year: "2026", pubTypes: ["Randomized Controlled Trial"] };
+	let plain = bot.scoreCandidate(paper, profile, { now: NOW });
+	let ex = bot.scoreCandidate(paper, profile, { now: NOW, exclude: ["children", "animal"] });
+	assert.equal(ex.score, Math.max(0, plain.score - bot.EXCLUDE_PENALTY));
+	assert.equal(ex.reasons[0], "含排除詞：children");
+	assert.deepEqual(ex.excluded, ["children"]);
+	assert.notEqual(ex.tier, "高");
+	// Whole words with plurals: "rat" is not "rate"; a trailing * takes every word it starts
+	assert.equal(bot.excludeHit("Fall rate in wards", "rat"), false);
+	assert.equal(bot.excludeHit("A study in rats", "rat"), true);
+	assert.equal(bot.excludeHit("Falls after childbirth", "child"), false);
+	assert.equal(bot.excludeHit("Falls in childhood", "child*"), true);
+	assert.deepEqual(bot.scoreCandidate({ title: "Falls in childhood" }, profile, { exclude: ["child*"] }).excluded, ["child"]);
+});
+
+test("中文文獻: the card's first Chinese term per element, links to the databases the bot can't search", () => {
+	assert.equal(bot.chineseQuery([{ terms: ["住院長者", "older adults"] }, { terms: ["exercise"] }, { terms: ["falls", "跌倒"] }]), "住院長者 跌倒");
+	assert.equal(bot.chineseQuery([{ terms: ["falls"] }]), "");
+	let row = bot.chineseRow({ query: "住院長者 跌倒", targets: [
+		{ name: "華藝線上圖書館", url: "https://www.airitilibrary.com/", copy: true, query: "住院長者 跌倒" },
+		{ name: "Google Scholar", url: "https://scholar.google.com/scholar?hl=zh-TW&q=%E4%BD%8F", copy: false, query: "住院長者 跌倒" },
+	] });
+	assert.equal(row, "> [!zm-links] 中文文獻（機器人查不到，請自己查）\n> [華藝線上圖書館](https://www.airitilibrary.com/)（貼上 `住院長者 跌倒`） · [Google Scholar](https://scholar.google.com/scholar?hl=zh-TW&q=%E4%BD%8F)");
+	assert.equal(bot.chineseRow(null), "");
+	// In the note, after the warnings and before the list
+	let built = bot.buildBotSection("", { at: NOW, counts: { pubmed: 0, citations: 0 }, candidates: [], chinese: { query: "跌倒", targets: [{ name: "華藝線上圖書館", url: "https://www.airitilibrary.com/", copy: true, query: "跌倒" }] } },
+		Object.assign({}, BOT, { exclude: ["children"] }), { layout: "board" });
+	assert.match(built.section, /> 排除詞（命中的扣 40 分）：children/);
+	assert.match(built.section, /\n\n> \[!zm-links\] 中文文獻[^\n]*\n> [^\n]*\n\n## 待看（0 篇）/);
+});
+
+test("botSummaries: what the topic page, home page and progress report read from the bots", () => {
+	let bots = {
+		a: { name: "跌倒", path: "碩論/跌倒", notePath: "Zotero/50 新文獻/跌倒 搜尋機器人", stats: { pending: 12, high: 3, at: "2026-10-23T08:00:00Z" },
+			imports: [{ at: "2026-10-01T00:00:00Z", n: 2 }, { at: "2026-10-20T00:00:00Z", n: 3 }] },
+		// Never run: no note yet
+		b: { name: "壓傷", path: "壓傷" },
+	};
+	assert.deepEqual(bot.botSummaries(bots, at => at >= "2026-10-10" && at <= "2026-10-24"), [
+		{ path: "碩論/跌倒", name: "跌倒", link: "Zotero/50 新文獻/跌倒 搜尋機器人", pending: 12, high: 3, imported: 3, at: "2026-10-23T08:00:00Z" },
+	]);
+	assert.equal(bot.botSummaries(bots)[0].imported, 5, "all imports without a period");
+	let n = bot.normalizeBot({ exclude: "children, rat", imports: [{ at: "x", n: 0 }, { at: "2026", n: 2 }] });
+	assert.deepEqual([n.exclude, n.imports], [["children", "rat"], [{ at: "2026", n: 2 }]]);
+});

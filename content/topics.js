@@ -431,6 +431,7 @@
 			meta.homeLink ? wikilink(meta.homeLink, `🏠 ${HOME_NAME}`) : "",
 			meta.dashboardLink ? wikilink(meta.dashboardLink, "📊 研究儀表板") : "",
 			meta.canvasLink ? wikilink(meta.canvasLink, "🗺️ 證據地圖") : "",
+			meta.bot ? wikilink(meta.bot.link, botLabel(meta.bot)) : "",
 		].filter(Boolean);
 		return [
 			dashboard.metaCallout(`🧭 ${topic.path} · ${s.total} 篇 · ${stamp(meta.now)} 更新`, [
@@ -450,13 +451,22 @@
 		].filter(Boolean).join("\n\n");
 	}
 
-	/** A topic page's managed region. meta: { now, layout, homeLink, dashboardLink, organized, canvasLink } */
+	/** 「🤖 搜尋機器人（待看 12 · ⭐⭐⭐ 3）」 for a topic-bot.js botSummaries() entry. */
+	function botLabel(b) {
+		return `🤖 搜尋機器人（待看 ${b.pending}${b.high ? ` · ⭐⭐⭐ ${b.high}` : ""}）`;
+	}
+
+	/**
+	 * A topic page's managed region. meta: { now, layout, homeLink, dashboardLink, organized, canvasLink,
+	 * bot: the collection's topic bot (topic-bot.js botSummaries()) }
+	 */
 	function topicSection(topic, s, meta = {}) {
 		if (meta.layout === "board") return boardTopic(topic, s, meta);
 		let links = [
 			meta.homeLink ? `← ${wikilink(meta.homeLink, HOME_NAME)}` : "",
 			meta.dashboardLink ? wikilink(meta.dashboardLink, "研究儀表板") : "",
 			meta.canvasLink ? `🗺️ ${wikilink(meta.canvasLink, "證據地圖（Canvas）")}` : "",
+			meta.bot ? wikilink(meta.bot.link, botLabel(meta.bot)) : "",
 		].filter(Boolean).join(" · ");
 		let info = [
 			`> [!info] 由 ZotMax 依 Zotero 分類「${topic.path}」的 ${s.total} 篇文獻筆記於 ${stamp(meta.now)} 產生；只讀筆記的 frontmatter，不連網、不呼叫 AI。`,
@@ -536,7 +546,7 @@
 				+ (meta.organized ? "，主題頁和那個分類的文獻在同一個資料夾。" : "；筆記本身沒有搬動。"),
 			"> 想一打開 Obsidian 就看到這頁：把它加入書籤（Bookmarks），或用 Homepage 外掛設成首頁。",
 		].join("\n");
-		let start = startHere(meta.records || [], { now: meta.now, layout: meta.layout });
+		let start = startHere(meta.records || [], { now: meta.now, layout: meta.layout, bots: meta.bots });
 		let overview = meta.layout === "board" && meta.stats ? dashboard.overviewBoard(meta.stats, { reviews: meta.reviews }) : "";
 		return [info, ...(start ? [start] : []), ...(overview ? [overview] : []), topicsBlock(meta.entries || [], meta.layout, meta.unfiled || 0), quickLinks(meta)].join("\n\n");
 	}
@@ -551,7 +561,7 @@
 				+ (meta.organized ? "，主題頁和那個分類的文獻在同一個資料夾。" : "；筆記本身沒有搬動。"),
 			"想一打開 Obsidian 就看到這頁：把它加入書籤（Bookmarks），或用 Homepage 外掛設成首頁。",
 		])];
-		let start = startHere(meta.records || [], { now: meta.now, layout: "board" });
+		let start = startHere(meta.records || [], { now: meta.now, layout: "board", bots: meta.bots });
 		if (start) parts.push(start);
 		if (meta.stats && meta.stats.total) parts.push(dashboard.overviewBoard(meta.stats, { reviews: meta.reviews, compact: true }));
 		parts.push(topicsBlock(meta.entries || [], "board", meta.unfiled || 0), quickLinkBar(meta));
@@ -590,13 +600,17 @@
 		let verify = live.filter(r => r.appraisal && !r.appraisalVerified && r.status !== "待讀").sort(newest);
 		let cutoff = now.getTime() - RECENT_DAYS * 86400000;
 		let recent = live.filter(r => Date.parse(r.dateAdded) >= cutoff).sort(newest);
+		// Topic bots with papers waiting, most high-scoring first
+		let bots = (opts.bots || []).filter(b => b.pending > 0).sort((a, b) => b.high - a.high || b.pending - a.pending || a.name.localeCompare(b.name, "zh-Hant"));
+		let botLine = b => `- ${wikilink(b.link, b.path)} · 待看 ${b.pending} 篇${b.high ? ` · ⭐⭐⭐ ${b.high}` : ""}`;
 		let groups = [
 			["zm-reading", `${readingTitle}（${reading.length}）`, reading],
 			["zm-appraisal", `待核對的評讀（${verify.length}）`, verify],
 			["zm-inbox", `最近 ${RECENT_DAYS} 天加入（${recent.length}）`, recent],
+			["zm-inbox", `🤖 搜尋機器人的新候選（${bots.reduce((n, b) => n + b.pending, 0)} 篇）`, bots, botLine],
 		].filter(([, , list]) => list.length);
 		if (!groups.length) return "";
-		let body = ([type, title, list]) => [...list.slice(0, START_ROWS).map(line), ...(list.length > START_ROWS ? [`- ……還有 ${list.length - START_ROWS} 篇`] : [])].join("\n");
+		let body = ([type, title, list, fmt]) => [...list.slice(0, START_ROWS).map(fmt || line), ...(list.length > START_ROWS ? [`- ……還有 ${list.length - START_ROWS} ${fmt ? "個" : "篇"}`] : [])].join("\n");
 		if (opts.layout !== "board") {
 			return ["## ▶️ 從這裡開始", ...groups.map(g => `**${g[1]}**\n${body(g)}`)].join("\n\n");
 		}
@@ -754,6 +768,8 @@
 		let entries = [];
 		let written = 0;
 		let done = new Set();
+		let bots = topicBots();
+		let botFor = path => bots.find(b => b.path === path) || null;
 		for (let { topic, file } of assignFiles(groupTopics(ctx.records))) {
 			let page = core.topicPage(settings, topic.path, file);
 			topic.link = [...page.dirParts, page.name].join("/");
@@ -783,7 +799,7 @@
 				}
 			}
 			let existing = await readIfExists(path);
-			let text = buildPage(existing, topicSection(topic, stats, { now, layout: ctx.layout, homeLink, dashboardLink, organized, canvasLink }), topic.name,
+			let text = buildPage(existing, topicSection(topic, stats, { now, layout: ctx.layout, homeLink, dashboardLink, organized, canvasLink, bot: botFor(topic.path) }), topic.name,
 				{ type: "topic", zotero_collection: topic.path, studies: stats.total, updated: now.toISOString() });
 			if (await writeIfChanged(path, text, existing)) written++;
 		}
@@ -806,13 +822,26 @@
 		let baseLink = (await IOUtils.exists(PathUtils.join(settings.vaultPath, ...systemParts, "Zotero 文獻庫.base"))) ? [...systemParts, "Zotero 文獻庫.base"].join("/") : "";
 		let section = homeSection({
 			now, layout: ctx.layout, stats: ctx.stats, entries, unfiled, reviews: ctx.reviews, dashboardLink, organized, records: ctx.records,
-			conceptIndex: await conceptIndexLink(settings), latestReport: ctx.latestReport, baseLink,
+			conceptIndex: await conceptIndexLink(settings), latestReport: ctx.latestReport, baseLink, bots,
 		});
 		let homePath = PathUtils.join(settings.vaultPath, ...folderParts, homeName + ".md");
 		let existing = await readIfExists(homePath);
 		let text = buildPage(existing, section, HOME_NAME, { type: "home", updated: now.toISOString() });
 		if (await writeIfChanged(homePath, text, existing)) written++;
 		return { home: rel(homeName + ".md"), topics: entries.length, written, organized };
+	}
+
+	/** The topic bots' summaries (topic-bot.js), while its switch is on; [] otherwise. */
+	function topicBots() {
+		let ZB = scope.ZB;
+		try {
+			if (!ZB || !ZB.topicBot || (ZB.features && !ZB.features.isEnabled("topicBot"))) return [];
+			return ZB.topicBot.botSummaries(ZB.topicBot.readBots());
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return [];
+		}
 	}
 
 	/** Every topic page there is: 主題/*.md (flat), or "00 … 總覽.md" anywhere under 10 文獻 (organized). */
