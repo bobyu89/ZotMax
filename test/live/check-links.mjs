@@ -29,6 +29,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const searchLinks = require(path.join(ROOT, "content", "search-links.js"));
 const pubmedWatch = require(path.join(ROOT, "content", "pubmed-watch.js"));
 const citationChase = require(path.join(ROOT, "content", "citation-chase.js"));
+const topicBot = require(path.join(ROOT, "content", "topic-bot.js"));
 
 const args = process.argv.slice(2);
 const flag = name => args.includes(name);
@@ -841,6 +842,20 @@ async function runNCBI(report) {
 		note(`record keys: ${Object.keys(d).join(", ")}`);
 	});
 
+	await s.check(`efetch db=pubmed retmode=xml (主題搜尋機器人: parseEFetch on PMID ${TEST_PMID})`, async ({ note }) => {
+		let r = await fetchTrace(pubmedWatch.eutilsURL("efetch", { db: "pubmed", id: TEST_PMID, retmode: "xml" }, ncbi), { accept: "application/xml" });
+		expect(r.status === 200 && /<PubmedArticleSet/.test(r.body), `HTTP ${r.status}`);
+		let [a] = topicBot.parseEFetch(r.body);
+		expect(a && a.pmid === TEST_PMID, "no PubmedArticle parsed");
+		expect(/nurse staffing/i.test(a.title), `title ${a.title}`);
+		expect(a.abstract.length > 200, `abstract ${a.abstract.length} chars`);
+		expect(a.doi === TEST_DOI, `doi ${a.doi}`);
+		expect(a.year === "2002", `year ${a.year}`);
+		expect(a.pubTypes.includes("Journal Article"), `publication types ${a.pubTypes.join(", ")}`);
+		expect(a.mesh.length > 3, `MeSH ${a.mesh.length}`);
+		note(`${a.journal} ${a.year}; ${a.pubTypes.join(", ")}; MeSH ${a.mesh.slice(0, 4).join(", ")}…; abstract ${a.abstract.slice(0, 80)}…`);
+	});
+
 	let meshIds = [];
 	await s.check("esearch db=mesh (MeSH helper)", async ({ note }) => {
 		let r = await getJSON(pubmedWatch.eutilsURL("esearch", { db: "mesh", term: "accidental falls", retmode: "json", retmax: 5 }, ncbi));
@@ -948,9 +963,14 @@ async function runOpenAlex(report) {
 		firstPage = r.json;
 	});
 
-	await s.check("cursor paging (meta.next_cursor → page 2 has different works)", async ({ note }) => {
+	await s.check("cursor paging (meta.next_cursor → page 2 has different works)", async ({ note, warn }) => {
 		expect(firstPage && firstPage.meta.next_cursor, "no next_cursor on page 1 (fewer than one page of references?)");
 		let r = await getJSON(SEED.listURL(`cited_by:${key()}`, firstPage.meta.next_cursor, { email: CONTACT, perPage: 10 }));
+		// Since 2026-10 OpenAlex refuses deeper pages without a key; listWorks keeps page 1 then (checked below)
+		if (r.status === 401 || r.status === 403) {
+			warn(`page 2 refused (HTTP ${r.status}) — without an API key a list stops at its first page (200 works)`);
+			return;
+		}
 		expect(r.status === 200 && r.json, `HTTP ${r.status}`);
 		let ids1 = new Set(firstPage.results.map(w => w.id));
 		let overlap = r.json.results.filter(w => ids1.has(w.id)).length;
@@ -989,6 +1009,30 @@ async function runOpenAlex(report) {
 		let pm = cands.filter(c => c.pmid).length;
 		note(`${cands.length} candidates: ${titles} with title, ${journals} with journal, ${pm} with PMID`);
 		expect(titles === cands.length, "candidates without a title");
+	});
+
+	await s.check("主題搜尋機器人: citing works since a date (filter=cites:W…,from_publication_date, sort=publication_date:desc, abstract_inverted_index)", async ({ note }) => {
+		let since = new Date(Date.now() - 365 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+		let r = await getJSON(topicBot.citingURL(key(), since, { email: CONTACT, perPage: 25 }));
+		expect(r.status === 200 && r.json && Array.isArray(r.json.results), `HTTP ${r.status} ${String(r.body).slice(0, 200)}`);
+		let works = r.json.results;
+		expect(works.length > 0, "no citing works in the last year");
+		let dates = works.map(w => w.publication_date).filter(Boolean);
+		expect(dates.every(d => d >= since), `a work before ${since}: ${dates.find(d => d < since)}`);
+		expect(dates.every((d, i) => i === 0 || dates[i - 1] >= d), "not newest first");
+		let withAbstract = works.filter(w => w.abstract_inverted_index);
+		let rec = topicBot.openAlexRecord(withAbstract[0] || works[0]);
+		note(`${r.json.meta.count} citing works since ${since}; ${withAbstract.length}/${works.length} with an abstract; newest ${dates[0]}: ${rec.title.slice(0, 60)}`);
+		if (withAbstract.length) expect(rec.abstract.split(" ").length > 20, `abstract ${rec.abstract.slice(0, 80)}`);
+	});
+
+	await s.check("listWorks() past one page keeps what it got (cap 250 on citing works)", async ({ note, warn }) => {
+		let client = new citationChase.OpenAlexClient({ fetch: (u, init) => fetch(u, init), email: CONTACT, maxRequests: 3 });
+		let list = await citationChase.listWorks(client, `cites:${key()}`, 250);
+		note(`${list.works.length} of ${list.total} works in ${client.requests} requests${list.cut ? `; cut: ${list.cut}` : ""}`);
+		expect(list.works.length >= 200, `${list.works.length} works`);
+		if (list.cut) warn(`stopped after page 1: ${list.cut}`);
+		else expect(list.works.length === 250, `${list.works.length} works without a cut`);
 	});
 }
 

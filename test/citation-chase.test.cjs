@@ -100,6 +100,27 @@ test("paging: cursor pages up to the per-study cap, most cited first", async () 
 	assert.equal(api2.log.length, 1);
 });
 
+test("paging: a refused later page (HTTP 401) keeps the first page; the run goes on", async () => {
+	let citing = Array.from({ length: 450 }, (_, i) => work(1000 + i));
+	let refused = (url) => /cursor=p\d/.test(url) ? { status: 401, ok: false, headers: { get: () => null }, text: async () => "{}" } : undefined;
+	let api = openAlexMock({ works: [work(1, { cited_by_count: 450 })], citing: { W1: citing } }, { fail: refused });
+	let list = await cc.listWorks(client(api.fetch), "cites:W1", 300);
+	assert.deepEqual([list.works.length, list.total, list.capped, list.stopped], [200, 450, true, ""]);
+	assert.match(list.cut, /OpenAlex 回應 401（OpenAlex 拒絕這個請求，可能需要 API key）/);
+	// The first page refused: the list fails as before
+	let first = openAlexMock({ citing: { W1: citing } }, { fail: (url) => /cursor=\*/.test(url) ? refused("cursor=p1") : undefined });
+	await assert.rejects(cc.listWorks(client(first.fetch), "cites:W1", 300), /OpenAlex 回應 401/);
+	// chase(): the seed is partly done with the reason, the next seed is still queried
+	let api2 = openAlexMock({ works: [work(1, { cited_by_count: 450 }), work(2, { cited_by_count: 1 })], citing: { W1: citing, W2: [work(30)] } }, { fail: refused });
+	let seeds = [{ id: "a", label: "A", doi: "10.5555/w1" }, { id: "b", label: "B", doi: "10.5555/w2" }];
+	let run = await cc.chase(seeds, { client: client(api2.fetch), direction: "forward", maxPerSeed: 300 });
+	assert.match(run.reports[0].status, /^部分完成：→ 被引用只取到前 200 篇（OpenAlex 回應 401/);
+	assert.deepEqual(run.reports[0].forward, { found: 200, total: 450, capped: true });
+	assert.equal(run.reports[1].status, "完成");
+	assert.equal(run.stopped, "");
+	assert.equal(run.hits.length, 201);
+});
+
 test("chase: both directions per seed, skips empty lists, reports missing IDs and the request cap", async () => {
 	let w1 = work(1, { referenced_works: ["https://openalex.org/W11", "https://openalex.org/W12"], cited_by_count: 1 });
 	let w2 = work(2, { doi: null, ids: { openalex: "https://openalex.org/W2", pmid: "https://pubmed.ncbi.nlm.nih.gov/222" }, cited_by_count: 0 });

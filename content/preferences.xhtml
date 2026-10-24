@@ -374,6 +374,11 @@
 				<html:input type="text" preference="extensions.zotero-bridge.citationChase.maxPerSeed" placeholder="200" size="5"/>
 			</hbox>
 		</groupbox>
+		<groupbox data-zb-section="topicBot" data-zb-feature="topicBot">
+			<label data-search-strings-raw="topic search bot, alert, new papers, PubMed, OpenAlex, cited by, 主題搜尋機器人, 機器人, 新文獻, 自動搜尋"><html:h2>主題搜尋機器人</html:h2></label>
+			<description>在主題分類上按右鍵 → ZotMax ▸ 主題搜尋機器人：建立或修改，存好檢索式（預設取自 PICO 問題卡）和核心文獻。機器人每天查 PubMed、每週查引用核心文獻的新研究，依你的 PICO 排序並寫出理由，列在 Obsidian「新文獻」資料夾的「&lt;分類&gt; 搜尋機器人」清單；你勾選後按「匯入主題搜尋機器人勾選的文獻」才會進 Zotero。不用 AI；PubMed 用上面「NCBI（PubMed）連線」的 Email 與 API key，OpenAlex 用引文追蹤的 Email。</description>
+			<checkbox preference="extensions.zotero-bridge.topicBot.autoRun" label="Zotero 開著時自動搜尋（啟動 3 分鐘後，之後每小時檢查一次是否到期）"/>
+		</groupbox>
 	</vbox>
 
 	<vbox id="zb-panel-appraise" class="zb-panel" role="tabpanel" data-zb-tab="appraise" aria-labelledby="zb-tab-appraise">

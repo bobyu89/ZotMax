@@ -31,7 +31,7 @@
 	const SNIPPET = "zotmax";
 	const FILE_NAME = `${SNIPPET}.css`;
 	// Bumped whenever the CSS changes, so installed copies are refreshed on the next sync
-	const VERSION = 8;
+	const VERSION = 10;
 	const HEADER_RE = /^\/\* ZotMax 看板樣式 v(\d+)\b/;
 
 	/**
@@ -83,7 +83,11 @@
 		"evidence_csv", "studies", "studies_without_data", "outcomes", "certainty", "cssclasses",
 		// 文獻比較, 文獻探討草稿, 進度報告, 引文追蹤 and 整理紀錄
 		"scope", "sources", "citekeys", "generated_at", "model", "ai_model", "ai_generated", "date", "period_start", "period_end",
-		"previous_report", "moved", "chase_candidates", "chase_new", "chase_seeds", "candidates_csv", "openalex_requests"];
+		"previous_report", "moved", "chase_candidates", "chase_new", "chase_seeds", "candidates_csv", "openalex_requests",
+		// 評讀總表
+		"appraisal_verified", "appraisal_unverified", "appraisal_csv", "appraisal_word",
+		// 主題搜尋機器人
+		"bot_query", "bot_new", "bot_pending"];
 	const REVIEW_PREFIXES = ["prisma_", "pico_", "grade_"];
 
 	function header() {

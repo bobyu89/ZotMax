@@ -170,7 +170,7 @@
 				if (error) throw new Error(`無法連線到 OpenAlex：${error.message || error}`);
 				if (res.status === 404) return null;
 				if (!res.ok) {
-					let hint = res.status === 429 ? "（請求太頻繁或超過每日額度，請稍後再試）" : "";
+					let hint = res.status === 429 ? "（請求太頻繁或超過每日額度，請稍後再試）" : res.status === 401 || res.status === 403 ? "（OpenAlex 拒絕這個請求，可能需要 API key）" : "";
 					throw new Error(`OpenAlex 回應 ${res.status}${hint}`);
 				}
 				let text = await res.text();
@@ -186,21 +186,25 @@
 
 	/**
 	 * Up to `cap` works of a list, following meta.next_cursor. When the run's request cap is reached
-	 * after the first page, the pages so far are kept and `stopped` says why.
+	 * after the first page, the pages so far are kept and `stopped` says why (the run stops). Any
+	 * other failure after the first page (OpenAlex refuses deeper pages without a key: HTTP 401) keeps
+	 * the pages so far too, and `cut` says why; the run goes on.
 	 */
 	async function listWorks(client, filter, cap) {
 		let works = [];
 		let total = null;
 		let cursor = "*";
 		let stopped = "";
+		let cut = "";
 		while (works.length < cap) {
 			let json;
 			try {
 				json = await client.get(listURL(filter, cursor, { email: client.email, perPage: Math.min(PER_PAGE, cap) }));
 			}
 			catch (e) {
-				if (!(e instanceof RequestCapError) || !works.length) throw e;
-				stopped = e.message;
+				if (!works.length) throw e;
+				if (e instanceof RequestCapError) stopped = e.message;
+				else cut = e.message || String(e);
 				break;
 			}
 			if (!json) break;
@@ -210,8 +214,8 @@
 			cursor = json.meta && json.meta.next_cursor;
 			if (!cursor || !results.length) break;
 		}
-		let capped = works.length > cap || (total !== null && total > works.length && (works.length >= cap || !!stopped));
-		return { works: works.slice(0, cap), total: total === null ? works.length : total, capped, stopped };
+		let capped = works.length > cap || (total !== null && total > works.length && (works.length >= cap || !!stopped || !!cut));
+		return { works: works.slice(0, cap), total: total === null ? works.length : total, capped, stopped, cut };
 	}
 
 	/**
@@ -230,6 +234,7 @@
 		let stopped = "";
 		for (let [i, seed] of seeds.entries()) {
 			let report = { seed, status: "", openalex: "", backward: null, forward: null };
+			let cuts = [];
 			reports.push(report);
 			if (stopped) {
 				report.status = "未查詢（已達請求上限）";
@@ -260,13 +265,14 @@
 					}
 					let list = await listWorks(client, filter, cap);
 					report[direction] = { found: list.works.length, total: list.total, capped: list.capped };
+					if (list.cut) cuts.push(`${DIRECTIONS[direction]}只取到前 ${list.works.length} 篇（${list.cut}）`);
 					for (let w of list.works) hits.push({ work: w, direction, seed });
 					if (list.stopped) {
 						stopped = list.stopped;
 						break;
 					}
 				}
-				report.status = stopped ? "部分完成（已達請求上限）" : "完成";
+				report.status = stopped ? "部分完成（已達請求上限）" : cuts.length ? `部分完成：${cuts.join("；")}` : "完成";
 			}
 			catch (e) {
 				if (e instanceof RequestCapError) {
@@ -910,5 +916,7 @@
 		libraryIndex, buildCandidates, candidateKey, doiURL, candidateLine, candidateTable, buildChaseSection, buildChaseCSV, frontmatterFor,
 		parseChecked, markImported,
 		config, chaseCollection, chaseItems, importChecked,
+		// shared with topic-bot.js
+		itemIdentity, libraryRecords, translateIdentifier,
 	};
 });

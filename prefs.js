@@ -109,6 +109,8 @@ pref("extensions.zotero-bridge.citationChase.email", "");
 pref("extensions.zotero-bridge.citationChase.maxRequests", "100");
 pref("extensions.zotero-bridge.citationChase.maxPerSeed", "200");
 pref("extensions.zotero-bridge.citationChase.direction", "both");
+pref("extensions.zotero-bridge.topicBot.bots", "{}");
+pref("extensions.zotero-bridge.topicBot.autoRun", true);
 // Medical-literature search links (content/search-links.js): source order and hidden sources
 // (comma-separated IDs), custom sources (JSON array of { name, url with {q}, needsAccess }), the
 // library proxy prefix (EZproxy, only for sources that need institutional access) and sources it
@@ -139,6 +141,7 @@ pref("extensions.zotero-bridge.feature.fullTextMarkdown", true);
 pref("extensions.zotero-bridge.feature.searchLinks", true);
 pref("extensions.zotero-bridge.feature.pubmedWatch", false);
 pref("extensions.zotero-bridge.feature.citationChase", false);
+pref("extensions.zotero-bridge.feature.topicBot", false);
 pref("extensions.zotero-bridge.feature.screening", true);
 pref("extensions.zotero-bridge.feature.appraisalForm", true);
 pref("extensions.zotero-bridge.feature.synthesis", false);

@@ -337,11 +337,52 @@
 	}
 
 	/**
+	 * The scored items most often answered 否 or 不清楚, across the studies appraised with each tool:
+	 * [{ tool, item, weak, answered }], most weak first (items no study had a problem with are left out).
+	 */
+	function weakItems(entries) {
+		let out = [];
+		for (let g of byTool(entries)) {
+			for (let item of g.tool.items.filter(i => !i.open)) {
+				let answers = g.entries.map(e => tools.normalizeAnswers(e.record.answers)[item.id]).map(a => a && a.answer).filter(a => a && a !== "不適用");
+				let weak = answers.filter(a => a === "否" || a === "不清楚").length;
+				if (weak) out.push({ tool: g.tool, item, weak, answered: answers.length });
+			}
+		}
+		return out.sort((a, b) => b.weak - a.weak || b.weak / b.answered - a.weak / a.answered);
+	}
+
+	/** 看板: 評讀概況 as cards — studies, verification, verdicts, κ — and the items most studies fall short on. */
+	function summaryBoard(entries, meta) {
+		let c = counts(entries);
+		let groups = byTool(entries);
+		// "CASP 隨機對照試驗評讀表（2024 版）" → "CASP 隨機對照試驗評讀表"
+		let short = tool => String(tool.nameZh || tool.name).replace(/\s*[（(][^）)]*[）)]\s*$/, "");
+		let cards = [
+			core.kpiCard("文獻", `${c.total} 篇`, groups.length === 1 ? `${short(groups[0].tool)}` : groups.length ? `用了 ${groups.length} 種評讀工具` : "", c.none ? `沒有評讀資料 ${c.none} 篇` : ""),
+			core.kpiCard("已核對", `${c.verified}／${c.appraised} 篇`, c.appraised ? core.bar(c.verified, c.appraised) : "", c.unverified ? `AI 初評或評讀中 ${c.unverified} 篇` : c.appraised ? "全部核對完成" : ""),
+		];
+		let ag = agreement(entries);
+		if (ag.rows.length) cards.push(core.kpiCard("雙人一致性", ag.overall.kappa === null ? "κ —" : `κ ${ag.overall.kappa.toFixed(2)}`, tools.kappaLabel(ag.overall.kappa), `${ag.rows.length} 篇雙人評讀，不一致 ${ag.disagreements.length} 題`));
+		if (c.appraised) cards.push(core.chartCard("整體評價", core.barRows(tools.VERDICTS.map(v => [v, c.verdicts[v]]), 3)));
+		let weak = weakItems(entries).slice(0, 5);
+		if (weak.length) {
+			cards.push(core.chartCard("常見弱點（否／不清楚）", weak.map(w => {
+				let text = w.item.text.length > 22 ? w.item.text.slice(0, 21) + "…" : w.item.text;
+				return `${groups.length > 1 ? `${short(w.tool)} ` : ""}${w.item.id}. ${text} ${core.bar(w.weak, w.answered, 6)} ${w.weak}／${w.answered}`;
+			}), true));
+		}
+		return core.boardBlock("評讀概況", cards);
+	}
+
+	/**
 	 * The summary's content. entries: [{ citation, title, link, record (or null), source: "form"|"ai"|"none" }].
-	 * opts.word: Word/Pandoc version (no callouts, wikilinks or emoji); meta: { name, generatedAt, uri, paths }
+	 * opts.word: Word/Pandoc version (no callouts, wikilinks or emoji); opts.layout "board": cards first,
+	 * the per-study forms and the rest folded; meta: { name, generatedAt, uri, paths }
 	 */
 	function summaryBody(entries, meta, opts = {}) {
 		let word = !!opts.word;
+		if (!word && opts.layout === "board") return boardSummaryBody(entries, meta);
 		let c = counts(entries);
 		let label = e => (!word && e.link ? `[[${e.link}\\|${cell(e.citation)}]]` : cell(e.citation));
 		let out = [];
@@ -419,6 +460,50 @@
 		return out.join("\n\n");
 	}
 
+	/** 看板 version of summaryBody: the folded meta, 評讀概況, the traffic lights open, the rest folded. */
+	function boardSummaryBody(entries, meta) {
+		let c = counts(entries);
+		let label = e => (e.link ? `[[${e.link}\\|${cell(e.citation)}]]` : cell(e.citation));
+		let out = [core.metaFold(`🧭 評讀總表 · ${meta.name} · ${c.total} 篇 · ${String(meta.generatedAt || "").slice(0, 10)} 產生`, [
+			`由 ZotMax 依分類「${meta.name}」的文獻產生；重新產生只會覆寫這個區塊。`,
+			meta.uri ? `Zotero：[開啟分類](${meta.uri})` + (meta.paths ? ` · CSV：\`${meta.paths.csv}\` · Word 版：\`${meta.paths.word}\`` : "") : "",
+			"「AI 初評」是 AI 筆記的評讀結果，尚未經研究者核對；請在 Zotero 條目窗格的文獻評讀表逐題確認後勾選「我已核對」。",
+		].filter(Boolean)), summaryBoard(entries, meta)];
+		let groups = byTool(entries);
+		out.push("## 評讀燈號總表", tools.legend({ plain: false }));
+		if (!groups.length) out.push("（還沒有任何評讀資料）");
+		for (let g of groups) {
+			out.push(`### ${g.tool.name}（${g.entries.length} 篇）`);
+			out.push(tools.trafficLightMatrix(g.tool, g.entries.map(e => ({
+				label: e.link ? `[[${e.link}|${e.citation}]]` : e.citation,
+				answers: e.record.answers, overall: e.record.overall, verified: e.record.verified,
+			})), { plain: false }));
+			out.push(`> [!zm-meta]- 題號對照\n> ${itemKey(g.tool)}`);
+		}
+		let forms = entries.filter(x => x.record);
+		if (forms.length) {
+			out.push(core.foldBlock(`各篇評讀表（${forms.length} 篇）`, forms.map(e => {
+				let tool = tools.getTool(e.record.tool);
+				return [`**${label(e)}** · ${statusText(e.record)}｜${tool.name}｜${tools.describeSummary(tools.summarize(tool, e.record.answers))}`,
+					tools.toMarkdownTable(tool, e.record.answers), `**整體評價**：${overallLine(e.record)}`].join("\n\n");
+			}).join("\n\n")));
+		}
+		let ag = agreement(entries);
+		if (ag.rows.length) {
+			let head = "| 文獻 | 評讀工具 | 雙方作答題數 | 一致題數 | 一致率 | κ | 解讀 |";
+			out.push(core.foldBlock("雙人評讀一致性（Cohen's κ）", [KAPPA_FORMULA, [head, "|---|---|---:|---:|---:|---:|---|",
+				...ag.rows.map(r => `| ${label(r.entry)} | ${cell(r.tool.name)} | ${kappaCells(r.kappa).join(" | ")} |`),
+				`| **合計** |  | ${kappaCells(ag.overall).join(" | ")} |`].join("\n"), "**不一致的題目**",
+			ag.disagreements.length ? ag.disagreements.map(d => `- ${label(d.entry)}：${d.id}. ${d.text}（A ${d.a}／B ${d.b}）`).join("\n") : "- 兩位評讀者的答案完全一致。"].join("\n\n")));
+		}
+		let none = entries.filter(e => !e.record);
+		if (none.length) out.push(core.foldBlock(`沒有評讀資料的文獻（${none.length}）`, none.map(e => `- ${label(e)}`).join("\n") + "\n\n先產生 AI 筆記（含嚴格評讀），或在條目窗格的文獻評讀表自行評讀。"));
+		if (meta.paths) {
+			out.push(core.foldBlock("轉成 Word（Pandoc）", [`在 \`${meta.paths.dirParts.join("/")}\` 資料夾開啟終端機執行，把 Word 版轉成 .docx：`, "", "```bash", meta.paths.command, "```"].join("\n")));
+		}
+		return out.join("\n\n");
+	}
+
 	/** CSV (UTF-8 BOM): one row per study × item. */
 	function summaryCSV(entries) {
 		let rows = [];
@@ -466,7 +551,8 @@
 	function buildSummaryNote(existing, fm, title, section) {
 		let block = `${core.MARK_START}\n\n${section}\n\n${core.MARK_END}`;
 		if (!existing) {
-			return core.buildFrontmatter(Object.assign({}, fm, { tags: ["文獻評讀"] }), null)
+			let { cssclasses, ...rest } = fm;
+			return core.buildFrontmatter(Object.assign(rest, { tags: ["文獻評讀"], cssclasses }), null)
 				+ `\n# ${title}\n\n${block}\n\n## ${USER_HEADING}\n\n`;
 		}
 		let { frontmatter, body } = core.splitFrontmatter(existing);
@@ -1020,7 +1106,12 @@
 				paths: target.paths,
 			};
 			await IOUtils.makeDirectory(target.dir, { createAncestors: true, ignoreExisting: true });
-			let text = buildSummaryNote(target.existing, summaryFrontmatter(entries, meta), meta.title, summaryBody(entries, meta));
+			let layout = core.layoutPref();
+			let fm = summaryFrontmatter(entries, meta);
+			let classes = core.pageClasses(target.existing ? core.splitFrontmatter(target.existing).frontmatter : "", layout === "board" ? [core.NOTE_CLASS, core.REVIEW_CLASS] : []);
+			if (classes) fm.cssclasses = classes;
+			else if (target.existing && /^cssclasses:/m.test(core.splitFrontmatter(target.existing).frontmatter || "")) fm.cssclasses = [];
+			let text = buildSummaryNote(target.existing, fm, meta.title, summaryBody(entries, meta, { layout }));
 			if (text !== target.existing) await IOUtils.writeUTF8(target.path, text);
 			await IOUtils.writeUTF8(PathUtils.join(target.dir, target.paths.csv), summaryCSV(entries));
 			await IOUtils.writeUTF8(PathUtils.join(target.dir, target.paths.word), wordDocument(entries, meta));
@@ -1057,7 +1148,7 @@
 		// pure
 		hasContent, statusOf, statusText, prefill, mergeAI, noteHTML, readNoteHTML, sectionMarkdown, recordFor, syncInfo, boardInfo,
 		overrideStudy,
-		summaryPaths, counts, agreement, summaryBody, summaryCSV, summaryFrontmatter, buildSummaryNote, wordDocument,
+		summaryPaths, counts, agreement, weakItems, summaryBoard, summaryBody, summaryCSV, summaryFrontmatter, buildSummaryNote, wordDocument,
 		// Zotero
 		getFormNote, loadRecord, initialRecord, saveRecord, stateFor, renderPaneRow, paneSummary, insertNotionTable, overrideStudyForItem,
 		exportSummary, exportCollections,

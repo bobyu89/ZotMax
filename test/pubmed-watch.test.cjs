@@ -173,3 +173,28 @@ test("buildDigestNote creates the day's note, then merges new papers and keeps c
 	assert.ok(bare.startsWith("# 我的清單\n\n手寫內容\n\n%% zotero-bridge:start"));
 	assert.ok(bare.includes("## 壓傷\n\n- [ ] **Paper 5**"));
 });
+
+test("buildDigestNote (看板): the day's papers as cards above the lists, which stay open to tick", () => {
+	let entry = (pmid, extra = {}) => Object.assign({ pmid, title: `Paper ${pmid}`, journal: "J Nurs", year: "2026", doi: "" }, extra);
+	let opts = { layout: "board" };
+	let note = pw.buildDigestNote(null, "2026-10-08", [
+		{ name: "跌倒預防", entries: [entry("1"), entry("2", { journal: "BMJ" }), entry("3")] },
+		{ name: "壓傷", entries: [entry("4", { journal: "" })] },
+	], opts);
+	assert.match(note, /\ntags:\n {2}- "新文獻"\ncssclasses:\n {2}- "zotmax-note"\n {2}- "zm-review"\n---\n/);
+	assert.match(note, /%%\n\n> \[!zm-board\] 今日新文獻\n> > \[!zm-kpi\] 新文獻\n> > \*\*4 篇\*\* {2}\n> > 來自 2 個追蹤\n>\n> > \[!zm-chart\] 依追蹤\n> > 跌倒預防 ▰▰▰▰▰▰▰▰▰▰ 3 {2}\n> > 壓傷 ▰▰▰▱▱▱▱▱▱▱ 1\n>\n> > \[!zm-chart\] 期刊（前 5）\n> > J Nurs ▰▰▰▰▰▰ 2 {2}\n> > BMJ ▰▰▰▱▱▱ 1\n\n## 跌倒預防\n\n- \[ \] \*\*Paper 1\*\*/);
+	// A later check the same day: the cards count every paper of the day, ticks kept, rebuilt the same way
+	let ticked = note.replace("- [ ] **Paper 1**", "- [x] **Paper 1**");
+	let merged = pw.buildDigestNote(ticked, "2026-10-08", [{ name: "壓傷", entries: [entry("5")] }], opts);
+	assert.match(merged, /> > \*\*5 篇\*\* {2}\n> > 來自 2 個追蹤/);
+	assert.match(merged, /> > 壓傷 ▰+▱* 2/);
+	assert.equal(merged.match(/\[!zm-board\]/g).length, 1);
+	assert.ok(merged.includes("- [x] **Paper 1**"));
+	assert.equal(pw.buildDigestNote(merged, "2026-10-08", [{ name: "壓傷", entries: [entry("5")] }], opts), merged);
+	// The progress report still reads the ticks under each watch
+	const pr = require("../content/progress-report.js");
+	assert.deepEqual(pr.digestSummary(merged), [{ name: "跌倒預防", total: 3, checked: 1 }, { name: "壓傷", total: 2, checked: 0 }]);
+	// Classic: no cards, no classes
+	let classic = pw.buildDigestNote(null, "2026-10-08", [{ name: "壓傷", entries: [entry("4")] }]);
+	assert.doesNotMatch(classic, /zm-board|cssclasses/);
+});
