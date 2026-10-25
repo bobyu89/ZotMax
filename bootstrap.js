@@ -8,7 +8,7 @@ var ZB;
 // content/manual-ai.xhtml)
 var chromeHandle = null;
 
-const SCRIPTS = ["apa-zh.js", "appraisal-tools.js", "core.js", "markdown.js", "notion.js", "llm.js", "synthesis.js", "verify.js", "fulltext-md.js", "scanned.js", "usage.js", "secrets.js", "zotero-adapter.js", "fulltext.js", "export.js", "annotation-images.js", "status.js", "review-draft.js", "screening.js", "pubmed-watch.js", "dashboard.js", "citation-chase.js", "topic-bot.js", "search-links.js", "ai-batch.js", "appraisal-coach.js", "appraisal-form.js", "pico.js", "grade.js", "progress-report.js", "concepts.js", "topics.js", "vault-layout.js", "manual-ai.js", "classify.js", "zh-meta.js", "word-style.js", "stats-explainer.js", "gemini-export.js", "obsidian-style.js", "features.js", "commands.js", "menus.js", "palette.js", "setup.js", "report.js", "toolbar.js", "sidepanel.js", "main.js"];
+const SCRIPTS = ["apa-zh.js", "appraisal-tools.js", "core.js", "markdown.js", "notion.js", "llm.js", "synthesis.js", "verify.js", "fulltext-md.js", "scanned.js", "usage.js", "secrets.js", "zotero-adapter.js", "fulltext.js", "export.js", "annotation-images.js", "status.js", "review-draft.js", "screening.js", "pubmed-watch.js", "dashboard.js", "citation-chase.js", "topic-bot.js", "search-links.js", "ai-batch.js", "appraisal-coach.js", "appraisal-form.js", "pico.js", "grade.js", "progress-report.js", "concepts.js", "planet.js", "topics.js", "vault-layout.js", "manual-ai.js", "classify.js", "zh-meta.js", "word-style.js", "stats-explainer.js", "gemini-export.js", "obsidian-style.js", "features.js", "commands.js", "menus.js", "palette.js", "setup.js", "report.js", "toolbar.js", "sidepanel.js", "main.js"];
 
 function install() {}
 

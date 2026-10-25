@@ -325,6 +325,11 @@
 			features: ["dashboard"], needs: null, menus: [],
 			keywords: ["儀表板", "dashboard", "進度", "progress", "待讀", "統計", "statistics", "obsidian"],
 			run: () => ZB().dashboard.runFromMenu() },
+		// 星球與島嶼 (planet.js): the selected collection's planet, or the planet the collection is an island of
+		{ id: "planet-map", group: "organize", l10n: "zotero-bridge-cmd-planet-map", label: "開啟群島地圖（目前分類）",
+			features: ["dashboard"], needs: null, menus: ["collection"],
+			keywords: ["星球", "島嶼", "群島", "地圖", "planet", "island", "map", "開發度", "進度", "缺口", "子分類", "obsidian"],
+			run: sel => ZB().planet.openForCollection(targetCollections(sel)[0] || null) },
 		// 整理 vault 資料夾 (vault-layout.js): the flat layout moved to 10 文獻/<collection> and the numbered folders
 		{ id: "vault-layout", group: "organize", l10n: "zotero-bridge-cmd-vault-layout", label: "整理 Obsidian 資料夾結構…",
 			features: [], needs: null, menus: [],

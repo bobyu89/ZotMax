@@ -1830,6 +1830,8 @@
 		ZB.statsExplainer.init({ pluginID });
 		// 設定精靈 (setup.js): opens by itself once on a fresh profile, after the main window is ready
 		ZB.setup.init({ reason: opts.reason });
+		// 群島地圖 (planet.js): reads its HTML template from the add-on
+		ZB.planet.init({ rootURI, chrome: !!opts.chrome });
 		// Word 中文 APA 樣式 (word-style.js): refreshes the styles installed earlier when this version bundles newer ones
 		try {
 			ZB.wordStyle.init({ rootURI, chrome: !!opts.chrome });

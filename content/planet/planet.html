@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>群島地圖</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
+<!--
+  ZotMax 星球地圖 (content/planet.js writes this file with the data below filled in).
+  One Zotero collection is the planet; its sub-collections are the islands. Everything is drawn on a
+  canvas from window.PLANET; no network is needed apart from the fonts (system fonts stand in offline).
+-->
+<style>
+/* Layout: the island map takes the middle, the chosen island on the left, the island log on the right, the tour below */
+:root {
+  --bg: #e6f4f1;
+  --panel: #ffffff;
+  --panel-2: #f2f8f6;
+  --ink: #213439;
+  --muted: #637a7f;
+  --line: #d9e8e4;
+  --accent: #7a6be0;
+  --accent-soft: #eeebff;
+  --good: #3c9d6a;
+  --warn: #d6843a;
+  --shadow: 0 10px 30px rgba(38, 78, 78, .12), 0 2px 6px rgba(38, 78, 78, .06);
+  --radius: 22px;
+  --display: "Baloo 2", "Noto Sans TC", system-ui, sans-serif;
+  --body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1c21; --panel: #16292f; --panel-2: #1c3239; --ink: #e4efed; --muted: #9db3b5; --line: #29434a;
+    --accent: #ab9ff6; --accent-soft: #2b2a55; --good: #6ccb97; --warn: #f2ab62;
+    --shadow: 0 10px 30px rgba(0, 0, 0, .40); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1c21; --panel: #16292f; --panel-2: #1c3239; --ink: #e4efed; --muted: #9db3b5; --line: #29434a;
+  --accent: #ab9ff6; --accent-soft: #2b2a55; --good: #6ccb97; --warn: #f2ab62;
+  --shadow: 0 10px 30px rgba(0, 0, 0, .40); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 14px; line-height: 1.55;
+  padding-block: 16px 28px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1340px; margin: 0 auto; display: grid; gap: 14px; }
+.note { font-size: 12px; color: var(--muted); }
+.note b { color: var(--warn); }
+header.top { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; justify-content: space-between; }
+.brand { display: flex; align-items: center; gap: 12px; background: var(--panel); border-radius: var(--radius); padding: 10px 18px 10px 10px; box-shadow: var(--shadow); min-width: 0; }
+.brand .logo { width: 46px; height: 46px; flex: none; border-radius: 16px; background: radial-gradient(circle at 35% 30%, #fff 0 12%, #b7aef7 13% 55%, #7a6be0 56%); box-shadow: inset 0 -4px 0 rgba(0,0,0,.12); }
+.brand h1 { font-family: var(--display); font-size: 22px; line-height: 1.1; margin: 0; text-wrap: balance; }
+.brand p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+.kpis { display: flex; flex-wrap: wrap; gap: 6px; background: var(--panel); border-radius: var(--radius); padding: 8px; box-shadow: var(--shadow); }
+.kpi { padding: 4px 14px; text-align: center; min-width: 74px; border-radius: 16px; }
+.kpi b { display: block; font-family: var(--display); font-size: 24px; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.kpi span { font-size: 11px; color: var(--muted); letter-spacing: .05em; }
+.kpi.hot { background: var(--accent-soft); }
+.kpi.hot b { color: var(--accent); }
+.stage { display: grid; grid-template-columns: 300px minmax(0, 1fr) 280px; gap: 14px; align-items: start; }
+.panel { background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px 18px; min-width: 0; }
+.panel h2 { font-family: var(--display); font-size: 22px; margin: 2px 0 6px; line-height: 1.2; text-wrap: balance; }
+.eyebrow { font-size: 11px; letter-spacing: .1em; color: var(--accent); font-weight: 700; }
+.lv { display: inline-flex; align-items: center; gap: 6px; padding: 3px 12px; border-radius: 99px; font-size: 12.5px; font-weight: 700; background: var(--accent-soft); color: var(--accent); }
+.devbar { height: 12px; border-radius: 99px; background: var(--panel-2); overflow: hidden; margin: 10px 0 4px; box-shadow: inset 0 1px 2px rgba(0,0,0,.08); }
+.devbar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #8fd6a8, var(--accent)); }
+.mini { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+.mini div { background: var(--panel-2); border-radius: 16px; padding: 8px 10px; }
+.mini b { display: block; font-family: var(--display); font-size: 20px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.mini span { font-size: 11px; color: var(--muted); }
+.formula { font-size: 12px; color: var(--muted); }
+.squares { letter-spacing: 1px; font-size: 13px; word-break: break-all; }
+.sec { margin-top: 12px; }
+.sec h3 { font-size: 13px; margin: 0 0 4px; }
+.gaps { margin: 0; padding-left: 18px; }
+.gaps li { margin: 2px 0; }
+.open { display: inline-flex; gap: 6px; align-items: center; margin-top: 14px; padding: 8px 14px; border-radius: 99px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 700; text-decoration: none; }
+.mapbox { position: relative; border-radius: 28px; overflow: hidden; box-shadow: var(--shadow); min-width: 0; }
+canvas { display: block; width: 100%; height: 580px; cursor: pointer; touch-action: manipulation; }
+.maptools { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 4px; background: rgba(255,255,255,.88); border-radius: 99px; padding: 4px; box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+.maptools button { border: 0; background: transparent; border-radius: 99px; padding: 5px 12px; font: 700 12px var(--body); color: #213439; cursor: pointer; }
+.maptools button[aria-pressed="true"] { background: #213439; color: #fff; }
+.legend { position: absolute; right: 12px; bottom: 12px; background: rgba(255,255,255,.88); color: #213439; border-radius: 16px; padding: 7px 12px; font-size: 11px; line-height: 1.7; box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin: 0 2px 0 6px; }
+.log { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; max-height: 500px; overflow: auto; }
+.log li { display: grid; grid-template-columns: 44px 22px 1fr; gap: 4px; padding: 6px 2px; border-bottom: 1px dashed var(--line); font-size: 12.5px; }
+.log time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.log .day { grid-column: 1 / -1; font-size: 11px; color: var(--muted); border: 0; padding-top: 10px; font-weight: 700; }
+.log .empty { grid-template-columns: 1fr; color: var(--muted); }
+.tour { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.tour .text { flex: 1 1 340px; min-width: 0; }
+.tour .step { font-size: 11px; color: var(--accent); font-weight: 700; letter-spacing: .08em; }
+.tour p { margin: 2px 0 0; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+button.b { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 99px; padding: 7px 16px; font: 700 13px var(--body); cursor: pointer; }
+button.b.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+button:focus-visible, a:focus-visible, canvas:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 99px; padding: 5px 12px; font: 500 12.5px var(--body); cursor: pointer; }
+.chips button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+@media (max-width: 1100px) {
+  .stage { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .mapbox { grid-column: 1 / -1; order: -1; }
+}
+@media (max-width: 640px) {
+  .stage { grid-template-columns: minmax(0, 1fr); }
+  canvas { height: 440px; }
+  .kpi { min-width: 60px; padding: 4px 8px; }
+  .kpi b { font-size: 20px; }
+  .legend { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="note" id="note"></div>
+  <header class="top">
+    <div class="brand">
+      <div class="logo" aria-hidden="true"></div>
+      <div style="min-width:0">
+        <h1 id="title"></h1>
+        <p id="question"></p>
+      </div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+  </header>
+
+  <div class="stage">
+    <aside class="panel" id="island" aria-live="polite"></aside>
+    <div class="mapbox">
+      <canvas id="map" tabindex="0" aria-label="群島地圖：點一座島看詳細資料"></canvas>
+      <div class="maptools" role="group" aria-label="時段">
+        <button type="button" data-time="day" aria-pressed="true">白天</button>
+        <button type="button" data-time="dusk" aria-pressed="false">黃昏</button>
+        <button type="button" data-time="night" aria-pressed="false">夜晚</button>
+      </div>
+      <div class="legend">屋頂<span class="dot" style="background:#8f80ec"></span>已讀<span class="dot" style="background:#f2b24c"></span>閱讀中<span class="dot" style="background:#f3efe7;border:1px solid #ccc"></span>待讀<br>屋子越高＝證據等級越強</div>
+    </div>
+    <aside class="panel">
+      <div class="eyebrow">島嶼日誌</div>
+      <ol class="log" id="log"></ol>
+    </aside>
+  </div>
+
+  <div class="panel"><div class="chips" id="chips" role="group" aria-label="選一座島"></div></div>
+
+  <div class="panel tour">
+    <div class="text">
+      <div class="step" id="tourStep"></div>
+      <p id="tourText"></p>
+    </div>
+    <div class="btns">
+      <button type="button" class="b" id="prev">← 上一站</button>
+      <button type="button" class="b primary" id="next">下一站 →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+window.PLANET = /*ZOTMAX_DATA*/null;
+</script>
+<script>
+(function () {
+  const D = window.PLANET;
+  if (!D) return;
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[c]);
+  const STAGES = [[75, 4, "🏙️", "城鎮"], [50, 3, "🏘️", "聚落"], [25, 2, "🏕️", "開墾中"], [0, 1, "🌱", "荒島"]];
+  const stageOf = d => STAGES.find(([min]) => d >= min);
+  const ROOF = { read: "#8f80ec", reading: "#f2b24c", todo: "#f3efe7" };
+
+  // ---------- head, KPIs, log, chips ----------
+  document.title = D.title || "群島地圖";
+  $("title").textContent = D.title;
+  $("question").textContent = D.question || "";
+  $("note").innerHTML = D.note || "";
+  const K = D.kpis || {};
+  $("kpis").innerHTML = [[K.papers, "文獻"], [K.islands, "座島"], [K.readPct + "%", "已讀"], [K.newWeek, "本週新增"], [K.gaps, "缺口"], ...(D.harbor ? [[D.harbor.pending, "港口待看", true]] : [])]
+    .map(([v, l, hot]) => `<div class="kpi${hot ? " hot" : ""}"><b>${esc(v)}</b><span>${l}</span></div>`).join("");
+  $("log").innerHTML = (D.log || []).length
+    ? D.log.map(e => e.day ? `<li class="day">${esc(e.day)}</li>` : `<li><time>${esc(e.t)}</time><span aria-hidden="true">${esc(e.i)}</span><span>${esc(e.s)}</span></li>`).join("")
+    : `<li class="empty">最近 14 天還沒有紀錄。讀完文獻、核對評讀、匯入新文獻都會記在這裡。</li>`;
+  const hub = { id: "hub", hub: true, name: "研究問題" };
+  const islands = D.islands || [];
+  $("chips").innerHTML = [["hub", "🪐 研究問題"], ...islands.map(i => [i.id, `${stageOf(i.dev)[2]} ${i.name}`]), ...(D.harbor ? [["harbor", "⛵ 港口"]] : [])]
+    .map(([id, t]) => `<button type="button" data-id="${esc(id)}" aria-pressed="false">${esc(t)}</button>`).join("");
+  $("chips").addEventListener("click", e => { const b = e.target.closest("button"); if (b) select(b.dataset.id); });
+
+  // ---------- the chosen island ----------
+  let selected = "hub";
+  function panel(id) {
+    const el = $("island");
+    const open = (link, text) => link ? `<a class="open" href="${esc(link)}">${text} →</a>` : "";
+    if (id === "harbor" && D.harbor) {
+      const h = D.harbor;
+      el.innerHTML = `<div class="eyebrow">港口</div><h2>⛵ 搜尋機器人</h2>
+        <div class="mini"><div><b>${h.pending}</b><span>待看</span></div><div><b>${h.high}</b><span>⭐⭐⭐</span></div><div><b>${h.imported}</b><span>已靠岸</span></div></div>
+        <p class="formula">每天查 PubMed、每週查引用核心文獻的新研究，依你的 PICO 排序。你勾選的才會靠岸（匯入 Zotero），由你決定放在哪座島。</p>
+        ${open(h.link, "在 Obsidian 開啟清單")}`;
+    }
+    else if (id === "hub") {
+      el.innerHTML = `<div class="eyebrow">星球中心</div><h2>${esc(D.title)}</h2>
+        ${(D.pico || []).map(([k, v]) => `<div><b>${esc(k)}</b>：${esc(v)}</div>`).join("") || `<p class="formula">這個分類還沒有 PICO 問題卡。</p>`}
+        <p class="formula" style="margin-top:12px">每座島是一個 Zotero 子分類。開發度 = 已讀 40% ＋ 評讀已核對 30% ＋ 有 AI 筆記 30%：🌱 荒島 &lt;25、🏕️ 開墾中 25–49、🏘️ 聚落 50–74、🏙️ 城鎮 ≥75。</p>
+        ${open(D.link, "在 Obsidian 開啟星球頁")}`;
+    }
+    else {
+      const is = islands.find(i => i.id === id);
+      if (!is) return;
+      const st = stageOf(is.dev);
+      const links = (D.bridges || []).filter(b => b.a === id || b.b === id), seasNear = (D.seas || []).filter(x => x.near === id);
+      const nameOf = x => x === "hub" ? (D.short || "研究問題") : (islands.find(i => i.id === x) || {}).name || x;
+      el.innerHTML = `<div class="eyebrow">島 · Zotero 子分類</div>
+        <h2>${esc(is.name)}</h2>
+        <span class="lv">LV${st[1]} ${st[2]} ${st[3]}</span>
+        <div class="devbar" role="img" aria-label="開發度 ${is.dev}"><i style="width:${Math.max(4, is.dev)}%"></i></div>
+        <div class="formula">開發度 ${is.dev}：已讀 ${is.read}／${is.papers}、評讀核對 ${is.verified}、AI 筆記 ${is.ai}</div>
+        <div class="mini"><div><b>${is.papers}</b><span>篇文獻</span></div><div><b>${is.best ? "L" + is.best : "—"}</b><span>最強證據</span></div><div><b>${is.gaps.length}</b><span>缺口</span></div></div>
+        ${is.design ? `<div class="sec"><h3>研究設計</h3>${esc(is.design)}</div>` : ""}
+        ${is.dirs ? `<div class="sec"><h3>結論方向（AI 初判）</h3><span class="squares">${esc(is.dirs)}</span></div>` : ""}
+        ${links.length ? `<div class="sec"><h3>🌉 橋（共用的概念卡）</h3>${links.map(b => `<div>${esc(b.label)} → ${esc(nameOf(b.a === id ? b.b : b.a))}</div>`).join("")}</div>` : ""}
+        ${seasNear.length ? `<div class="sec"><h3>🌊 附近的未探索海域</h3>${seasNear.map(x => `<div>${esc(x.text)}</div>`).join("")}</div>` : ""}
+        <div class="sec"><h3>🧭 這座島的缺口</h3>${is.gaps.length ? `<ul class="gaps">${is.gaps.map(g => `<li>${esc(g)}</li>`).join("")}</ul>` : `<span class="formula">目前沒有規則找到的缺口</span>`}</div>
+        ${open(is.link, "在 Obsidian 開啟島頁")}`;
+    }
+  }
+  function select(id) {
+    selected = id;
+    panel(id);
+    document.querySelectorAll("#chips button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.id === id)));
+    paintStatic();
+  }
+
+  // ---------- tour ----------
+  const TOUR = (D.tour && D.tour.length) ? D.tour : [{ id: "hub", text: "這顆星球是你的研究主題，每座島是一個子分類。" }];
+  let step = 0;
+  function tour(n) {
+    step = (n + TOUR.length) % TOUR.length;
+    $("tourStep").textContent = `導覽 ${step + 1} / ${TOUR.length}`;
+    $("tourText").textContent = TOUR[step].text;
+    select(TOUR[step].id);
+  }
+  $("next").onclick = () => tour(step + 1);
+  $("prev").onclick = () => tour(step - 1);
+
+  // ---------- layout: the hub in the middle, the islands on a ring (bridged ones side by side) ----------
+  const radius = i => Math.min(3.1, 1.45 + Math.sqrt(i.papers) * .42);
+  const order = (() => {
+    const ids = islands.map(i => i.id), out = [], left = new Set(ids);
+    const nb = id => (D.bridges || []).filter(b => b.a === id || b.b === id).map(b => (b.a === id ? b.b : b.a)).filter(x => left.has(x));
+    while (left.size) {
+      let cur = [...left][0];
+      while (cur) { out.push(cur); left.delete(cur); cur = nb(cur)[0]; }
+    }
+    return out.map(id => islands.find(i => i.id === id));
+  })();
+  const HUB_R = 2.1;
+  order.forEach(i => { i.r = radius(i); });
+  const n = order.length;
+  // Islands sit on an ellipse in screen space (wider than tall, like the map), far enough apart for a
+  // bridge between neighbours and clear of the hub; X/Y are screen units, x/y the iso grid
+  const toGrid = (X, Y) => [Y + X / 2, Y - X / 2];
+  const arc = Math.PI * 2 / Math.max(1, n);
+  const FLAT = .62;
+  hub.x = 0; hub.y = 0; hub.r = HUB_R;
+  let ring = 4;
+  // Two islands sit up left and up right of the hub (a bridge between them clears it); more go round the ring
+  const angOf = k => n === 2 ? -Math.PI / 2 + (k ? 1 : -1) : -Math.PI / 2 + k * arc;
+  const place = R => order.forEach((is, k) => {
+    const a = angOf(k);
+    [is.x, is.y] = toGrid(R * Math.cos(a), R * FLAT * Math.sin(a));
+    is.ang = a;
+  });
+  for (let tries = 0; tries < 200; tries++) {
+    place(ring);
+    const apart = (a, b, room) => Math.hypot(a.x - b.x, a.y - b.y) >= a.r + b.r + room;
+    let ok = order.every(i => apart(i, hub, 2.2));
+    for (let k = 0; ok && n > 1 && k < n; k++) ok = apart(order[k], order[(k + 1) % n], 2.6);
+    for (let k = 0; ok && k < n; k++) for (let j = k + 2; ok && j < n; j++) if (!(k === 0 && j === n - 1)) ok = apart(order[k], order[j], 1.2);
+    if (ok) break;
+    ring += .25;
+  }
+  // The gaps between neighbouring islands: the harbor takes the one nearest the viewer, the seas others
+  const gaps = n > 2 ? order.map(is => is.ang + arc / 2) : [Math.PI / 2, Math.PI * .95, Math.PI * .05];
+  // gap k lies between order[k] and order[k + 1]: the harbor prefers one no bridge crosses
+  const bridged = k => n > 2 && (D.bridges || []).some(b => [b.a, b.b].sort().join() === [order[k].id, order[(k + 1) % n].id].sort().join());
+  const harborK = gaps.map((a, k) => [k, bridged(k) ? 1 : 0, Math.sin(a)]).sort((x, y) => x[1] - y[1] || y[2] - x[2])[0][0];
+  const harborAng = gaps[harborK];
+  // Only islands next to each other on the ring (or the hub) get a bridge drawn; the panel lists them all
+  const neighbours = (A, B) => {
+    if (A.hub || B.hub) return true;
+    const ka = order.indexOf(A), kb = order.indexOf(B), d = Math.abs(ka - kb);
+    // every gap had a bridge: the one through the harbor's gap gives way
+    if (D.harbor && n > 2 && [ka, kb].sort().join() === [harborK, (harborK + 1) % n].sort().join()) return false;
+    return d === 1 || (n > 2 && d === n - 1);
+  };
+  const gridDir = a => { const [gx, gy] = toGrid(Math.cos(a), FLAT * Math.sin(a)); const l = Math.hypot(gx, gy) || 1; return [gx / l, gy / l]; };
+  const used = [harborAng];
+  const seas = (D.seas || []).map(s => {
+    const near = order.find(i => i.id === s.near);
+    const options = (near && n > 2 ? [near.ang + arc / 2, near.ang - arc / 2] : gaps).concat(gaps);
+    const ang = options.find(a => !used.some(u => Math.abs(Math.atan2(Math.sin(a - u), Math.cos(a - u))) < .01)) ?? gaps[0];
+    used.push(ang);
+    const [x, y] = toGrid(ring * 1.22 * Math.cos(ang), ring * FLAT * 1.22 * Math.sin(ang));
+    return Object.assign({ x, y }, s);
+  });
+
+  // ---------- drawing ----------
+  const cv = $("map");
+  // The drawing helpers paint on `ctx`: the offscreen canvas while the scene is built, see ctxSwap()
+  let ctx = cv.getContext("2d");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const TIMES = {
+    day: { sky: ["#c6eef0", "#9ed9df"], deep: "#7fcad1", shallow: "#b8ece8", sand: "#f6e6bd", sand2: "#ead3a0", grass: ["#bfe69a", "#96cf74"], rim: "#d6f2b6", cliff: ["#d8bf92", "#b49468"], wall: "#fffaf2", wall2: "#efe4d2", door: "#c79a6b", tree: ["#7cc86d", "#5aa95a"], trunk: "#9a7451", label: "#ffffff", ink: "#213439", foam: "rgba(255,255,255,.75)", cloud: "rgba(255,255,255,.92)", shade: "rgba(30,70,80,.18)", glow: 0 },
+    dusk: { sky: ["#ffd3b0", "#d2b1e0"], deep: "#b49fd0", shallow: "#d9c6ea", sand: "#f5d6b0", sand2: "#e3bd94", grass: ["#c8d690", "#a3b979"], rim: "#e4e9b1", cliff: ["#d3ad86", "#ad8565"], wall: "#fff1e2", wall2: "#ecd4bd", door: "#b9876a", tree: ["#86ad66", "#678f53"], trunk: "#8f6a4c", label: "#fff7ef", ink: "#3b2c37", foam: "rgba(255,240,230,.75)", cloud: "rgba(255,236,226,.9)", shade: "rgba(80,40,70,.18)", glow: .55 },
+    night: { sky: ["#1e2b52", "#111a36"], deep: "#1f3460", shallow: "#2f4b7c", sand: "#9a948f", sand2: "#837d79", grass: ["#5c8a66", "#466f53"], rim: "#6f9a76", cliff: ["#76698a", "#5a4f6d"], wall: "#d5d1e6", wall2: "#b5afcb", door: "#6e5f82", tree: ["#3f7058", "#2f5846"], trunk: "#5b4a5e", label: "#26315a", ink: "#eef2ff", foam: "rgba(200,220,255,.35)", cloud: "rgba(190,200,240,.25)", shade: "rgba(0,0,0,.3)", glow: 1 },
+  };
+  let time = matchMedia("(prefers-color-scheme: dark)").matches && document.documentElement.dataset.theme !== "light" ? "night" : "day";
+  document.querySelectorAll(".maptools button").forEach(b => {
+    b.setAttribute("aria-pressed", String(b.dataset.time === time));
+    b.onclick = () => { time = b.dataset.time; document.querySelectorAll(".maptools button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); paintStatic(); };
+  });
+
+  let W = 0, H = 0, S = 1, OX = 0, OY = 0, dpr = 1;
+  const ISO = (gx, gy, z = 0) => [OX + (gx - gy) * S, OY + (gx + gy) * S * .5 - z * S * .5];
+  const rng = seed => { let s = Math.abs(Math.floor(seed * 9973)) % 233280 + 1; return () => (s = (s * 9301 + 49297) % 233280) / 233280; };
+  const TOP = 1.5;
+
+  // A smooth closed island outline (grid space)
+  function outline(is, extra = 0) {
+    const r = rng(is.x * 31 + is.y * 17 + 7), pts = [], m = 10;
+    const bumps = Array.from({ length: m }, () => (r() - .5) * (is.hub ? 0 : .5));
+    for (let k = 0; k < 48; k++) {
+      const a = k / 48 * Math.PI * 2, t = k / 48 * m, i0 = Math.floor(t) % m, i1 = (i0 + 1) % m, f = t - Math.floor(t);
+      const bump = bumps[i0] * (1 - f) + bumps[i1] * f;
+      pts.push([is.x + Math.cos(a) * (is.r + extra + bump), is.y + Math.sin(a) * (is.r + extra + bump)]);
+    }
+    return pts;
+  }
+  function path(pts, z, dz = 0) {
+    ctx.beginPath();
+    const P = pts.map(([x, y]) => ISO(x, y, z + dz));
+    ctx.moveTo((P[0][0] + P[1][0]) / 2, (P[0][1] + P[1][1]) / 2);
+    for (let k = 1; k <= P.length; k++) {
+      const a = P[k % P.length], b = P[(k + 1) % P.length];
+      ctx.quadraticCurveTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+    }
+    ctx.closePath();
+  }
+  function roundPoly(points, fill, round) {
+    ctx.beginPath();
+    points.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill();
+    ctx.lineJoin = "round"; ctx.lineWidth = round; ctx.strokeStyle = fill; ctx.stroke();
+  }
+
+  function drawIsland(is, P) {
+    const top = outline(is), beach = outline(is, .55), shallow = outline(is, 1.5);
+    // shallow water and a soft shadow under the island
+    ctx.save(); ctx.globalAlpha = .55; path(shallow, 0); ctx.fillStyle = P.shallow; ctx.fill(); ctx.restore();
+    ctx.save(); path(beach, 0, -.6); ctx.fillStyle = P.shade; ctx.filter = "blur(6px)"; ctx.fill(); ctx.restore();
+    // foam ring and beach
+    path(beach, 0); ctx.fillStyle = P.sand2; ctx.fill();
+    ctx.lineWidth = Math.max(2, S * .09); ctx.strokeStyle = P.foam; ctx.stroke();
+    path(outline(is, .4), .12); ctx.fillStyle = P.sand; ctx.fill();
+    // cliff: the outline at the bottom and the top, filled between with a vertical gradient
+    const [, yTop] = ISO(is.x + is.r, is.y + is.r, TOP), [, yBot] = ISO(is.x + is.r, is.y + is.r, .1);
+    const cg = ctx.createLinearGradient(0, yTop - S * is.r, 0, yBot);
+    cg.addColorStop(0, P.cliff[0]); cg.addColorStop(1, P.cliff[1]);
+    for (let z = .1; z < TOP; z += .1) { path(top, z); ctx.fillStyle = cg; ctx.fill(); }
+    // grass top with a light rim and a highlight
+    const [cx, cy] = ISO(is.x, is.y, TOP);
+    const gg = ctx.createRadialGradient(cx - S * is.r * .3, cy - S * is.r * .25, S * .2, cx, cy, S * is.r * 1.4);
+    gg.addColorStop(0, P.grass[0]); gg.addColorStop(1, P.grass[1]);
+    path(top, TOP); ctx.fillStyle = gg; ctx.fill();
+    ctx.lineWidth = Math.max(2, S * .12); ctx.strokeStyle = P.rim; ctx.stroke();
+    if (selected === is.id) {
+      ctx.save(); ctx.globalAlpha = .9; path(outline(is, .15), TOP + .02); ctx.lineWidth = Math.max(3, S * .14); ctx.strokeStyle = "#7a6be0"; ctx.setLineDash([S * .35, S * .25]); ctx.stroke(); ctx.restore();
+    }
+  }
+
+  function shadowDot(x, y, z, w) {
+    const [px, py] = ISO(x, y, z);
+    ctx.fillStyle = "rgba(40,70,40,.18)"; ctx.beginPath(); ctx.ellipse(px, py + S * .04, S * w, S * w * .5, 0, 0, 7); ctx.fill();
+  }
+  function tree(x, y, z, P, size = 1) {
+    shadowDot(x, y, z, .36 * size);
+    const [px, py] = ISO(x, y, z);
+    ctx.fillStyle = P.trunk; ctx.beginPath(); ctx.roundRect(px - S * .06 * size, py - S * .42 * size, S * .12 * size, S * .44 * size, S * .05); ctx.fill();
+    const puffs = [[-.16, -.62, .24], [.16, -.6, .22], [0, -.82, .26]];
+    for (const [dx, dy, r] of puffs) { ctx.fillStyle = P.tree[1]; ctx.beginPath(); ctx.arc(px + dx * S * size, py + dy * S * size, r * S * size, 0, 7); ctx.fill(); }
+    for (const [dx, dy, r] of puffs) { ctx.fillStyle = P.tree[0]; ctx.beginPath(); ctx.arc(px + (dx - .04) * S * size, py + (dy - .05) * S * size, r * .78 * S * size, 0, 7); ctx.fill(); }
+    ctx.fillStyle = "rgba(255,255,255,.28)"; ctx.beginPath(); ctx.arc(px - S * .1 * size, py - S * .92 * size, S * .07 * size, 0, 7); ctx.fill();
+  }
+  function house(x, y, z, level, status, P) {
+    const w = .32, h = .9 + (5 - (level || 5)) * .55;
+    shadowDot(x + .1, y + .1, z, .48);
+    const a = ISO(x - w, y - w, z), b = ISO(x + w, y - w, z), c = ISO(x + w, y + w, z), d = ISO(x - w, y + w, z);
+    const up = h * S * .5, R = Math.max(2, S * .08);
+    roundPoly([[d[0], d[1]], [c[0], c[1]], [c[0], c[1] - up], [d[0], d[1] - up]], P.wall2, R);
+    roundPoly([[b[0], b[1]], [c[0], c[1]], [c[0], c[1] - up], [b[0], b[1] - up]], P.wall, R);
+    // door and window on the front faces
+    const mid = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+    const dp = mid(d, c, .5);
+    ctx.fillStyle = P.door; ctx.beginPath(); ctx.roundRect(dp[0] - S * .07, dp[1] - S * .3, S * .14, S * .28, [S * .07, S * .07, 0, 0]); ctx.fill();
+    const wp = mid(b, c, .5);
+    const lit = P.glow && status !== "todo";
+    ctx.fillStyle = lit ? `rgba(255, 214, 120, ${.5 + P.glow * .5})` : "rgba(120,170,200,.55)";
+    ctx.beginPath(); ctx.roundRect(wp[0] - S * .08, wp[1] - up * .62 - S * .08, S * .16, S * .16, S * .05); ctx.fill();
+    // rounded roof
+    const roof = ROOF[status] || ROOF.todo, apex = ISO(x, y, z + h + .75);
+    const A = [a[0], a[1] - up], B = [b[0], b[1] - up], C = [c[0], c[1] - up], Dd = [d[0], d[1] - up];
+    ctx.save(); ctx.lineJoin = "round"; ctx.lineWidth = Math.max(3, S * .14);
+    const face = (p1, p2, fill) => { ctx.beginPath(); ctx.moveTo(...p1); ctx.lineTo(...p2); ctx.lineTo(...apex); ctx.closePath(); ctx.fillStyle = fill; ctx.strokeStyle = fill; ctx.fill(); ctx.stroke(); };
+    face(A, B, shade(roof, 18)); face(Dd, C, shade(roof, -18)); face(B, C, roof);
+    ctx.restore();
+  }
+  function shade(hex, pct) {
+    const n = parseInt(hex.slice(1), 16), f = v => Math.max(0, Math.min(255, Math.round(v + (pct > 0 ? (255 - v) : v) * pct / 100)));
+    return `rgb(${f(n >> 16)}, ${f((n >> 8) & 255)}, ${f(n & 255)})`;
+  }
+  function pill(text, x, y, P, strong, dotColor) {
+    const fs = Math.max(W < 520 ? 10.5 : 11.5, Math.min(15, S * .44));
+    ctx.font = `${strong ? 900 : 700} ${fs}px "Noto Sans TC", system-ui, sans-serif`;
+    const tw = ctx.measureText(text).width, pad = fs * .9, h = fs * 1.95, w = tw + pad * 2 + (dotColor ? fs * .9 : 0);
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,.14)"; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
+    ctx.fillStyle = P.label; ctx.beginPath(); ctx.roundRect(x - w / 2, y - h / 2, w, h, h / 2); ctx.fill();
+    ctx.restore();
+    if (strong) { ctx.lineWidth = 2.5; ctx.strokeStyle = "#7a6be0"; ctx.beginPath(); ctx.roundRect(x - w / 2, y - h / 2, w, h, h / 2); ctx.stroke(); }
+    let tx = x - w / 2 + pad;
+    if (dotColor) { ctx.fillStyle = dotColor; ctx.beginPath(); ctx.arc(tx + fs * .3, y, fs * .3, 0, 7); ctx.fill(); tx += fs * .9; }
+    ctx.fillStyle = P.ink; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(text, tx, y + 1);
+  }
+  // labels never sit on top of each other: try spots near the anchor until one is free
+  const placed = [];
+  function putPill(text, x, y, P, strong, dotColor, optional) {
+    const fs = Math.max(W < 520 ? 10.5 : 11.5, Math.min(15, S * .44));
+    ctx.font = `${strong ? 900 : 700} ${fs}px "Noto Sans TC", system-ui, sans-serif`;
+    const w = ctx.measureText(text).width + fs * 1.8 + (dotColor ? fs * .9 : 0), h = fs * 1.95, m = 4;
+    const free = (cx, cy) => placed.every(r => cx + w / 2 + m < r.x0 || cx - w / 2 - m > r.x1 || cy + h / 2 + m < r.y0 || cy - h / 2 - m > r.y1);
+    const tries = [[0, 0]];
+    for (let k = 1; k <= 4; k++) tries.push([0, k * h * .62], [0, -k * h * .62], [k * w * .3, k * h * .4], [-k * w * .3, k * h * .4]);
+    let spot = null;
+    for (const [dx, dy] of tries) {
+      const tx = Math.min(W - w / 2 - 6, Math.max(w / 2 + 6, x + dx)), ty = Math.min(H - h / 2 - 6, Math.max(h / 2 + 6, y + dy));
+      if (free(tx, ty)) { spot = [tx, ty]; break; }
+    }
+    // a bridge or sea label that finds no room is left out (the island panel still lists it)
+    if (!spot && optional) return null;
+    const [cx, cy] = spot || [x, y];
+    placed.push({ x0: cx - w / 2, x1: cx + w / 2, y0: cy - h / 2, y1: cy + h / 2 });
+    pill(text, cx, cy, P, strong, dotColor);
+    return [cx, cy];
+  }
+  const STAGE_DOT = { 1: "#9ccf7f", 2: "#f2b24c", 3: "#62b7d8", 4: "#8f80ec" };
+
+  const hits = [];
+  const off = document.createElement("canvas"), octx = off.getContext("2d");
+  let tick = 0;
+
+  function paintStatic() {
+    const rect = cv.getBoundingClientRect();
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = rect.width; H = rect.height;
+    if (!W || !H) return;
+    cv.width = off.width = Math.round(W * dpr); cv.height = off.height = Math.round(H * dpr);
+    // fit: the ring plus the seas, projected
+    const all = [hub, ...order, ...seas.map(s => ({ x: s.x, y: s.y, r: 1.6 }))];
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const i of all) { const e = (i.r || 2) + .8; for (const [gx, gy] of [[i.x - e, i.y - e], [i.x + e, i.y + e], [i.x + e, i.y - e], [i.x - e, i.y + e]]) { const X = gx - gy, Y = (gx + gy) / 2; x0 = Math.min(x0, X); x1 = Math.max(x1, X); y0 = Math.min(y0, Y); y1 = Math.max(y1, Y); } }
+    S = Math.min(W / (x1 - x0 + 1), H / (y1 - y0 + 2.6));
+    OX = W / 2 - (x0 + x1) / 2 * S; OY = H / 2 - (y0 + y1) / 2 * S + S * .6;
+    const P = TIMES[time];
+    // draw everything static onto the offscreen canvas, then the animated layer over it
+    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawScene(octx, P);
+    frame();
+  }
+
+  function drawScene(c, P) {
+    const keep = ctx;
+    ctxSwap(c);
+    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, P.sky[0]); g.addColorStop(1, P.sky[1]);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.save(); ctx.globalAlpha = .6; ctx.fillStyle = P.deep; ctx.fillRect(0, 0, W, H); ctx.restore();
+    // unexplored seas
+    for (const s of seas) {
+      const [px, py] = ISO(s.x, s.y);
+      ctx.save(); ctx.setLineDash([S * .3, S * .3]); ctx.lineWidth = 2.5; ctx.strokeStyle = P.glow > .9 ? "rgba(255,255,255,.45)" : "rgba(255,255,255,.85)";
+      ctx.beginPath(); ctx.ellipse(px, py, S * 2.3, S * 1.15, 0, 0, 7); ctx.stroke(); ctx.restore();
+      ctx.fillStyle = "rgba(255,255,255,.12)"; ctx.beginPath(); ctx.ellipse(px, py, S * 2.3, S * 1.15, 0, 0, 7); ctx.fill();
+      s._label = [px, py];
+    }
+    hits.length = 0;
+    const byDepth = [hub, ...order].sort((a, b) => (a.x + a.y) - (b.x + b.y));
+    for (const is of byDepth) drawIsland(is, P);
+    // bridges (a concept card both islands share)
+    for (const br of D.bridges || []) {
+      const A = [hub, ...order].find(i => i.id === br.a), B = [hub, ...order].find(i => i.id === br.b);
+      if (!A || !B || !neighbours(A, B)) continue;
+      const dx = B.x - A.x, dy = B.y - A.y, len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len;
+      const p1 = ISO(A.x + ux * (A.r - .2), A.y + uy * (A.r - .2), TOP), p2 = ISO(B.x - ux * (B.r - .2), B.y - uy * (B.r - .2), TOP);
+      const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2 + S * .35];
+      ctx.save(); ctx.lineCap = "round";
+      ctx.strokeStyle = "rgba(0,0,0,.12)"; ctx.lineWidth = S * .5; ctx.beginPath(); ctx.moveTo(p1[0], p1[1] + S * .25); ctx.quadraticCurveTo(mid[0], mid[1] + S * .25, p2[0], p2[1] + S * .25); ctx.stroke();
+      ctx.strokeStyle = "#b8865a"; ctx.lineWidth = S * .42; ctx.beginPath(); ctx.moveTo(...p1); ctx.quadraticCurveTo(mid[0], mid[1], ...p2); ctx.stroke();
+      ctx.strokeStyle = "#dcae7c"; ctx.lineWidth = S * .3; ctx.setLineDash([S * .14, S * .1]); ctx.beginPath(); ctx.moveTo(...p1); ctx.quadraticCurveTo(mid[0], mid[1], ...p2); ctx.stroke();
+      ctx.restore();
+      br._label = [(p1[0] + p2[0]) / 2, mid[1] - S * .55];
+    }
+    // the harbor: a pier off the hub towards the viewer
+    if (D.harbor) {
+      const [ux, uy] = gridDir(harborAng);
+      const hx0 = hub.x + ux * (hub.r - .1), hy0 = hub.y + uy * (hub.r - .1), len = Math.max(1.4, ring * .4 - hub.r * .3);
+      const p1 = ISO(hx0, hy0, .55), p2 = ISO(hx0 + ux * len, hy0 + uy * len, .55);
+      ctx.save(); ctx.lineCap = "round"; ctx.strokeStyle = "#b8865a"; ctx.lineWidth = S * .36; ctx.beginPath(); ctx.moveTo(...p1); ctx.lineTo(...p2); ctx.stroke();
+      ctx.strokeStyle = "#dcae7c"; ctx.lineWidth = S * .24; ctx.setLineDash([S * .1, S * .08]); ctx.beginPath(); ctx.moveTo(...p1); ctx.lineTo(...p2); ctx.stroke(); ctx.restore();
+      D.harbor._at = [hx0 + ux * len, hy0 + uy * len];
+      D.harbor._dir = [ux, uy];
+      const [lx, ly] = ISO(hx0 + ux * (len + .8), hy0 + uy * (len + .8));
+      hits.push({ id: "harbor", x: lx, y: ly, rx: S * 1.6, ry: S * 1.0 });
+    }
+    // houses and trees, front to back per island
+    for (const is of byDepth) {
+      const items = [], r = rng(is.x * 13 + is.y * 7 + 3);
+      if (is.hub) {
+        items.push({ x: is.x, y: is.y, kind: "dome" });
+        for (let k = 0; k < 6; k++) { const a = k / 6 * 6.283 + .3; items.push({ x: is.x + Math.cos(a) * 1.45, y: is.y + Math.sin(a) * 1.45, kind: "tree", s: .8 }); }
+      }
+      else {
+        const hs = is.houses || [], m = hs.length;
+        hs.forEach((h, k) => {
+          const a = k * 2.399963, rad = Math.sqrt((k + .5) / Math.max(1, m)) * (is.r - .75);
+          items.push({ x: is.x + Math.cos(a) * rad, y: is.y + Math.sin(a) * rad, kind: "house", h });
+        });
+        const trees = Math.max(3, Math.round(is.r * 2.2) - Math.floor(m / 5));
+        for (let k = 0; k < trees; k++) { const a = r() * 6.283, rad = is.r - .3 - r() * .25; items.push({ x: is.x + Math.cos(a) * rad, y: is.y + Math.sin(a) * rad, kind: "tree", s: .75 + r() * .35 }); }
+      }
+      items.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+      for (const it of items) {
+        if (it.kind === "tree") tree(it.x, it.y, TOP, P, it.s);
+        else if (it.kind === "house") house(it.x, it.y, TOP, it.h.level, it.h.status, P);
+        else dome(it.x, it.y, TOP, P);
+      }
+      const [lx, ly] = ISO(is.x, is.y, TOP);
+      hits.push({ id: is.id, x: lx, y: ly, rx: S * is.r * 1.1, ry: S * is.r * .66 });
+    }
+    // labels last, so nothing covers them; islands claim their spot first
+    placed.length = 0;
+    for (const is of byDepth) {
+      const [lx, ly] = ISO(is.x, is.y, TOP);
+      if (is.hub) putPill("🪐 " + (D.short || "研究問題"), lx, ly + S * (is.r * .55 + 1.05), P, selected === "hub");
+      else { const st = stageOf(is.dev); putPill(`${is.name} · LV${st[1]}`, lx, ly + S * (is.r * .55 + 1.05), P, selected === is.id, STAGE_DOT[st[1]]); }
+    }
+    if (D.harbor) { const [lx, ly] = ISO(D.harbor._at[0] + D.harbor._dir[0] * 1.2, D.harbor._at[1] + D.harbor._dir[1] * 1.2); putPill(`⛵ 港口 · 待看 ${D.harbor.pending}`, lx, ly + S * 1.1, P, selected === "harbor", null, true); }
+    // on a phone the bridges and seas keep their shapes but leave the words to the panel
+    if (W < 520) return ctxSwap(keep);
+    for (const br of D.bridges || []) if (br._label) putPill("🌉 " + br.label, br._label[0], br._label[1], P, false, null, true);
+    for (const s of seas) if (s._label) putPill("🌊 " + s.text, s._label[0], s._label[1], P, false, null, true);
+    ctxSwap(keep);
+  }
+  function dome(x, y, z, P) {
+    shadowDot(x, y, z, .9);
+    const [px, py] = ISO(x, y, z);
+    ctx.fillStyle = P.wall2; ctx.beginPath(); ctx.roundRect(px - S * .7, py - S * .9, S * 1.4, S * .9, S * .2); ctx.fill();
+    ctx.fillStyle = P.wall; ctx.beginPath(); ctx.roundRect(px - S * .7, py - S * .9, S * .7, S * .9, [S * .2, 0, 0, S * .2]); ctx.fill();
+    const dg = ctx.createRadialGradient(px - S * .25, py - S * 1.35, S * .1, px, py - S * 1.0, S * .8);
+    dg.addColorStop(0, "#c9c0ff"); dg.addColorStop(1, "#7a6be0");
+    ctx.fillStyle = dg; ctx.beginPath(); ctx.ellipse(px, py - S * .9, S * .72, S * .66, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = `800 ${S * .55}px "Baloo 2", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("?", px, py - S * 1.18);
+    ctx.strokeStyle = P.trunk; ctx.lineWidth = Math.max(1.5, S * .05); ctx.beginPath(); ctx.moveTo(px + S * .3, py - S * 1.45); ctx.lineTo(px + S * .3, py - S * 2.1); ctx.stroke();
+    ctx.fillStyle = "#f2b24c"; ctx.beginPath(); ctx.moveTo(px + S * .3, py - S * 2.1); ctx.lineTo(px + S * .75, py - S * 1.95); ctx.lineTo(px + S * .3, py - S * 1.8); ctx.fill();
+  }
+  function ctxSwap(c) { ctx = c; }
+
+  // ---------- animation: waves, sparkles, boats and clouds over the static scene ----------
+  const clouds = Array.from({ length: 4 }, (_, k) => ({ x: k / 4, y: .08 + (k % 2) * .1, s: .8 + (k % 3) * .25 }));
+  function frame() {
+    const P = TIMES[time];
+    const c = cv.getContext("2d");
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, cv.width, cv.height);
+    c.drawImage(off, 0, 0);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const t = reduce ? 0 : tick;
+    // sparkles on open water
+    const r = rng(11);
+    c.strokeStyle = P.foam; c.lineWidth = 2; c.lineCap = "round";
+    for (let k = 0; k < 34; k++) {
+      const x = r() * W, y = r() * H;
+      if (hits.some(h => ((x - h.x) / (h.rx * 1.35)) ** 2 + ((y - h.y) / (h.ry * 1.6)) ** 2 <= 1)) continue;
+      const o = Math.sin(t / 30 + k) * 3, a = .35 + .35 * Math.sin(t / 20 + k * 1.7);
+      c.globalAlpha = a; c.beginPath(); c.arc(x + o, y, S * .22, Math.PI * 1.15, Math.PI * 1.85); c.stroke();
+    }
+    c.globalAlpha = 1;
+    // boats waiting at the harbor (one per 4 candidates, at most 4)
+    if (D.harbor) {
+      const nb = Math.min(4, Math.max(1, Math.ceil(D.harbor.pending / 4)));
+      for (let k = 0; k < nb; k++) {
+        const [ux, uy] = D.harbor._dir, side = k % 2 ? 1 : -1, along = .3 + Math.floor(k / 2) * .9;
+        const [bx, by] = ISO(D.harbor._at[0] + ux * along - uy * side * .75, D.harbor._at[1] + uy * along + ux * side * .75, 0);
+        const bob = Math.sin(t / 22 + k) * 2.5;
+        c.fillStyle = "rgba(0,0,0,.12)"; c.beginPath(); c.ellipse(bx, by + 4, S * .42, S * .14, 0, 0, 7); c.fill();
+        c.fillStyle = "#ffffff"; c.beginPath(); c.ellipse(bx, by + bob, S * .42, S * .18, 0, 0, Math.PI); c.fill();
+        c.fillStyle = "#e9f1f3"; c.beginPath(); c.ellipse(bx, by + bob, S * .42, S * .1, 0, 0, 7); c.fill();
+        c.fillStyle = k < D.harbor.high ? "#f2b24c" : "#ff9e7d";
+        c.beginPath(); c.moveTo(bx, by - S * .85 + bob); c.quadraticCurveTo(bx + S * .45, by - S * .45 + bob, bx + S * .32, by - S * .08 + bob); c.lineTo(bx, by - S * .08 + bob); c.closePath(); c.fill();
+      }
+    }
+    // clouds drifting across the top
+    if (P.glow < 1) {
+      for (const cl of clouds) {
+        const x = ((cl.x + t / 4000) % 1.2 - .1) * W, y = cl.y * H, s = S * cl.s;
+        c.fillStyle = P.cloud;
+        for (const [dx, dy, rr] of [[0, 0, .7], [.65, .1, .55], [-.6, .12, .5], [.2, -.3, .5]]) { c.beginPath(); c.arc(x + dx * s, y + dy * s, rr * s, 0, 7); c.fill(); }
+      }
+    }
+    else {
+      const sr = rng(5);
+      for (let k = 0; k < 40; k++) { c.globalAlpha = .4 + .6 * Math.abs(Math.sin(t / 25 + k)); c.fillStyle = "#fff"; c.beginPath(); c.arc(sr() * W, sr() * H * .3, 1.2, 0, 7); c.fill(); }
+      c.globalAlpha = 1;
+    }
+  }
+
+  cv.addEventListener("click", e => {
+    const rc = cv.getBoundingClientRect(), x = e.clientX - rc.left, y = e.clientY - rc.top;
+    const hit = hits.slice().reverse().find(h => ((x - h.x) / h.rx) ** 2 + ((y - h.y) / h.ry) ** 2 <= 1);
+    if (hit) select(hit.id);
+  });
+  cv.addEventListener("keydown", e => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const ids = ["hub", ...order.map(i => i.id), ...(D.harbor ? ["harbor"] : [])];
+    select(ids[(ids.indexOf(selected) + (e.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length]);
+  });
+  new ResizeObserver(() => paintStatic()).observe(cv);
+  if (!reduce) setInterval(() => { tick++; frame(); }, 60);
+  (document.fonts ? document.fonts.ready : Promise.resolve()).then(() => tour(0));
+})();
+</script>
+</body>
+</html>

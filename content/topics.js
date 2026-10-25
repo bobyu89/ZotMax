@@ -207,24 +207,24 @@
 		let steps = [];
 		if (s.noAI) steps.push({ short: `${s.noAI} 篇還沒有 AI 筆記`, text: `**${s.noAI} 篇還沒有 AI 筆記**：產生後才看得出結論方向、PICO 和缺口。` });
 		if (s.withAI >= 3 && !s.high) {
-			steps.push({ short: "還沒有 RCT 或系統性回顧", text: "**還沒有 RCT 或系統性回顧（CEBM 1–2）**：到 PubMed 用 Clinical Queries，或篩選 Randomized Controlled Trial、Systematic Review 補找。" });
+			steps.push({ gap: true, short: "還沒有 RCT 或系統性回顧", text: "**還沒有 RCT 或系統性回顧（CEBM 1–2）**：到 PubMed 用 Clinical Queries，或篩選 Randomized Controlled Trial、Systematic Review 補找。" });
 		}
 		if (s.rct >= 3 && !s.reviews) {
-			steps.push({ short: `${s.rct} 篇 RCT，還沒有系統性回顧`, text: `**已有 ${s.rct} 篇 RCT，但還沒有系統性回顧**：先查 Cochrane Library 和 PROSPERO 有沒有人做過；沒有的話，這可能就是寫系統性回顧或統合分析的機會。` });
+			steps.push({ gap: true, short: `${s.rct} 篇 RCT，還沒有系統性回顧`, text: `**已有 ${s.rct} 篇 RCT，但還沒有系統性回顧**：先查 Cochrane Library 和 PROSPERO 有沒有人做過；沒有的話，這可能就是寫系統性回顧或統合分析的機會。` });
 		}
 		let d = s.directions;
 		if (d.judged >= 2 && (s.verdict.label === "結論分歧" || d["不一致"])) {
-			steps.push({ short: "結論分歧，值得比較", text: `**結論分歧**（${DIRECTIONS.filter(k => d[k]).map(k => `${k} ${d[k]}`).join("、")}）：比較各篇的族群、介入劑量和測量工具；這正是 GRADE 的 inconsistency 要看的地方。` });
+			steps.push({ gap: true, short: "結論分歧，值得比較", text: `**結論分歧**（${DIRECTIONS.filter(k => d[k]).map(k => `${k} ${d[k]}`).join("、")}）：比較各篇的族群、介入劑量和測量工具；這正是 GRADE 的 inconsistency 要看的地方。` });
 		}
 		let pairs = emptyPairs(s.map);
 		if (s.map.studied >= 2 && pairs.length) {
-			steps.push({ short: `缺口：${pairs[0]}`, text: `**還沒有研究的組合**：${pairs.join("、")}。可能是研究缺口，先用 PICO 問題卡搜一次，確認不是漏找。` });
+			steps.push({ gap: true, short: `缺口：${pairs[0]}`, text: `**還沒有研究的組合**：${pairs.join("、")}。可能是研究缺口，先用 PICO 問題卡搜一次，確認不是漏找。` });
 		}
 		if (s.trend.newest && s.trend.newest <= s.trend.to - RECENT_YEARS) {
-			steps.push({ short: `最新一篇是 ${s.trend.newest} 年`, text: `**最新一篇是 ${s.trend.newest} 年**：補找近 ${RECENT_YEARS} 年的研究，指引和臨床做法可能已經更新。` });
+			steps.push({ gap: true, short: `最新一篇是 ${s.trend.newest} 年`, text: `**最新一篇是 ${s.trend.newest} 年**：補找近 ${RECENT_YEARS} 年的研究，指引和臨床做法可能已經更新。` });
 		}
 		if (s.medianSample !== null && s.medianSample < SMALL_SAMPLE) {
-			steps.push({ short: `樣本數中位數 ${s.medianSample} 人`, text: `**樣本數中位數只有 ${s.medianSample} 人**：結果的精確度有限（GRADE 的 imprecision），留意樣本較大的研究或統合分析。` });
+			steps.push({ gap: true, short: `樣本數中位數 ${s.medianSample} 人`, text: `**樣本數中位數只有 ${s.medianSample} 人**：結果的精確度有限（GRADE 的 imprecision），留意樣本較大的研究或統合分析。` });
 		}
 		if (s.appraised > s.verified) {
 			steps.push({ short: `${s.appraised - s.verified} 篇評讀待核對`, text: `**${s.appraised - s.verified} 篇的評讀還沒核對**：在文獻評讀表確認後，結論才是你自己的判斷。` });
@@ -432,6 +432,7 @@
 			meta.dashboardLink ? wikilink(meta.dashboardLink, "📊 研究儀表板") : "",
 			meta.canvasLink ? wikilink(meta.canvasLink, "🗺️ 證據地圖") : "",
 			meta.bot ? wikilink(meta.bot.link, botLabel(meta.bot)) : "",
+			meta.backLink || "",
 		].filter(Boolean);
 		return [
 			dashboard.metaCallout(`🧭 ${topic.path} · ${s.total} 篇 · ${stamp(meta.now)} 更新`, [
@@ -442,6 +443,7 @@
 			]),
 			links.length ? `> [!zm-links] 前往\n> ${links.join(" · ")}` : "",
 			topicOverview(s, "board"),
+			meta.planet || "",
 			evidenceBoard(topic, s),
 			stepsBoard(s),
 			gapMapSection(s.map, { level: 2, board: true }),
@@ -458,7 +460,8 @@
 
 	/**
 	 * A topic page's managed region. meta: { now, layout, homeLink, dashboardLink, organized, canvasLink,
-	 * bot: the collection's topic bot (topic-bot.js botSummaries()) }
+	 * bot: the collection's topic bot (topic-bot.js botSummaries()), planet: 「🪐 星球」 (planet.js planetSection) on a
+	 * planet's page, backLink: 「🪐 回到星球」 on an island's page }
 	 */
 	function topicSection(topic, s, meta = {}) {
 		if (meta.layout === "board") return boardTopic(topic, s, meta);
@@ -467,6 +470,7 @@
 			meta.dashboardLink ? wikilink(meta.dashboardLink, "研究儀表板") : "",
 			meta.canvasLink ? `🗺️ ${wikilink(meta.canvasLink, "證據地圖（Canvas）")}` : "",
 			meta.bot ? wikilink(meta.bot.link, botLabel(meta.bot)) : "",
+			meta.backLink || "",
 		].filter(Boolean).join(" · ");
 		let info = [
 			`> [!info] 由 ZotMax 依 Zotero 分類「${topic.path}」的 ${s.total} 篇文獻筆記於 ${stamp(meta.now)} 產生；只讀筆記的 frontmatter，不連網、不呼叫 AI。`,
@@ -475,7 +479,7 @@
 				: "> 筆記沒有搬動，一篇在幾個分類，就會出現在幾個主題頁。",
 			...(links ? [`> ${links}`] : []),
 		].join("\n");
-		return [info, topicOverview(s, meta.layout), directionSection(s), trendSection(s), gapSection(s), paperSection(topic.records)].join("\n\n");
+		return [info, topicOverview(s, meta.layout), meta.planet || "", directionSection(s), trendSection(s), gapSection(s), paperSection(topic.records)].filter(Boolean).join("\n\n");
 	}
 
 	/** The managed region of a topic page whose collection has no notes now. */
@@ -770,9 +774,45 @@
 		let done = new Set();
 		let bots = topicBots();
 		let botFor = path => bots.find(b => b.path === path) || null;
-		for (let { topic, file } of assignFiles(groupTopics(ctx.records))) {
+		// 星球與島嶼 (planet.js): a planet whose notes all sit in its sub-collections still gets a page
+		let P = planetModule();
+		let planets = P ? P.findPlanets(ctx.records) : [];
+		let groups = groupTopics(ctx.records);
+		for (let pl of planets) {
+			if (!groups.some(t => t.path === pl.path)) groups.push({ path: pl.path, name: pl.name, parent: pl.parent, records: pl.records });
+		}
+		groups.sort((a, b) => b.records.length - a.records.length || a.path.localeCompare(b.path, "zh-Hant"));
+		let pages = assignFiles(groups).map(({ topic, file }) => {
 			let page = core.topicPage(settings, topic.path, file);
 			topic.link = [...page.dirParts, page.name].join("/");
+			return { topic, page };
+		});
+		let linkOf = (path) => {
+			let hit = pages.find(x => x.topic.path === path);
+			return hit ? hit.topic.link : "";
+		};
+		let vaultName = PathUtils.filename(settings.vaultPath);
+		let worlds = new Map();
+		let maps = [];
+		let history = P ? P.readHistory() : null;
+		for (let pl of planets) {
+			try {
+				let bot = botFor(pl.path);
+				let data = P.planetData(pl, {
+					stats: records => topicStats({ records }, { aliases: ctx.aliases, now }), designLabel, squares: t => directionSquares(t),
+					link: path => (linkOf(path) ? core.obsidianURI(vaultName, linkOf(path)) : ""), planetLink: core.obsidianURI(vaultName, linkOf(pl.path)),
+					card: P.cardForPath(pl.path), bot, botLink: bot ? core.obsidianURI(vaultName, bot.link) : "", aliases: ctx.aliases,
+					levelUps: ((history && history.events) || []).filter(e => e.planet === pl.path), now,
+				});
+				history = P.nextHistory(history, pl, pl.islands.map((island, k) => ({ island, n: data.islands[k] })), now);
+				worlds.set(pl.path, { planet: pl, data });
+			}
+			catch (e) {
+				Zotero.logError(e);
+			}
+		}
+		if (P && planets.length) P.saveHistory(history);
+		for (let { topic, page } of pages) {
 			let stats = topicStats(topic, { aliases: ctx.aliases, now });
 			entries.push({ topic, stats });
 			let dir = PathUtils.join(settings.vaultPath, ...page.dirParts);
@@ -798,8 +838,27 @@
 					Zotero.debug(`ZotMax: no evidence map for ${topic.path}: ${e}`);
 				}
 			}
+			// 🪐 the planet's islands and its map; an island links back to its planet
+			let planetMd = "";
+			let world = worlds.get(topic.path);
+			if (world) {
+				try {
+					world.data.note = P.mapNote(now);
+					let map = await P.writeMap(dir, page.name, world.data);
+					maps.push({ path: topic.path, file: map.path });
+					let links = Object.fromEntries(world.planet.islands.map(is => [is.path, linkOf(is.path)]));
+					planetMd = P.planetSection(world.planet, world.data, { layout: ctx.layout, links, mapURL: map.url, botLink: world.data.harbor ? botFor(topic.path).link : "" });
+				}
+				catch (e) {
+					Zotero.logError(e);
+				}
+			}
+			let home = P ? P.planetOf(planets.filter(pl => pl.path !== topic.path && worlds.has(pl.path)), topic.path) : null;
+			let island = home && P.islandOf(home, topic.path);
+			let backLink = island
+				? P.backLink(linkOf(home.path), home.name, island.path === topic.path ? worlds.get(home.path).data.islands[home.islands.indexOf(island)].dev : null) : "";
 			let existing = await readIfExists(path);
-			let text = buildPage(existing, topicSection(topic, stats, { now, layout: ctx.layout, homeLink, dashboardLink, organized, canvasLink, bot: botFor(topic.path) }), topic.name,
+			let text = buildPage(existing, topicSection(topic, stats, { now, layout: ctx.layout, homeLink, dashboardLink, organized, canvasLink, bot: botFor(topic.path), planet: planetMd, backLink }), topic.name,
 				{ type: "topic", zotero_collection: topic.path, studies: stats.total, updated: now.toISOString() });
 			if (await writeIfChanged(path, text, existing)) written++;
 		}
@@ -828,7 +887,13 @@
 		let existing = await readIfExists(homePath);
 		let text = buildPage(existing, section, HOME_NAME, { type: "home", updated: now.toISOString() });
 		if (await writeIfChanged(homePath, text, existing)) written++;
-		return { home: rel(homeName + ".md"), topics: entries.length, written, organized };
+		return { home: rel(homeName + ".md"), topics: entries.length, written, organized, planets: maps };
+	}
+
+	/** planet.js while its switch (pref dashboard.planet) is on; null otherwise. */
+	function planetModule() {
+		let P = scope.ZB && scope.ZB.planet;
+		return P && P.enabled() ? P : null;
 	}
 
 	/** The topic bots' summaries (topic-bot.js), while its switch is on; [] otherwise. */
@@ -890,7 +955,7 @@
 	return {
 		HOME_NAME, TOPIC_FOLDER, DIRECTIONS, UNJUDGED, MAX_CARDS,
 		topicFileName, groupTopics, tally, verdict, termGroups, trendOf, topicStats, nextSteps,
-		topicOverview, topicSection, boardTopic, evidenceBoard, directionSquares, staleSection, topicCard, topicsBlock, quickLinks, quickLinkBar, homeSection, boardHome, startHere, evidenceCanvas, canvasIsOurs, buildPage, assignFiles,
+		topicOverview, topicSection, boardTopic, evidenceBoard, directionSquares, designLabel, staleSection, topicCard, topicsBlock, quickLinks, quickLinkBar, homeSection, boardHome, startHere, evidenceCanvas, canvasIsOurs, buildPage, assignFiles,
 		writeAll, afterDashboard,
 	};
 });

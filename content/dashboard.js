@@ -144,6 +144,7 @@
 			hasAI: !!(asText(f.ai_model) || asText(f.ai_generated)),
 			hasStudyData: ["study_design", "evidence_level", "jbi_level", "sample_size", "appraisal_overall"].some(k => asText(f[k])),
 			dateAdded: asText(f.date_added),
+			aiGenerated: asText(f.ai_generated),
 			suspectNames: suspectChineseNames(title, authors),
 		};
 	}
