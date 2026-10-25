@@ -343,6 +343,40 @@ test("主題搜尋機器人: set up from the PICO card, run PubMed + citations, 
 	same(env.errors, []);
 });
 
+test("🏝️ 靠岸到哪座島: with two sub-collections each line suggests one, and the import puts the paper there (or where the user changed it to)", async () => {
+	let env = await setup();
+	let { ZB, collection } = env;
+	let paper = (n, title, tags) => new env.MockItem("journalArticle", { key: `S${n}`, title, year: "2022", tags });
+	env.addCollection(2, "運動", [paper(11, "Balance exercise for frail older adults", ["Exercise Therapy"]), paper(12, "Balance and exercise in hospital wards", ["Exercise Therapy"])], 1);
+	env.addCollection(3, "衛教", [paper(13, "Video education on fall prevention", ["Patient Education as Topic"]), paper(14, "Teach-back education", ["Patient Education as Topic"])], 1);
+	ZB.pico.saveCard(collection, { type: "intervention", p: "住院長者、older adults", i: "運動、exercise", o: "跌倒、falls" });
+	ZB.topicBot.runtime.ask = init => ({ action: "run", query: init.query, exclude: [], core: init.choices.filter(c => c.picked).map(c => c.key), sources: init.sources });
+	await ZB.topicBot.setup(collection);
+	same(env.errors, []);
+	let note = fs.readFileSync(path.join(env.vault, ...NOTE), "utf8");
+	assert.match(note, /\*\*Nurse-led balance exercise[^\n]*｜🏝️ 建議放：運動（[^）]*）｜\[DOI\]/);
+	assert.match(note, /🏝️ 建議放哪座島：比對各子分類文獻/);
+	// Tick two; send Tai chi to 衛教 by hand (the line may not suggest anything for it)
+	let ticked = note.split("\n").map((l) => {
+		if (/\*\*Nurse-led/.test(l)) return l.replace("- [ ]", "- [x]");
+		if (/\*\*Tai chi/.test(l)) return l.replace("- [ ]", "- [x]").replace(/｜🏝️[^｜]*/, "").replace(/｜\[DOI\]/, "｜🏝️ 衛教｜[DOI]");
+		return l;
+	}).join("\n");
+	fs.writeFileSync(path.join(env.vault, ...NOTE), ticked);
+	let routed = null;
+	ZB.topicBot.runtime.confirm = (todo, r) => {
+		routed = Object.fromEntries(r);
+		return true;
+	};
+	same(await ZB.topicBot.importChecked(collection), { imported: 2, failed: [] });
+	same(routed, { "運動": 1, "衛教": 1 });
+	let titles = id => env.context.Zotero.Collections.get(id).getChildItems().map(i => i.getField("title"));
+	assert.ok(titles(2).some(t => /Nurse-led/.test(t)));
+	assert.ok(titles(3).some(t => /Tai chi/.test(t)));
+	assert.ok(!titles(1).some(t => /Nurse-led|Tai chi/.test(t)), "not in the topic itself");
+	same(env.errors, []);
+});
+
 test("主題搜尋機器人: off by its switch, a collection without a bot, delete", async () => {
 	let env = await setup();
 	let { ZB, collection } = env;

@@ -16,12 +16,15 @@
 <style>
 /* Layout: the island map takes the middle, the chosen island on the left, the island log on the right, the tour below */
 :root {
-  --bg: #e6f4f1;
-  --panel: #ffffff;
-  --panel-2: #f2f8f6;
+  --bg: #f4f0e6;
+  --panel: #fffdf8;
+  --panel-2: #f6f1e6;
   --ink: #213439;
-  --muted: #637a7f;
-  --line: #d9e8e4;
+  --muted: #6b7570;
+  --line: #e7dfcd;
+  --warm: #e07a4f;
+  --hint-bg: #fff1dc;
+  --hint-ink: #8a5420;
   --accent: #7a6be0;
   --accent-soft: #eeebff;
   --good: #3c9d6a;
@@ -36,12 +39,14 @@
   :root:not([data-theme="light"]) {
     --bg: #0e1c21; --panel: #16292f; --panel-2: #1c3239; --ink: #e4efed; --muted: #9db3b5; --line: #29434a;
     --accent: #ab9ff6; --accent-soft: #2b2a55; --good: #6ccb97; --warn: #f2ab62;
+    --warm: #f29a73; --hint-bg: #3a2c1f; --hint-ink: #f6c995;
     --shadow: 0 10px 30px rgba(0, 0, 0, .40); color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0e1c21; --panel: #16292f; --panel-2: #1c3239; --ink: #e4efed; --muted: #9db3b5; --line: #29434a;
   --accent: #ab9ff6; --accent-soft: #2b2a55; --good: #6ccb97; --warn: #f2ab62;
+  --warm: #f29a73; --hint-bg: #3a2c1f; --hint-ink: #f6c995;
   --shadow: 0 10px 30px rgba(0, 0, 0, .40); color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -77,6 +82,10 @@ header.top { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; jus
 .mini b { display: block; font-family: var(--display); font-size: 20px; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .mini span { font-size: 11px; color: var(--muted); }
 .formula { font-size: 12px; color: var(--muted); }
+.hint { margin-top: 8px; padding: 7px 11px; border-radius: 12px; background: var(--hint-bg); color: var(--hint-ink); font-size: 12.5px; font-weight: 700; }
+.go { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; border: 0; border-radius: 16px; padding: 11px 18px; background: var(--warm); color: #fff; font: 800 14px var(--body); cursor: pointer; box-shadow: 0 6px 16px rgba(224, 122, 79, .28); }
+.go:hover { filter: brightness(1.05); }
+.clock { align-self: center; padding: 0 8px 0 6px; font: 700 12px var(--display); color: #213439; font-variant-numeric: tabular-nums; letter-spacing: .04em; }
 .squares { letter-spacing: 1px; font-size: 13px; word-break: break-all; }
 .sec { margin-top: 12px; }
 .sec h3 { font-size: 13px; margin: 0 0 4px; }
@@ -138,6 +147,7 @@ button:focus-visible, a:focus-visible, canvas:focus-visible { outline: 3px solid
     <div class="mapbox">
       <canvas id="map" tabindex="0" aria-label="群島地圖：點一座島看詳細資料"></canvas>
       <div class="maptools" role="group" aria-label="時段">
+        <span class="clock" id="clock" title="依現在時間自動切換白天、黃昏、夜晚"></span>
         <button type="button" data-time="day" aria-pressed="true">白天</button>
         <button type="button" data-time="dusk" aria-pressed="false">黃昏</button>
         <button type="button" data-time="night" aria-pressed="false">夜晚</button>
@@ -210,7 +220,9 @@ window.PLANET = /*ZOTMAX_DATA*/null;
       el.innerHTML = `<div class="eyebrow">星球中心</div><h2>${esc(D.title)}</h2>
         ${(D.pico || []).map(([k, v]) => `<div><b>${esc(k)}</b>：${esc(v)}</div>`).join("") || `<p class="formula">這個分類還沒有 PICO 問題卡。</p>`}
         <p class="formula" style="margin-top:12px">每座島是一個 Zotero 子分類。開發度 = 已讀 40% ＋ 評讀已核對 30% ＋ 有 AI 筆記 30%：🌱 荒島 &lt;25、🏕️ 開墾中 25–49、🏘️ 聚落 50–74、🏙️ 城鎮 ≥75。</p>
-        ${open(D.link, "在 Obsidian 開啟星球頁")}`;
+        <button type="button" class="go" id="go">跟著導覽逛一圈 <span aria-hidden="true">↗</span></button>
+        <div>${open(D.link, "在 Obsidian 開啟星球頁")}</div>`;
+      $("go").onclick = () => { tour(0); document.querySelector(".tour").scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "nearest" }); };
     }
     else {
       const is = islands.find(i => i.id === id);
@@ -223,6 +235,7 @@ window.PLANET = /*ZOTMAX_DATA*/null;
         <span class="lv">LV${st[1]} ${st[2]} ${st[3]}</span>
         <div class="devbar" role="img" aria-label="開發度 ${is.dev}"><i style="width:${Math.max(4, is.dev)}%"></i></div>
         <div class="formula">開發度 ${is.dev}：已讀 ${is.read}／${is.papers}、評讀核對 ${is.verified}、AI 筆記 ${is.ai}</div>
+        ${is.hint ? `<div class="hint">⬆️ ${esc(is.hint)}</div>` : ""}
         <div class="mini"><div><b>${is.papers}</b><span>篇文獻</span></div><div><b>${is.best ? "L" + is.best : "—"}</b><span>最強證據</span></div><div><b>${is.gaps.length}</b><span>缺口</span></div></div>
         ${is.design ? `<div class="sec"><h3>研究設計</h3>${esc(is.design)}</div>` : ""}
         ${is.dirs ? `<div class="sec"><h3>結論方向（AI 初判）</h3><span class="squares">${esc(is.dirs)}</span></div>` : ""}
@@ -319,15 +332,29 @@ window.PLANET = /*ZOTMAX_DATA*/null;
   let ctx = cv.getContext("2d");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const TIMES = {
-    day: { sky: ["#c6eef0", "#9ed9df"], deep: "#7fcad1", shallow: "#b8ece8", sand: "#f6e6bd", sand2: "#ead3a0", grass: ["#bfe69a", "#96cf74"], rim: "#d6f2b6", cliff: ["#d8bf92", "#b49468"], wall: "#fffaf2", wall2: "#efe4d2", door: "#c79a6b", tree: ["#7cc86d", "#5aa95a"], trunk: "#9a7451", label: "#ffffff", ink: "#213439", foam: "rgba(255,255,255,.75)", cloud: "rgba(255,255,255,.92)", shade: "rgba(30,70,80,.18)", glow: 0 },
-    dusk: { sky: ["#ffd3b0", "#d2b1e0"], deep: "#b49fd0", shallow: "#d9c6ea", sand: "#f5d6b0", sand2: "#e3bd94", grass: ["#c8d690", "#a3b979"], rim: "#e4e9b1", cliff: ["#d3ad86", "#ad8565"], wall: "#fff1e2", wall2: "#ecd4bd", door: "#b9876a", tree: ["#86ad66", "#678f53"], trunk: "#8f6a4c", label: "#fff7ef", ink: "#3b2c37", foam: "rgba(255,240,230,.75)", cloud: "rgba(255,236,226,.9)", shade: "rgba(80,40,70,.18)", glow: .55 },
-    night: { sky: ["#1e2b52", "#111a36"], deep: "#1f3460", shallow: "#2f4b7c", sand: "#9a948f", sand2: "#837d79", grass: ["#5c8a66", "#466f53"], rim: "#6f9a76", cliff: ["#76698a", "#5a4f6d"], wall: "#d5d1e6", wall2: "#b5afcb", door: "#6e5f82", tree: ["#3f7058", "#2f5846"], trunk: "#5b4a5e", label: "#26315a", ink: "#eef2ff", foam: "rgba(200,220,255,.35)", cloud: "rgba(190,200,240,.25)", shade: "rgba(0,0,0,.3)", glow: 1 },
+    day: { sky: ["#c6eef0", "#9ed9df"], deep: "#7fcad1", shallow: "#b8ece8", sand: "#f6e6bd", sand2: "#ead3a0", grass: ["#bfe69a", "#96cf74"], rim: "#d6f2b6", cliff: ["#d8bf92", "#b49468"], wall: "#fffaf2", wall2: "#efe4d2", door: "#c79a6b", tree: ["#7cc86d", "#5aa95a"], trunk: "#9a7451", label: "#fffdf7", ink: "#213439", foam: "rgba(255,255,255,.75)", cloud: "rgba(255,255,255,.92)", shade: "rgba(30,70,80,.18)", glow: 0,
+      land: ["#d8e8b0", "#bcd890"], shore: "#efe3c2", num: "#e07a4f", lead: "rgba(33,52,57,.45)", rail: "#9c6e47", plank: "#e4bb8a" },
+    dusk: { sky: ["#ffd3b0", "#d2b1e0"], deep: "#b49fd0", shallow: "#d9c6ea", sand: "#f5d6b0", sand2: "#e3bd94", grass: ["#c8d690", "#a3b979"], rim: "#e4e9b1", cliff: ["#d3ad86", "#ad8565"], wall: "#fff1e2", wall2: "#ecd4bd", door: "#b9876a", tree: ["#86ad66", "#678f53"], trunk: "#8f6a4c", label: "#fff7ef", ink: "#3b2c37", foam: "rgba(255,240,230,.75)", cloud: "rgba(255,236,226,.9)", shade: "rgba(80,40,70,.18)", glow: .55,
+      land: ["#e0d8a4", "#c7c08a"], shore: "#f1d7b2", num: "#d9663c", lead: "rgba(59,44,55,.45)", rail: "#8f6145", plank: "#deb084" },
+    night: { sky: ["#1e2b52", "#111a36"], deep: "#1f3460", shallow: "#2f4b7c", sand: "#9a948f", sand2: "#837d79", grass: ["#5c8a66", "#466f53"], rim: "#6f9a76", cliff: ["#76698a", "#5a4f6d"], wall: "#d5d1e6", wall2: "#b5afcb", door: "#6e5f82", tree: ["#3f7058", "#2f5846"], trunk: "#5b4a5e", label: "#26315a", ink: "#eef2ff", foam: "rgba(200,220,255,.35)", cloud: "rgba(190,200,240,.25)", shade: "rgba(0,0,0,.3)", glow: 1,
+      land: ["#2f4a42", "#263c35"], shore: "#6d6a63", num: "#f29a73", lead: "rgba(238,242,255,.45)", rail: "#6b5466", plank: "#8a7a86" },
   };
-  let time = matchMedia("(prefers-color-scheme: dark)").matches && document.documentElement.dataset.theme !== "light" ? "night" : "day";
+  // The time of day follows the clock (06–16 白天, 16–19 黃昏, else 夜晚) until the reader picks one
+  const byClock = () => { const h = new Date().getHours(); return h >= 6 && h < 16 ? "day" : h >= 16 && h < 19 ? "dusk" : "night"; };
+  let picked = false;
+  let time = byClock();
+  const pressTime = () => document.querySelectorAll(".maptools button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.time === time)));
+  pressTime();
   document.querySelectorAll(".maptools button").forEach(b => {
-    b.setAttribute("aria-pressed", String(b.dataset.time === time));
-    b.onclick = () => { time = b.dataset.time; document.querySelectorAll(".maptools button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); paintStatic(); };
+    b.onclick = () => { picked = true; time = b.dataset.time; pressTime(); paintStatic(); };
   });
+  const showClock = () => {
+    const d = new Date(), p = n => String(n).padStart(2, "0");
+    $("clock").textContent = `🕒 ${p(d.getHours())}:${p(d.getMinutes())}`;
+    if (!picked && byClock() !== time) { time = byClock(); pressTime(); paintStatic(); }
+  };
+  showClock();
+  setInterval(showClock, 30000);
 
   let W = 0, H = 0, S = 1, OX = 0, OY = 0, dpr = 1;
   const ISO = (gx, gy, z = 0) => [OX + (gx - gy) * S, OY + (gx + gy) * S * .5 - z * S * .5];
@@ -395,6 +422,9 @@ window.PLANET = /*ZOTMAX_DATA*/null;
   function tree(x, y, z, P, size = 1) {
     shadowDot(x, y, z, .36 * size);
     const [px, py] = ISO(x, y, z);
+    treeAt(px, py, P, size);
+  }
+  function treeAt(px, py, P, size = 1) {
     ctx.fillStyle = P.trunk; ctx.beginPath(); ctx.roundRect(px - S * .06 * size, py - S * .42 * size, S * .12 * size, S * .44 * size, S * .05); ctx.fill();
     const puffs = [[-.16, -.62, .24], [.16, -.6, .22], [0, -.82, .26]];
     for (const [dx, dy, r] of puffs) { ctx.fillStyle = P.tree[1]; ctx.beginPath(); ctx.arc(px + dx * S * size, py + dy * S * size, r * S * size, 0, 7); ctx.fill(); }
@@ -428,41 +458,118 @@ window.PLANET = /*ZOTMAX_DATA*/null;
     const n = parseInt(hex.slice(1), 16), f = v => Math.max(0, Math.min(255, Math.round(v + (pct > 0 ? (255 - v) : v) * pct / 100)));
     return `rgb(${f(n >> 16)}, ${f((n >> 8) & 255)}, ${f(n & 255)})`;
   }
-  function pill(text, x, y, P, strong, dotColor) {
-    const fs = Math.max(W < 520 ? 10.5 : 11.5, Math.min(15, S * .44));
-    ctx.font = `${strong ? 900 : 700} ${fs}px "Noto Sans TC", system-ui, sans-serif`;
-    const tw = ctx.measureText(text).width, pad = fs * .9, h = fs * 1.95, w = tw + pad * 2 + (dotColor ? fs * .9 : 0);
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,.14)"; ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
-    ctx.fillStyle = P.label; ctx.beginPath(); ctx.roundRect(x - w / 2, y - h / 2, w, h, h / 2); ctx.fill();
-    ctx.restore();
-    if (strong) { ctx.lineWidth = 2.5; ctx.strokeStyle = "#7a6be0"; ctx.beginPath(); ctx.roundRect(x - w / 2, y - h / 2, w, h, h / 2); ctx.stroke(); }
-    let tx = x - w / 2 + pad;
-    if (dotColor) { ctx.fillStyle = dotColor; ctx.beginPath(); ctx.arc(tx + fs * .3, y, fs * .3, 0, 7); ctx.fill(); tx += fs * .9; }
-    ctx.fillStyle = P.ink; ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.fillText(text, tx, y + 1);
-  }
-  // labels never sit on top of each other: try spots near the anchor until one is free
+  // the tags placed so far this paint (placeTag keeps them apart)
   const placed = [];
-  function putPill(text, x, y, P, strong, dotColor, optional) {
+  const STAGE_DOT = { 1: "#9ccf7f", 2: "#f2b24c", 3: "#62b7d8", 4: "#8f80ec" };
+
+  // ---------- the lake inside its shore (screen space), boardwalks, the lighthouse, labels with leader lines ----------
+  const lake = { cx: 0, cy: 0, rx: 1, ry: 1 };
+  const lakeR = a => 1 + .035 * Math.sin(3 * a + 1) + .025 * Math.sin(5 * a + 2) + .015 * Math.sin(8 * a);
+  const lakeAt = (x, y) => { const dx = (x - lake.cx) / lake.rx, dy = (y - lake.cy) / lake.ry; return Math.hypot(dx, dy) / lakeR(Math.atan2(dy, dx)); };
+  function lakePath(grow = 0) {
+    ctx.beginPath();
+    for (let k = 0; k <= 96; k++) {
+      const a = k / 96 * Math.PI * 2, r = lakeR(a);
+      const x = lake.cx + Math.cos(a) * (lake.rx * r + grow), y = lake.cy + Math.sin(a) * (lake.ry * r + grow);
+      k ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    }
+    ctx.closePath();
+  }
+  // A wooden boardwalk along a quadratic curve (screen points): deck, planks, two rails on posts
+  function boardwalk(p1, c, p2, P, wide = .26) {
+    const n = Math.max(4, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / (S * .26)));
+    const pts = [];
+    for (let k = 0; k <= n; k++) {
+      const t = k / n, u = 1 - t;
+      const x = u * u * p1[0] + 2 * u * t * c[0] + t * t * p2[0], y = u * u * p1[1] + 2 * u * t * c[1] + t * t * p2[1];
+      let tx = 2 * u * (c[0] - p1[0]) + 2 * t * (p2[0] - c[0]), ty = 2 * u * (c[1] - p1[1]) + 2 * t * (p2[1] - c[1]);
+      const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+      pts.push({ x, y, nx: -ty * S * wide, ny: tx * S * wide * .6 });
+    }
+    const side = sgn => pts.map(q => [q.x + q.nx * sgn, q.y + q.ny * sgn]);
+    const L = side(1), R = side(-1);
+    ctx.save(); ctx.lineJoin = "round"; ctx.lineCap = "round";
+    // shadow on the water, then the deck
+    ctx.fillStyle = "rgba(0,0,0,.13)"; ctx.beginPath(); [...L, ...R.reverse()].forEach(([x, y], k) => (k ? ctx.lineTo(x, y + S * .3) : ctx.moveTo(x, y + S * .3))); ctx.closePath(); ctx.fill();
+    R.reverse();
+    ctx.fillStyle = P.plank; ctx.beginPath(); [...L, ...R.slice().reverse()].forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = shade(P.plank, -22); ctx.lineWidth = Math.max(1, S * .03);
+    for (let k = 1; k < pts.length - 1; k++) { ctx.beginPath(); ctx.moveTo(...L[k]); ctx.lineTo(...R[k]); ctx.stroke(); }
+    // rails and posts
+    const up = S * .26;
+    ctx.strokeStyle = P.rail; ctx.lineWidth = Math.max(1.2, S * .045);
+    for (const line of [L, R]) {
+      for (let k = 0; k < line.length; k += 2) { ctx.beginPath(); ctx.moveTo(line[k][0], line[k][1]); ctx.lineTo(line[k][0], line[k][1] - up); ctx.stroke(); }
+      ctx.beginPath(); line.forEach(([x, y], k) => (k ? ctx.lineTo(x, y - up) : ctx.moveTo(x, y - up))); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function lighthouse(px, py, P) {
+    const w = S * .34, h = S * 2.1;
+    ctx.fillStyle = "rgba(0,0,0,.15)"; ctx.beginPath(); ctx.ellipse(px, py + S * .08, S * .7, S * .28, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#b9b4aa"; ctx.beginPath(); ctx.ellipse(px, py, S * .62, S * .26, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#d4cfc4"; ctx.beginPath(); ctx.ellipse(px - S * .08, py - S * .05, S * .5, S * .2, 0, 0, 7); ctx.fill();
+    const tower = (y0, y1, c) => {
+      const t0 = 1 - (py - y0) / h * .35, t1 = 1 - (py - y1) / h * .35;
+      ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(px - w * t0, y0); ctx.lineTo(px + w * t0, y0); ctx.lineTo(px + w * t1, y1); ctx.lineTo(px - w * t1, y1); ctx.closePath(); ctx.fill();
+    };
+    tower(py - S * .05, py - h, P.wall);
+    tower(py - h * .3, py - h * .45, "#e2604a");
+    tower(py - h * .65, py - h * .8, "#e2604a");
+    ctx.fillStyle = "rgba(0,0,0,.08)"; ctx.fillRect(px, py - h, w * .9, h - S * .05);
+    ctx.fillStyle = P.rail; ctx.beginPath(); ctx.roundRect(px - w * 1.05, py - h - S * .08, w * 2.1, S * .12, S * .04); ctx.fill();
+    ctx.fillStyle = P.glow ? "#ffe08a" : "#fff3c4"; ctx.beginPath(); ctx.roundRect(px - w * .6, py - h - S * .42, w * 1.2, S * .34, S * .06); ctx.fill();
+    ctx.fillStyle = "#e2604a"; ctx.beginPath(); ctx.moveTo(px - w * .85, py - h - S * .42); ctx.quadraticCurveTo(px, py - h - S * .95, px + w * .85, py - h - S * .42); ctx.closePath(); ctx.fill();
+    return [px, py - h - S * .25];
+  }
+  // Labels: placed first (islands, then the harbor, bridges and seas), then the leader lines, then the tags on top
+  function tagSize(spec) {
     const fs = Math.max(W < 520 ? 10.5 : 11.5, Math.min(15, S * .44));
-    ctx.font = `${strong ? 900 : 700} ${fs}px "Noto Sans TC", system-ui, sans-serif`;
-    const w = ctx.measureText(text).width + fs * 1.8 + (dotColor ? fs * .9 : 0), h = fs * 1.95, m = 4;
+    ctx.font = `${spec.strong ? 900 : 700} ${fs}px "Noto Sans TC", system-ui, sans-serif`;
+    let w = ctx.measureText(spec.text).width + fs * 1.7;
+    if (spec.num) { ctx.font = `800 ${fs * .82}px "Baloo 2", "Noto Sans TC", sans-serif`; w += ctx.measureText(spec.num).width + fs * .55; }
+    if (spec.dot) w += fs * .85;
+    return { fs, w, h: fs * 2.05 };
+  }
+  function placeTag(spec) {
+    const { fs, w, h } = tagSize(spec), m = 5;
     const free = (cx, cy) => placed.every(r => cx + w / 2 + m < r.x0 || cx - w / 2 - m > r.x1 || cy + h / 2 + m < r.y0 || cy - h / 2 - m > r.y1);
     const tries = [[0, 0]];
-    for (let k = 1; k <= 4; k++) tries.push([0, k * h * .62], [0, -k * h * .62], [k * w * .3, k * h * .4], [-k * w * .3, k * h * .4]);
+    for (let k = 1; k <= 5; k++) tries.push([0, k * h * .62], [0, -k * h * .62], [k * w * .3, k * h * .4], [-k * w * .3, k * h * .4], [k * w * .45, 0], [-k * w * .45, 0]);
     let spot = null;
     for (const [dx, dy] of tries) {
-      const tx = Math.min(W - w / 2 - 6, Math.max(w / 2 + 6, x + dx)), ty = Math.min(H - h / 2 - 6, Math.max(h / 2 + 6, y + dy));
+      const tx = Math.min(W - w / 2 - 6, Math.max(w / 2 + 6, spec.x + dx)), ty = Math.min(H - h / 2 - 6, Math.max(h / 2 + 6, spec.y + dy));
       if (free(tx, ty)) { spot = [tx, ty]; break; }
     }
-    // a bridge or sea label that finds no room is left out (the island panel still lists it)
-    if (!spot && optional) return null;
-    const [cx, cy] = spot || [x, y];
+    if (!spot && spec.optional) return null;
+    const [cx, cy] = spot || [spec.x, spec.y];
     placed.push({ x0: cx - w / 2, x1: cx + w / 2, y0: cy - h / 2, y1: cy + h / 2 });
-    pill(text, cx, cy, P, strong, dotColor);
-    return [cx, cy];
+    return Object.assign({}, spec, { cx, cy, fs, w, h });
   }
-  const STAGE_DOT = { 1: "#9ccf7f", 2: "#f2b24c", 3: "#62b7d8", 4: "#8f80ec" };
+  function drawLeader(t, P) {
+    if (!t.from) return;
+    const [ax, ay] = t.from, ex = Math.max(t.cx - t.w / 2, Math.min(t.cx + t.w / 2, ax)), ey = ay < t.cy ? t.cy - t.h / 2 : t.cy + t.h / 2;
+    if (Math.hypot(ex - ax, ey - ay) < S * .5) return;
+    ctx.save(); ctx.strokeStyle = P.lead; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ex, ey); ctx.stroke();
+    ctx.fillStyle = P.lead; ctx.beginPath(); ctx.arc(ax, ay, 2.4, 0, 7); ctx.fill(); ctx.restore();
+  }
+  function drawTag(t, P) {
+    const { cx, cy, fs, w, h } = t, x = cx - w / 2, y = cy - h / 2, r = h * .32;
+    ctx.save();
+    ctx.shadowColor = "rgba(40,30,10,.14)"; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3;
+    ctx.fillStyle = P.label; ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill();
+    ctx.restore();
+    ctx.lineWidth = t.strong ? 2.5 : 1; ctx.strokeStyle = t.strong ? "#7a6be0" : "rgba(120,100,60,.18)";
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.stroke();
+    let tx = x + fs * .85;
+    ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    if (t.num) {
+      ctx.font = `800 ${fs * .82}px "Baloo 2", "Noto Sans TC", sans-serif`; ctx.fillStyle = P.num; ctx.fillText(t.num, tx, cy + 1.5);
+      tx += ctx.measureText(t.num).width + fs * .55;
+    }
+    if (t.dot) { ctx.fillStyle = t.dot; ctx.beginPath(); ctx.arc(tx + fs * .28, cy, fs * .28, 0, 7); ctx.fill(); tx += fs * .85; }
+    ctx.font = `${t.strong ? 900 : 700} ${fs}px "Noto Sans TC", system-ui, sans-serif`; ctx.fillStyle = P.ink; ctx.fillText(t.text, tx, cy + 1);
+  }
 
   const hits = [];
   const off = document.createElement("canvas"), octx = off.getContext("2d");
@@ -478,8 +585,11 @@ window.PLANET = /*ZOTMAX_DATA*/null;
     const all = [hub, ...order, ...seas.map(s => ({ x: s.x, y: s.y, r: 1.6 }))];
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const i of all) { const e = (i.r || 2) + .8; for (const [gx, gy] of [[i.x - e, i.y - e], [i.x + e, i.y + e], [i.x + e, i.y - e], [i.x - e, i.y + e]]) { const X = gx - gy, Y = (gx + gy) / 2; x0 = Math.min(x0, X); x1 = Math.max(x1, X); y0 = Math.min(y0, Y); y1 = Math.max(y1, Y); } }
-    S = Math.min(W / (x1 - x0 + 1), H / (y1 - y0 + 2.6));
+    // room for a strip of land around the lake
+    S = Math.min(W / (x1 - x0 + 2.4), H / (y1 - y0 + 3.6));
     OX = W / 2 - (x0 + x1) / 2 * S; OY = H / 2 - (y0 + y1) / 2 * S + S * .6;
+    lake.cx = W / 2; lake.cy = H / 2 + S * .5;
+    lake.rx = (x1 - x0) / 2 * S + S * .95; lake.ry = (y1 - y0) / 2 * S + S * 1.15;
     const P = TIMES[time];
     // draw everything static onto the offscreen canvas, then the animated layer over it
     octx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -490,9 +600,33 @@ window.PLANET = /*ZOTMAX_DATA*/null;
   function drawScene(c, P) {
     const keep = ctx;
     ctxSwap(c);
-    const g = ctx.createLinearGradient(0, 0, 0, H); g.addColorStop(0, P.sky[0]); g.addColorStop(1, P.sky[1]);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    ctx.save(); ctx.globalAlpha = .6; ctx.fillStyle = P.deep; ctx.fillRect(0, 0, W, H); ctx.restore();
+    // land all round, then the lake with a sandy shore
+    const lg = ctx.createLinearGradient(0, 0, W, H); lg.addColorStop(0, P.land[0]); lg.addColorStop(1, P.land[1]);
+    ctx.fillStyle = lg; ctx.fillRect(0, 0, W, H);
+    lakePath(S * .55); ctx.fillStyle = P.shore; ctx.fill();
+    lakePath(S * .2); ctx.fillStyle = shade(P.shore, -8); ctx.fill();
+    lakePath();
+    const g = ctx.createLinearGradient(0, lake.cy - lake.ry, 0, lake.cy + lake.ry); g.addColorStop(0, P.sky[0]); g.addColorStop(1, P.sky[1]);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.save(); lakePath(); ctx.clip(); ctx.globalAlpha = .55; ctx.fillStyle = P.deep; ctx.fill();
+    ctx.globalAlpha = 1; ctx.lineWidth = S * .35; ctx.strokeStyle = P.foam; lakePath(-S * .1); ctx.stroke(); ctx.restore();
+    // trees on the shore, back to front
+    const tr = rng(3), shoreTrees = [];
+    for (let gy = -1; gy < H / (S * 1.1) + 1; gy++) for (let gx = -1; gx < W / (S * 1.3) + 1; gx++) {
+      const x = (gx + tr() * .8) * S * 1.3, y = (gy + tr() * .8) * S * 1.1, d = lakeAt(x, y);
+      if (d > 1.12 && tr() < .2) shoreTrees.push([x, y, .8 + tr() * .5]);
+    }
+    shoreTrees.sort((a, b) => a[1] - b[1]).forEach(([x, y, sz]) => { ctx.fillStyle = "rgba(40,70,40,.16)"; ctx.beginPath(); ctx.ellipse(x, y, S * .3 * sz, S * .14 * sz, 0, 0, 7); ctx.fill(); treeAt(x, y, P, sz); });
+    // pebbles in the water, clear of the islands
+    const pr = rng(9);
+    for (let k = 0; k < 22; k++) {
+      const a = pr() * 6.283, d = .35 + pr() * .6, x = lake.cx + Math.cos(a) * lake.rx * d, y = lake.cy + Math.sin(a) * lake.ry * d;
+      if ([hub, ...order].some(is => { const [ix, iy] = ISO(is.x, is.y, 0); return ((x - ix) / (S * (is.r + 1.6))) ** 2 + ((y - iy) / (S * (is.r + 1.6) * .55)) ** 2 < 1; })) continue;
+      const w = S * (.12 + pr() * .16);
+      ctx.fillStyle = "rgba(0,0,0,.1)"; ctx.beginPath(); ctx.ellipse(x, y + w * .25, w * 1.1, w * .45, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = P.glow > .9 ? "#7d8394" : "#c9cdc6"; ctx.beginPath(); ctx.ellipse(x, y, w, w * .55, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = "rgba(255,255,255,.35)"; ctx.beginPath(); ctx.ellipse(x - w * .25, y - w * .18, w * .4, w * .18, 0, 0, 7); ctx.fill();
+    }
     // unexplored seas
     for (const s of seas) {
       const [px, py] = ISO(s.x, s.y);
@@ -511,11 +645,7 @@ window.PLANET = /*ZOTMAX_DATA*/null;
       const dx = B.x - A.x, dy = B.y - A.y, len = Math.hypot(dx, dy), ux = dx / len, uy = dy / len;
       const p1 = ISO(A.x + ux * (A.r - .2), A.y + uy * (A.r - .2), TOP), p2 = ISO(B.x - ux * (B.r - .2), B.y - uy * (B.r - .2), TOP);
       const mid = [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2 + S * .35];
-      ctx.save(); ctx.lineCap = "round";
-      ctx.strokeStyle = "rgba(0,0,0,.12)"; ctx.lineWidth = S * .5; ctx.beginPath(); ctx.moveTo(p1[0], p1[1] + S * .25); ctx.quadraticCurveTo(mid[0], mid[1] + S * .25, p2[0], p2[1] + S * .25); ctx.stroke();
-      ctx.strokeStyle = "#b8865a"; ctx.lineWidth = S * .42; ctx.beginPath(); ctx.moveTo(...p1); ctx.quadraticCurveTo(mid[0], mid[1], ...p2); ctx.stroke();
-      ctx.strokeStyle = "#dcae7c"; ctx.lineWidth = S * .3; ctx.setLineDash([S * .14, S * .1]); ctx.beginPath(); ctx.moveTo(...p1); ctx.quadraticCurveTo(mid[0], mid[1], ...p2); ctx.stroke();
-      ctx.restore();
+      boardwalk(p1, mid, p2, P);
       br._label = [(p1[0] + p2[0]) / 2, mid[1] - S * .55];
     }
     // the harbor: a pier off the hub towards the viewer
@@ -523,8 +653,10 @@ window.PLANET = /*ZOTMAX_DATA*/null;
       const [ux, uy] = gridDir(harborAng);
       const hx0 = hub.x + ux * (hub.r - .1), hy0 = hub.y + uy * (hub.r - .1), len = Math.max(1.4, ring * .4 - hub.r * .3);
       const p1 = ISO(hx0, hy0, .55), p2 = ISO(hx0 + ux * len, hy0 + uy * len, .55);
-      ctx.save(); ctx.lineCap = "round"; ctx.strokeStyle = "#b8865a"; ctx.lineWidth = S * .36; ctx.beginPath(); ctx.moveTo(...p1); ctx.lineTo(...p2); ctx.stroke();
-      ctx.strokeStyle = "#dcae7c"; ctx.lineWidth = S * .24; ctx.setLineDash([S * .1, S * .08]); ctx.beginPath(); ctx.moveTo(...p1); ctx.lineTo(...p2); ctx.stroke(); ctx.restore();
+      boardwalk(p1, [(p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2], p2, P, .22);
+      const lp = ISO(hx0 + ux * (len + .35), hy0 + uy * (len + .35), .3);
+      D.harbor._light = lighthouse(lp[0], lp[1], P);
+      D.harbor._base = lp;
       D.harbor._at = [hx0 + ux * len, hy0 + uy * len];
       D.harbor._dir = [ux, uy];
       const [lx, ly] = ISO(hx0 + ux * (len + .8), hy0 + uy * (len + .8));
@@ -555,18 +687,33 @@ window.PLANET = /*ZOTMAX_DATA*/null;
       const [lx, ly] = ISO(is.x, is.y, TOP);
       hits.push({ id: is.id, x: lx, y: ly, rx: S * is.r * 1.1, ry: S * is.r * .66 });
     }
-    // labels last, so nothing covers them; islands claim their spot first
+    // labels last, so nothing covers them: islands claim their spot first (outward from the hub, on a leader line),
+    // then the harbor, the bridges and the seas (those three drop out when there is no room, and on phones)
     placed.length = 0;
-    for (const is of byDepth) {
-      const [lx, ly] = ISO(is.x, is.y, TOP);
-      if (is.hub) putPill("🪐 " + (D.short || "研究問題"), lx, ly + S * (is.r * .55 + 1.05), P, selected === "hub");
-      else { const st = stageOf(is.dev); putPill(`${is.name} · LV${st[1]}`, lx, ly + S * (is.r * .55 + 1.05), P, selected === is.id, STAGE_DOT[st[1]]); }
+    const tags = [];
+    const [hx, hy] = ISO(hub.x, hub.y, TOP);
+    tags.push(placeTag({ text: "🪐 " + (D.short || "研究問題"), x: hx, y: hy + S * (hub.r * .55 + 1.05), strong: selected === "hub" }));
+    order.forEach((is) => {
+      const [lx, ly] = ISO(is.x, is.y, TOP), st = stageOf(is.dev);
+      let vx = lx - hx, vy = (ly - hy) * 1.6;
+      const l = Math.hypot(vx, vy) || 1; vx /= l; vy /= l;
+      const from = [lx + vx * S * is.r * .75, ly + vy * S * is.r * .42];
+      const y = ly + vy * S * (is.r * .62 + 1.1) - (vy < 0 ? S * 1.5 : -S * .3);
+      tags.push(placeTag({ num: String(islands.indexOf(is) + 1).padStart(2, "0"), text: `${is.name} · LV${st[1]}`, dot: STAGE_DOT[st[1]],
+        x: lx + vx * S * (is.r * 1.1 + 1.4), y, strong: selected === is.id, from }));
+    });
+    if (D.harbor) {
+      const [bx, by] = D.harbor._base;
+      tags.push(placeTag({ text: `⛵ 港口 · 待看 ${D.harbor.pending}`, x: bx + S * 1.6, y: by + S * 1.2, strong: selected === "harbor", optional: true, from: [bx, by] }));
     }
-    if (D.harbor) { const [lx, ly] = ISO(D.harbor._at[0] + D.harbor._dir[0] * 1.2, D.harbor._at[1] + D.harbor._dir[1] * 1.2); putPill(`⛵ 港口 · 待看 ${D.harbor.pending}`, lx, ly + S * 1.1, P, selected === "harbor", null, true); }
     // on a phone the bridges and seas keep their shapes but leave the words to the panel
-    if (W < 520) return ctxSwap(keep);
-    for (const br of D.bridges || []) if (br._label) putPill("🌉 " + br.label, br._label[0], br._label[1], P, false, null, true);
-    for (const s of seas) if (s._label) putPill("🌊 " + s.text, s._label[0], s._label[1], P, false, null, true);
+    if (W >= 520) {
+      for (const br of D.bridges || []) if (br._label) tags.push(placeTag({ text: "🌉 " + br.label, x: br._label[0], y: br._label[1], optional: true }));
+      for (const s of seas) if (s._label) tags.push(placeTag({ text: "🌊 " + s.text, x: s._label[0], y: s._label[1], optional: true }));
+    }
+    const shown = tags.filter(Boolean);
+    shown.forEach(t => drawLeader(t, P));
+    shown.forEach(t => drawTag(t, P));
     ctxSwap(keep);
   }
   function dome(x, y, z, P) {
@@ -598,7 +745,7 @@ window.PLANET = /*ZOTMAX_DATA*/null;
     c.strokeStyle = P.foam; c.lineWidth = 2; c.lineCap = "round";
     for (let k = 0; k < 34; k++) {
       const x = r() * W, y = r() * H;
-      if (hits.some(h => ((x - h.x) / (h.rx * 1.35)) ** 2 + ((y - h.y) / (h.ry * 1.6)) ** 2 <= 1)) continue;
+      if (lakeAt(x, y) > .95 || hits.some(h => ((x - h.x) / (h.rx * 1.35)) ** 2 + ((y - h.y) / (h.ry * 1.6)) ** 2 <= 1)) continue;
       const o = Math.sin(t / 30 + k) * 3, a = .35 + .35 * Math.sin(t / 20 + k * 1.7);
       c.globalAlpha = a; c.beginPath(); c.arc(x + o, y, S * .22, Math.PI * 1.15, Math.PI * 1.85); c.stroke();
     }
@@ -616,6 +763,13 @@ window.PLANET = /*ZOTMAX_DATA*/null;
         c.fillStyle = k < D.harbor.high ? "#f2b24c" : "#ff9e7d";
         c.beginPath(); c.moveTo(bx, by - S * .85 + bob); c.quadraticCurveTo(bx + S * .45, by - S * .45 + bob, bx + S * .32, by - S * .08 + bob); c.lineTo(bx, by - S * .08 + bob); c.closePath(); c.fill();
       }
+    }
+    // the lighthouse lamp glows from dusk
+    if (D.harbor && D.harbor._light && P.glow) {
+      const [lx, ly] = D.harbor._light, a = .35 + .25 * Math.sin(t / 12);
+      const lg = c.createRadialGradient(lx, ly, 1, lx, ly, S * 2.4);
+      lg.addColorStop(0, `rgba(255, 224, 138, ${a * P.glow})`); lg.addColorStop(1, "rgba(255, 224, 138, 0)");
+      c.fillStyle = lg; c.beginPath(); c.arc(lx, ly, S * 2.4, 0, 7); c.fill();
     }
     // clouds drifting across the top
     if (P.glow < 1) {

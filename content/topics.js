@@ -847,7 +847,11 @@
 					let map = await P.writeMap(dir, page.name, world.data);
 					maps.push({ path: topic.path, file: map.path });
 					let links = Object.fromEntries(world.planet.islands.map(is => [is.path, linkOf(is.path)]));
-					planetMd = P.planetSection(world.planet, world.data, { layout: ctx.layout, links, mapURL: map.url, botLink: world.data.harbor ? botFor(topic.path).link : "" });
+					let botLink = world.data.harbor ? botFor(topic.path).link : "";
+					// 🪐 星球 Canvas: the same planet inside Obsidian (phones too)
+					let planetCanvasLink = await P.writeCanvas(dir, page.dirParts, page.name,
+						P.planetCanvas(world.planet, world.data, { links, pageLink: topic.link, botLink, now }));
+					planetMd = P.planetSection(world.planet, world.data, { layout: ctx.layout, links, mapURL: map.url, canvasLink: planetCanvasLink, botLink });
 				}
 				catch (e) {
 					Zotero.logError(e);

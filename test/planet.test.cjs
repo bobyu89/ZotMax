@@ -163,3 +163,56 @@ test("the topic page carries 「🪐 星球」 and 「🪐 回到星球」 where
 	assert.ok(classic.includes("\n\n## 🪐 星球：跌倒\n\n"));
 	assert.ok(!T.topicSection(topic, s, { now: NOW, layout: "classic" }).includes("\n\n\n"), "no empty section without a planet");
 });
+
+test("levelHint: the fewest steps to the next stage, reading first, then AI notes, then verified appraisals", () => {
+	assert.deepEqual(P.levelHint({ papers: 4, read: 0, verified: 0, ai: 0, dev: 0 }), { to: ["🏕️", 2, "開墾中"], read: 3, ai: 0, verify: 0, text: "再讀 3 篇 → 🏕️ 開墾中" });
+	// 10 papers, all read (40): 聚落 needs 49.5 → one more AI note (43) is not enough, four are (52)
+	assert.equal(P.levelHint({ papers: 10, read: 10, verified: 0, ai: 0, dev: 40 }).text, "補 4 篇 AI 筆記 → 🏘️ 聚落");
+	assert.equal(P.levelHint({ papers: 2, read: 2, verified: 0, ai: 2, dev: 70 }).text, "核對 1 篇評讀 → 🏙️ 城鎮");
+	assert.equal(P.levelHint({ papers: 3, read: 3, verified: 3, ai: 3, dev: 100 }).text, "已是 🏙️ 城鎮：接下來補這座島的缺口");
+	assert.equal(P.levelHint({ papers: 0, read: 0, verified: 0, ai: 0, dev: 0 }).text, "島上還沒有文獻");
+	// Doing what it says really reaches the stage
+	for (let n of [{ papers: 7, read: 1, verified: 0, ai: 2 }, { papers: 13, read: 5, verified: 2, ai: 9 }, { papers: 1, read: 0, verified: 0, ai: 1 }]) {
+		n.dev = P.devOf(n);
+		let h = P.levelHint(n);
+		if (!h.to) continue;
+		let after = P.devOf({ papers: n.papers, read: n.read + h.read, verified: n.verified + h.verify, ai: n.ai + h.ai });
+		assert.equal(P.stageOf(after)[1], h.to[1], JSON.stringify(n));
+	}
+	let { data } = dataFor(archipelago());
+	assert.equal(data.islands[2].hint, "再讀 1 篇 → 🏕️ 開墾中");
+	assert.match(data.tour[2].text, /升級只差：再讀 1 篇 → 🏕️ 開墾中。$/);
+});
+
+test("planetCanvas: the hub, one coloured group and card per island, bridges as edges, seas and the harbor; only zm- nodes", () => {
+	let { pl, data } = dataFor(archipelago(), { bot: { pending: 4, high: 1, imported: 0, imports: [] } });
+	let json = JSON.parse(P.planetCanvas(pl, data, { links: { "碩論/跌倒/運動": "Z/運動/00 運動 總覽" }, pageLink: "Z/00 跌倒 總覽", botLink: "Z/bot", now: NOW }));
+	let ids = json.nodes.map(n => n.id);
+	assert.ok(ids.every(id => id.startsWith("zm-")));
+	assert.deepEqual(ids.filter(id => id.startsWith("zm-g-")), ["zm-g-i1", "zm-g-i2", "zm-g-i3"]);
+	let hub = json.nodes.find(n => n.id === "zm-hub");
+	assert.match(hub.text, /^## 🪐 \[\[Z\/00 跌倒 總覽\|跌倒\]\]/);
+	assert.match(hub.text, /由 ZotMax 自動產生（2026-10-24 10:00）/);
+	let g1 = json.nodes.find(n => n.id === "zm-g-i1");
+	assert.deepEqual([g1.type, g1.label, g1.color], ["group", "🏙️ 運動 · LV4", "6"]);
+	let card = json.nodes.find(n => n.id === "zm-i-i1");
+	assert.ok(card.x >= g1.x && card.y >= g1.y && card.x + card.width <= g1.x + g1.width && card.y + card.height <= g1.y + g1.height, "the card sits inside its group");
+	assert.match(card.text, /^### \[\[Z\/運動\/00 運動 總覽\|運動\]\]\n\*\*LV4 🏙️ 城鎮\*\* · 開發度 77\n▰▰▰▰▰▰▰▰▱▱\n3 篇 · 已讀 2 · 核對 2 · AI 3 · CEBM 1\n⬆️ 已是 🏙️ 城鎮/);
+	assert.equal(json.nodes.find(n => n.id === "zm-g-i3").color, "4", "LV1 green");
+	assert.deepEqual(json.edges.filter(e => e.id.startsWith("zm-b-")).map(e => [e.fromNode, e.toNode, e.label]), [["zm-g-i1", "zm-g-i2", "🌉 平衡能力"]]);
+	assert.equal(json.nodes.filter(n => n.id.startsWith("zm-sea-")).length, data.seas.length);
+	assert.match(json.nodes.find(n => n.id === "zm-harbor").text, /⛵ \*\*港口\*\*：\[\[Z\/bot\|搜尋機器人\]\]\n待看 4 篇 · ⭐⭐⭐ 1/);
+	// Groups don't overlap each other or the hub
+	let boxes = json.nodes.filter(n => n.type === "group" || n.id === "zm-hub");
+	for (let a of boxes) for (let b of boxes) {
+		if (a === b) continue;
+		assert.ok(a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y, `${a.id} × ${b.id}`);
+	}
+	assert.ok(P.canvasIsOurs(null));
+	assert.ok(P.canvasIsOurs(JSON.stringify(json)));
+	assert.ok(!P.canvasIsOurs(JSON.stringify({ nodes: [...json.nodes, { id: "abc", type: "text", text: "我的" }] })));
+	assert.ok(!P.canvasIsOurs("not json"));
+	let md = P.planetSection(pl, data, { layout: "board", canvasLink: "Z/00 跌倒 星球.canvas" });
+	assert.ok(md.includes("[[Z/00 跌倒 星球.canvas|🪐 星球 Canvas]]"));
+	assert.ok(md.includes("> > ⬆️ 已是 🏙️ 城鎮：接下來補這座島的缺口"));
+});

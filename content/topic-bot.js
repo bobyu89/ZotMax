@@ -11,6 +11,10 @@
  * rules only, no AI, every score with its reasons. The result is a checklist note in Obsidian
  * (<digest folder>/<collection> 搜尋機器人.md); only the papers the user ticks are imported
  * (Zotero's 「新增條目（依識別碼）」), tagged 新文獻, 追蹤/<collection> and the source.
+ * 🏝️ 靠岸到哪座島: when the collection has two or more sub-collections (a planet's islands, planet.js), each line
+ * suggests the one the paper fits (its papers' tags and MeSH, title words and the AI notes' interventions and
+ * outcomes, weighted by how much each belongs to that island) and the import puts it there; the user edits or
+ * deletes the 🏝️ part to send it elsewhere.
  *
  *   extensions.zotero-bridge.topicBot.bots     { <collection scope key>: bot }
  *   bot = { name, path, libraryID, collectionKey, query, exclude: [terms], core: [{ key, label, doi, pmid, openalex }],
@@ -344,9 +348,88 @@
 			c.journal ? `*${mdText(c.journal)}*` : "",
 			`${c.rank.score} 分：${c.rank.reasons.join(" · ")}`,
 			`來源 ${src}`,
+			c.island ? `${ISLAND_MARK} 建議放：${mdText(c.island.name)}（${c.island.hits.map(mdText).join("、")}）` : "",
 			links.join(" · "),
 		].filter(Boolean).join("｜");
 		return `- [${checked ? "x" : " "}] ${parts}`;
+	}
+
+	// ---------- 靠岸到哪座島: which sub-collection a paper fits (pure) ----------
+
+	const ISLAND_MARK = "🏝️";
+	const ISLAND_MIN_SCORE = 1;
+	const ISLAND_MARGIN = 1.25;
+	// Tags every sub-collection has (or ZotMax's own) say nothing about where a paper goes
+	const ISLAND_SKIP_RE = /[/:：#]|^新文獻$|^(humans?|animals?|female|male|adult|aged|middle aged|aged, 80 and over|young adult|adolescent|child|infant)$/i;
+	// English words of a title that say nothing about a topic
+	const TITLE_STOP = new Set(["with", "without", "from", "that", "this", "their", "among", "between", "study", "trial", "randomized", "randomised", "controlled",
+		"effect", "effects", "effectiveness", "review", "systematic", "analysis", "patients", "older", "adults", "people", "using", "based", "versus", "after", "during",
+		"protocol", "results", "outcomes", "impact", "association", "associated", "factors", "hospital", "care", "nursing", "intervention", "interventions", "program", "programme"]);
+
+	/** Title words worth matching: lower case, 5+ letters, not a stop word. */
+	function titleWords(title) {
+		return [...new Set(String(title || "").toLowerCase().match(/[a-z][a-z-]{4,}/g) || [])].filter(w => !TITLE_STOP.has(w));
+	}
+
+	/**
+	 * Each island's words, weighted by how much they belong to it rather than the others: [{ name, weights: Map(key →
+	 * { term, w }) }]. islands: [{ name, tagLists: [[tags of one paper]], titles: [titles], terms: [{ name, n }] (the AI
+	 * notes' interventions and outcomes) }]. A word's weight is its share of the papers that have it across the islands
+	 * (1 when only this island has it), less when only one paper has it; the island's own name weighs 1.5.
+	 */
+	function islandProfiles(islands) {
+		let counts = islands.map((is) => {
+			let m = new Map();
+			let add = (raw, k = 1) => {
+				let term = String(raw || "").normalize("NFKC").trim();
+				if (term.length < 3 || term.length > 60 || ISLAND_SKIP_RE.test(term)) return;
+				let key = term.toLowerCase();
+				let e = m.get(key) || { term, n: 0 };
+				e.n += k;
+				m.set(key, e);
+			};
+			for (let tags of is.tagLists || []) for (let t of new Set(tags)) add(t);
+			for (let t of is.titles || []) for (let w of titleWords(t)) add(w, 0.5);
+			for (let t of is.terms || []) add(t.name, t.n || 1);
+			return m;
+		});
+		let total = new Map();
+		for (let m of counts) for (let [k, e] of m) total.set(k, (total.get(k) || 0) + e.n);
+		return islands.map((is, i) => {
+			let weights = new Map();
+			for (let [k, e] of counts[i]) weights.set(k, { term: e.term, w: (e.n / total.get(k)) * Math.min(1, e.n / 2) });
+			let own = String(is.name || "").normalize("NFKC").trim();
+			if (own) weights.set(own.toLowerCase(), { term: own, w: 1.5 });
+			return { name: is.name, weights };
+		});
+	}
+
+	/**
+	 * The island a candidate fits best: { name, hits: [≤2 words], score } when it clearly wins (score ≥ 1 and 1.25 × the
+	 * runner-up), else null. A MeSH heading that is one of the island's tags counts double.
+	 */
+	function suggestIsland(c, profiles) {
+		if (!profiles || profiles.length < 2) return null;
+		let text = `${c.title || ""} ${c.abstract || ""}`;
+		let mesh = new Set((c.mesh || []).map(m => String(m).toLowerCase()));
+		let scored = profiles.map((p) => {
+			let hits = [];
+			for (let [k, { term, w }] of p.weights) {
+				let got = mesh.has(k) ? 2 * w : hasTerm(text, term) ? w : 0;
+				if (got > 0) hits.push([term, got]);
+			}
+			hits.sort((a, b) => b[1] - a[1]);
+			return { name: p.name, score: hits.reduce((n, [, g]) => n + g, 0), hits: hits.slice(0, 2).map(([t]) => t) };
+		}).sort((a, b) => b.score - a.score);
+		let [best, second] = scored;
+		if (best.score < ISLAND_MIN_SCORE || best.score < second.score * ISLAND_MARGIN) return null;
+		return { name: best.name, hits: best.hits, score: Math.round(best.score * 10) / 10 };
+	}
+
+	/** The island a checklist line names (「🏝️ 建議放：運動（…）」, or a name the user typed after 🏝️); "" without one. */
+	function islandOfLine(line) {
+		let m = /🏝\uFE0F?\s*(?:建議放[：:]\s*)?([^｜|（(\n]+)/u.exec(String(line || ""));
+		return m ? m[1].trim() : "";
 	}
 
 	// Also inside a folded callout (the 看板's 已匯入 list): "> - [x] …"
@@ -406,6 +489,7 @@
 			`排程：${scheduleText(bot)}；在 Zotero 分類右鍵 → ZotMax ▸ 主題搜尋機器人 可以修改或立即搜尋。`,
 			"分數（0–100，不用 AI）：主題詞出現在標題或摘要（介入權重最高）、每個概念都出現、研究設計（系統性回顧、RCT 較高）、引用核心文獻、近一年發表。分數只幫你排順序，要不要看、要不要納入由你決定。",
 			"勾選想讀的（`- [x]`），回到 Zotero 在分類上按右鍵 → ZotMax ▸ 匯入主題搜尋機器人勾選的文獻；沒勾的不會進文獻庫。",
+			run.islands ? `🏝️ 建議放哪座島：比對各子分類文獻的 MeSH／關鍵詞、標題用詞和 AI 筆記的介入與結果，匯入時放進那個子分類。不同意就改成別的子分類名稱，或刪掉「🏝️」那段，就放在「${bot.name}」本身。` : "",
 		].filter(Boolean);
 		if (board) {
 			parts.push(core.metaFold(`🤖 搜尋機器人 · ${bot.name} · ${date} 搜尋`, settingsLines));
@@ -998,11 +1082,18 @@
 			let profile = profileFrom({ cardBlocks: card && card.blocks, query: bot.query });
 			for (let c of merged) c.rank = scoreCandidate(c, profile, { now, exclude: bot.exclude });
 			merged.sort((a, b) => b.rank.score - a.rank.score);
+			// 🏝️ the sub-collection each paper fits, when the topic has two or more
+			let islands = await islandsFor(collection, settings);
+			if (islands.length >= 2) {
+				let profiles = islandProfiles(islands);
+				for (let c of merged) c.island = suggestIsland(c, profiles);
+			}
 			let target = await notePath(settings, collection);
 			let result = {
 				at: now.toISOString(), candidates: merged, errors,
 				counts: { pubmed: merged.filter(c => c.sources.has("pubmed")).length, citations: merged.filter(c => c.sources.has("citations") && !c.sources.has("pubmed")).length },
 				chinese: chineseTargets(card && card.zh),
+				islands: islands.length >= 2,
 			};
 			let { text, stats } = buildBotNote(target.existing, result, bot, { layout: core.layoutPref() });
 			await IOUtils.makeDirectory(target.dir, { createAncestors: true, ignoreExisting: true });
@@ -1053,6 +1144,56 @@
 		return out;
 	}
 
+	/** The direct sub-collections of a collection (none when Zotero can't say). */
+	function childCollections(collection) {
+		try {
+			return (Zotero.Collections.getByParent(collection.id) || []).filter(c => c && !c.deleted);
+		}
+		catch (e) {
+			return [];
+		}
+	}
+
+	/**
+	 * The islands of a topic for islandProfiles(): each direct sub-collection with the tags and titles of the papers in
+	 * it (and below it), and the AI notes' interventions and outcomes from the vault. [] on any trouble.
+	 */
+	async function islandsFor(collection, settings) {
+		try {
+			let children = childCollections(collection);
+			if (children.length < 2) return [];
+			let records = [];
+			try {
+				records = ZB().dashboard ? await ZB().dashboard.literatureRecords(settings) : [];
+			}
+			catch (e) {
+				Zotero.logError(e);
+			}
+			let planet = ZB().planet;
+			return children.map((child) => {
+				let items = [];
+				let visit = (c, depth) => {
+					items.push(...c.getChildItems(false).filter(it => it.isRegularItem()));
+					if (depth < 8) for (let sub of childCollections(c)) visit(sub, depth + 1);
+				};
+				visit(child, 0);
+				let path = ZB().adapter.collectionPath(child);
+				let mine = records.filter(r => !r.deleted && (r.collections || []).some(p => p === path || String(p).startsWith(path + "/")));
+				let terms = planet ? [...planet.islandTerms(mine).values()] : [];
+				return {
+					name: child.name,
+					tagLists: items.map(it => it.getTags().map(t => t.tag)),
+					titles: items.map(it => it.getField("title")),
+					terms,
+				};
+			});
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return [];
+		}
+	}
+
 	/** Import the ticked papers of a collection's bot note, tagged 新文獻, 追蹤/<collection> and the source. */
 	async function importChecked(collection) {
 		if (!featureOn()) return featureOff();
@@ -1080,8 +1221,21 @@
 			return { imported: 0, failed: [] };
 		}
 		let prefix = screening.config().sourcePrefix;
-		let ok = runtime.confirm ? runtime.confirm(todo) : Services.prompt.confirm(Zotero.getMainWindow(), "ZotMax：主題搜尋機器人",
-			`要用 DOI／PMID 查詢並匯入 ${todo.length} 篇勾選的文獻到分類「${collection.name}」嗎？\n`
+		// 🏝️ a line that names a sub-collection goes there; any other name, or none, stays in the topic itself
+		let children = childCollections(collection);
+		let key = s => String(s || "").normalize("NFKC").trim().toLowerCase();
+		let destOf = (c) => {
+			let name = key(islandOfLine(lines.get(c.key)));
+			return (name && children.find(ch => key(ch.name) === name)) || collection;
+		};
+		let routed = new Map();
+		for (let c of todo) {
+			let d = destOf(c);
+			if (d !== collection) routed.set(d.name, (routed.get(d.name) || 0) + 1);
+		}
+		let routeText = routed.size ? `其中 ${[...routed.values()].reduce((a, b) => a + b, 0)} 篇依 🏝️ 放進子分類（${[...routed].map(([n, k]) => `${n} ${k}`).join("、")}），其餘放在「${collection.name}」。\n` : "";
+		let ok = runtime.confirm ? runtime.confirm(todo, routed) : Services.prompt.confirm(Zotero.getMainWindow(), "ZotMax：主題搜尋機器人",
+			`要用 DOI／PMID 查詢並匯入 ${todo.length} 篇勾選的文獻到分類「${collection.name}」嗎？\n${routeText}`
 			+ `會加上標籤「${pubmedWatch.NEW_TAG}」「${pubmedWatch.WATCH_TAG_PREFIX}${collection.name}」和來源（${prefix}PubMed 或 ${prefix}${SOURCE_TAGS.citations}）；篩選標籤不會變動，不會下載 PDF。`);
 		if (!ok) return { imported: 0, failed: [], cancelled: true };
 		let pw = new Zotero.ProgressWindow({ closeOnClick: true });
@@ -1095,7 +1249,7 @@
 			line.setText(`匯入 ${i + 1}/${todo.length}：${c.title || c.doi || c.pmid}`);
 			line.setProgress(Math.round(i / todo.length * 100));
 			try {
-				let items = await citationChase.translateIdentifier(c.doi ? { DOI: c.doi } : { PMID: c.pmid }, collection.libraryID, [collection.id]);
+				let items = await citationChase.translateIdentifier(c.doi ? { DOI: c.doi } : { PMID: c.pmid }, collection.libraryID, [destOf(c).id]);
 				let regular = (items || []).filter(it => it && it.isRegularItem && it.isRegularItem());
 				if (!regular.length) throw new Error("查不到這個識別碼");
 				let fromPubMed = /｜來源 [^｜]*PubMed/.test(lines.get(c.key) || "");
@@ -1169,7 +1323,8 @@
 		queryBlocks, profileFrom, decodeXML, parseEFetch, invertedAbstract, openAlexRecord, citingURL, keyOf, mergeCandidates,
 		hasTerm, excludeHit, designOf, tierOf, scoreCandidate, botLine, parseListed, scheduleText, buildBotSection, frontmatterFor, buildBotNote,
 		dueSources, sinceDate, normalizeBot, parseExclude, chineseRow, chineseQuery, botSummaries, EXCLUDE_PENALTY,
+		ISLAND_MARK, titleWords, islandProfiles, suggestIsland, islandOfLine,
 		// Zotero
-		runtime, readBots, botFor, saveBot, deleteBot, coreChoices, setup, testQuery, run, runAll, importChecked, init, shutdown,
+		runtime, readBots, botFor, saveBot, deleteBot, coreChoices, setup, testQuery, run, runAll, islandsFor, importChecked, init, shutdown,
 	};
 });
