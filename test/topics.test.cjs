@@ -238,3 +238,21 @@ test("證據地圖 canvas: the topic page on top, a coloured group per direction
 	assert.equal(T.canvasIsOurs(JSON.stringify({ nodes: [...c.nodes, { id: "a1b2", type: "text" }] })), false);
 	assert.equal(T.canvasIsOurs("{ broken"), false);
 });
+
+test("主題搜尋機器人 on the topic page (a button with what waits) and on the home page (從這裡開始)", () => {
+	let topic = T.groupTopics(falls())[0];
+	let s = T.topicStats(topic, { now: NOW });
+	let bot = { path: "碩論/跌倒", name: "跌倒", link: "Zotero/50 新文獻/跌倒 搜尋機器人", pending: 12, high: 3, imported: 0 };
+	let board = T.topicSection(topic, s, { now: NOW, layout: "board", homeLink: "Zotero/首頁", bot });
+	assert.match(board, /\n> \[!zm-links\] 前往\n> \[\[Zotero\/首頁\|🏠 首頁\]\] · \[\[Zotero\/50 新文獻\/跌倒 搜尋機器人\|🤖 搜尋機器人（待看 12 · ⭐⭐⭐ 3）\]\]\n/);
+	let classic = T.topicSection(topic, s, { now: NOW, layout: "classic", homeLink: "Zotero/首頁", bot: Object.assign({}, bot, { high: 0 }) });
+	assert.match(classic, /\n> ← \[\[Zotero\/首頁\|首頁\]\] · \[\[Zotero\/50 新文獻\/跌倒 搜尋機器人\|🤖 搜尋機器人（待看 12）\]\]\n/);
+	// Home: bots with papers waiting, the most high-scoring first; none waiting → no card
+	let bots = [Object.assign({}, bot, { high: 1 }), { path: "壓傷", name: "壓傷", link: "Zotero/50 新文獻/壓傷 搜尋機器人", pending: 4, high: 2 },
+		{ path: "睡眠", name: "睡眠", link: "x", pending: 0, high: 0 }];
+	let md = T.startHere([], { now: NOW, layout: "board", bots });
+	assert.equal(md, "> [!zm-board] ▶️ 從這裡開始\n>\n> > [!zm-inbox] 🤖 搜尋機器人的新候選（16 篇）\n"
+		+ "> > - [[Zotero/50 新文獻/壓傷 搜尋機器人|壓傷]] · 待看 4 篇 · ⭐⭐⭐ 2\n> > - [[Zotero/50 新文獻/跌倒 搜尋機器人|碩論/跌倒]] · 待看 12 篇 · ⭐⭐⭐ 1");
+	assert.equal(T.startHere([], { now: NOW, layout: "board", bots: [bots[2]] }), "");
+	assert.match(T.homeSection({ now: NOW, layout: "board", stats: null, entries: [], bots }), /🤖 搜尋機器人的新候選（16 篇）/);
+});

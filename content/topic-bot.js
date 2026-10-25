@@ -13,8 +13,10 @@
  * (Zotero's 「新增條目（依識別碼）」), tagged 新文獻, 追蹤/<collection> and the source.
  *
  *   extensions.zotero-bridge.topicBot.bots     { <collection scope key>: bot }
- *   bot = { name, libraryID, collectionKey, query, core: [{ key, label, doi, pmid, openalex }],
- *           sources: { pubmed, citations }, days, lastPubmed, lastCitations, seen: [keys], createdAt }
+ *   bot = { name, path, libraryID, collectionKey, query, exclude: [terms], core: [{ key, label, doi, pmid, openalex }],
+ *           sources: { pubmed, citations }, days, lastPubmed, lastCitations, seen: [keys], createdAt,
+ *           notePath (vault-relative, no .md), stats: { pending, high, at }, imports: [{ at, n }] }
+ *   (path, notePath, stats and imports are what the topic page, the home page and the progress report read)
  *   extensions.zotero-bridge.topicBot.autoRun  run due bots in the background (default true)
  *
  * The helpers at the top are pure (Node tests); the rest needs Zotero.
@@ -46,6 +48,7 @@
 	const OPENALEX_FIELDS = "id,doi,display_name,publication_year,publication_date,primary_location,ids,type,abstract_inverted_index";
 	// Weights per PICO element; a search-string block without a label counts as 2
 	const WEIGHTS = { P: 2, I: 3, C: 1, O: 2 };
+	const EXCLUDE_PENALTY = 40;
 	const TIERS = [[60, "⭐⭐⭐", "高"], [35, "⭐⭐", "中"], [0, "⭐", "低"]];
 	const DESIGNS = [
 		{ label: "系統性回顧", points: 3, pubTypes: ["Systematic Review", "Meta-Analysis"], re: /\b(systematic (literature )?review|meta-?analys[ie]s|umbrella review)\b/i },
@@ -109,6 +112,11 @@
 		}
 		if (out.length) return out;
 		return queryBlocks(opts.query).map((terms, i) => ({ key: `Q${i + 1}`, label: `概念 ${i + 1}`, weight: 2, terms }));
+	}
+
+	/** 排除詞 as typed: one per line or separated by commas, 、 or semicolons. */
+	function parseExclude(text) {
+		return [...new Set(String(text || "").split(/[\n,，、;；]+/).map(t => t.trim()).filter(t => t.length >= 2))].slice(0, 30);
 	}
 
 	// ---------- PubMed EFetch and OpenAlex records (pure) ----------
@@ -240,6 +248,18 @@
 		return new RegExp(`(^|[^a-z0-9])${t}`, "i").test(text);
 	}
 
+	/**
+	 * An 排除詞 in the text: the whole word, plural included (rat → rats, not rate); with a trailing *
+	 * any word it starts (child* → children, childhood).
+	 */
+	function excludeHit(text, raw) {
+		let prefix = /\*\s*$/.test(String(raw || ""));
+		let t = cleanTerm(raw);
+		if (t.length < 2) return false;
+		let e = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		return new RegExp(`(^|[^a-z0-9])${e}${prefix ? "" : "(?:s|es)?(?![a-z0-9])"}`, "i").test(text || "");
+	}
+
 	/** The study design a paper reports: PubMed's publication types, else words in the title and abstract. */
 	function designOf(c) {
 		let types = c.pubTypes || [];
@@ -259,7 +279,8 @@
 	 *   each element found in the title counts its weight × 1.5, in the abstract its weight;
 	 *   +2 when every element is found; the design (系統性回顧／統合分析 3, RCT 2, other trials and observational
 	 *   or qualitative studies 1); +2 for each core paper it cites (at most 3); +1 within the last year.
-	 * Scaled to the best a paper could get with this profile.
+	 * Scaled to the best a paper could get with this profile; a paper with one of opts.exclude (the user's
+	 * 排除詞) loses EXCLUDE_PENALTY points.
 	 */
 	function scoreCandidate(c, profile, opts = {}) {
 		let title = c.title || "";
@@ -291,7 +312,10 @@
 		max += 1;
 		if (year && thisYear - year <= 1) points += 1;
 		let score = Math.round(points / max * 100);
+		let excluded = (opts.exclude || []).filter(t => excludeHit(text, t)).map(cleanTerm);
+		if (excluded.length) score = Math.max(0, score - EXCLUDE_PENALTY);
 		let reasons = [];
+		if (excluded.length) reasons.push(`含排除詞：${excluded.join("、")}`);
 		if (found.length) reasons.push(`命中 ${found.join("、")}` + (inTitle.length ? `（標題有 ${inTitle.join("、")}）` : ""));
 		else if (profile.length) reasons.push("標題與摘要都沒有主題詞");
 		let missing = profile.filter(el => !found.includes(el.label)).map(el => el.label);
@@ -300,7 +324,7 @@
 		if (cites.length) reasons.push(`引用 ${cites.length} 篇核心文獻：${cites.join("、")}`);
 		if (!c.abstract) reasons.push("沒有摘要");
 		let tier = tierOf(score);
-		return { score, stars: tier[1], tier: tier[2], design: design ? design.label : "", reasons, found };
+		return { score, stars: tier[1], tier: tier[2], design: design ? design.label : "", reasons, found, excluded };
 	}
 
 	// ---------- the note (pure) ----------
@@ -378,10 +402,11 @@
 		let settingsLines = [
 			`檢索式：\`${String(bot.query || "（沒有 PubMed 檢索式）").replace(/`/g, "'")}\``,
 			`核心文獻（找引用它們的新文獻）：${bot.core.length ? bot.core.map(c => c.label).join("、") : "（沒有）"}`,
+			bot.exclude && bot.exclude.length ? `排除詞（命中的扣 ${EXCLUDE_PENALTY} 分）：${bot.exclude.join("、")}` : "",
 			`排程：${scheduleText(bot)}；在 Zotero 分類右鍵 → ZotMax ▸ 主題搜尋機器人 可以修改或立即搜尋。`,
 			"分數（0–100，不用 AI）：主題詞出現在標題或摘要（介入權重最高）、每個概念都出現、研究設計（系統性回顧、RCT 較高）、引用核心文獻、近一年發表。分數只幫你排順序，要不要看、要不要納入由你決定。",
 			"勾選想讀的（`- [x]`），回到 Zotero 在分類上按右鍵 → ZotMax ▸ 匯入主題搜尋機器人勾選的文獻；沒勾的不會進文獻庫。",
-		];
+		].filter(Boolean);
 		if (board) {
 			parts.push(core.metaFold(`🤖 搜尋機器人 · ${bot.name} · ${date} 搜尋`, settingsLines));
 			let cards = [
@@ -401,12 +426,49 @@
 			parts.push(core.callout("info", `🤖 搜尋機器人：${bot.name}（${date} 搜尋）`, settingsLines.join("\n"), false));
 		}
 		for (let e of run.errors || []) parts.push(`> [!warning] ${e}`);
+		let zh = chineseRow(run.chinese);
+		if (zh) parts.push(zh);
 		parts.push(`## 待看（${pending.length} 篇）`, pending.length ? pending.map(r => r.line).join("\n") : "（目前沒有候選文獻）");
 		if (imported.length) {
 			let list = imported.map(r => r.line).join("\n");
 			parts.push(board ? core.foldBlock(`已匯入（${imported.length} 篇）`, list) : `## 已匯入（${imported.length} 篇）\n\n${list}`);
 		}
-		return { section: parts.join("\n\n"), listed: rows.map(r => r.key), dropped: dropped.map(r => r.key), fresh: fresh.length, high, pending: pending.length };
+		let highPending = pending.filter(r => /^\s*[-*+]\s+\[[ xX]\]\s+⭐⭐⭐/.test(r.line)).length;
+		return { section: parts.join("\n\n"), listed: rows.map(r => r.key), dropped: dropped.map(r => r.key), fresh: fresh.length, high, pending: pending.length, highPending };
+	}
+
+	/**
+	 * The Chinese databases the bot can't search (no API): a row of links with the PICO card's Chinese terms.
+	 * chinese = { query, targets: search-links.js buildTarget()s }; a target without a search URL opens its
+	 * start page, with the words to paste shown beside it.
+	 */
+	function chineseRow(chinese) {
+		if (!chinese || !chinese.query || !(chinese.targets || []).length) return "";
+		let links = chinese.targets.map(t => (t.copy ? `[${t.name}](${t.url})（貼上 \`${t.query.replace(/`/g, "'")}\`）` : `[${t.name}](${t.url})`));
+		return `> [!zm-links] 中文文獻（機器人查不到，請自己查）\n> ${links.join(" · ")}`;
+	}
+
+	/** The words to search the Chinese databases with: each PICO element's first Chinese term. */
+	function chineseQuery(cardBlocks) {
+		let words = (cardBlocks || []).map(b => (b.terms || []).find(t => /[㐀-鿿豈-﫿]/.test(t))).filter(Boolean);
+		return words.join(" ");
+	}
+
+	/**
+	 * What the topic page, the home page and the progress report show of each bot: [{ path, name, link,
+	 * pending, high, imported (those whose time passes `within`, else all), at }], the bots that have a note.
+	 */
+	function botSummaries(bots, within) {
+		let inPeriod = at => !within || within(at);
+		return Object.values(bots || {}).map(normalizeBot).filter(b => b.notePath).map(b => ({
+			path: b.path || b.name,
+			name: b.name,
+			link: b.notePath,
+			pending: b.stats.pending || 0,
+			high: b.stats.high || 0,
+			imported: b.imports.filter(i => inPeriod(i.at)).reduce((n, i) => n + i.n, 0),
+			at: b.stats.at || "",
+		}));
 	}
 
 	function frontmatterFor(bot, run, stats) {
@@ -414,6 +476,7 @@
 			title: `${bot.name}${NOTE_SUFFIX}`,
 			type: "topic-bot",
 			zotero_collection: bot.collectionKey,
+			collection_path: bot.path || bot.name,
 			bot_query: bot.query || "",
 			bot_new: stats.fresh,
 			bot_pending: stats.pending,
@@ -478,9 +541,11 @@
 		let days = Math.floor(Number(b.days));
 		return {
 			name: String(b.name || "").trim(),
+			path: String(b.path || b.name || "").trim(),
 			libraryID: b.libraryID,
 			collectionKey: String(b.collectionKey || ""),
 			query: String(b.query || "").trim(),
+			exclude: (Array.isArray(b.exclude) ? b.exclude : parseExclude(b.exclude)).map(String).slice(0, 30),
 			core: (Array.isArray(b.core) ? b.core : []).filter(c => c && (c.doi || c.pmid)).slice(0, MAX_CORE)
 				.map(c => ({ key: String(c.key || ""), label: String(c.label || c.doi || c.pmid), doi: screening.normalizeDOI(c.doi), pmid: String(c.pmid || ""), openalex: String(c.openalex || "") })),
 			sources: { pubmed: !b.sources || b.sources.pubmed !== false, citations: !b.sources || b.sources.citations !== false },
@@ -489,6 +554,9 @@
 			lastCitations: b.lastCitations || "",
 			seen: (Array.isArray(b.seen) ? b.seen : []).map(String).slice(-SEEN_LIMIT),
 			createdAt: b.createdAt || "",
+			notePath: String(b.notePath || ""),
+			stats: b.stats && typeof b.stats === "object" ? { pending: Number(b.stats.pending) || 0, high: Number(b.stats.high) || 0, at: String(b.stats.at || "") } : { pending: 0, high: 0, at: "" },
+			imports: (Array.isArray(b.imports) ? b.imports : []).filter(i => i && i.at && Number(i.n) > 0).map(i => ({ at: String(i.at), n: Number(i.n) })).slice(-100),
 		};
 	}
 
@@ -533,7 +601,12 @@
 
 	function saveBot(collection, bot) {
 		let all = readBots();
-		all[scopeKey(collection)] = normalizeBot(Object.assign({}, bot, { name: collection.name, libraryID: collection.libraryID, collectionKey: scopeKey(collection) }));
+		let path = collection.name;
+		try {
+			path = ZB().adapter.collectionPath(collection) || collection.name;
+		}
+		catch (e) {}
+		all[scopeKey(collection)] = normalizeBot(Object.assign({}, bot, { name: collection.name, path, libraryID: collection.libraryID, collectionKey: scopeKey(collection) }));
 		writeBots(all);
 		init();
 		return normalizeBot(all[scopeKey(collection)]);
@@ -566,7 +639,7 @@
 			let pico = ZB().pico;
 			let card = pico && pico.cardFor(collection);
 			let q = card ? pico.cardQuery(card) : null;
-			return q ? { query: q.en || "", blocks: q.blocks || [] } : null;
+			return q ? { query: q.en || "", blocks: q.blocks || [], zh: chineseQuery(q.blocks) } : null;
 		}
 		catch (e) {
 			Zotero.logError(e);
@@ -642,6 +715,11 @@
 					testOut.textContent = `⚠️ ${e.message || e}`;
 				}
 			});
+			let xLabel = el("div", "font-weight: 600; margin-top: 12px;", "排除詞（選填）");
+			let xHint = el("div", "opacity: 0.75; font-size: 0.92em; margin: 2px 0 4px;", `標題或摘要有這些詞的文獻扣 ${EXCLUDE_PENALTY} 分、排到後面（不會刪掉），理由會寫出是哪個詞。以逗號或換行分開，例如：children, pediatric, animal；字尾加 * 表示開頭相同的字都算（child* 包含 children、childhood）`);
+			let exclude = el("input", "width: 100%; box-sizing: border-box; font: inherit;");
+			exclude.setAttribute("type", "text");
+			exclude.value = (init.exclude || []).join(", ");
 			let cLabel = el("div", "font-weight: 600; margin-top: 12px;", `核心文獻（最多 ${MAX_CORE} 篇；機器人每週找引用它們的新研究）`);
 			let list = el("div", "max-height: 200px; overflow: auto; border: 1px solid rgba(128,128,128,0.35); border-radius: 6px; padding: 4px 8px; margin-top: 4px;");
 			let boxes = [];
@@ -678,11 +756,12 @@
 			};
 			if (init.exists) buttons.append(mk("刪除機器人", "delete"));
 			buttons.append(mk("取消", ""), mk("儲存", "save"), mk("儲存並立即搜尋", "run", true));
-			dialog.append(head, intro, qLabel, qHint, query, testRow, cLabel, list, sLabel, pubmed.row, citations.row, buttons);
+			dialog.append(head, intro, qLabel, qHint, query, testRow, xLabel, xHint, exclude, cLabel, list, sLabel, pubmed.row, citations.row, buttons);
 			dialog.addEventListener("close", () => {
 				let result = action ? {
 					action,
 					query: query.value.replace(/\s+/g, " ").trim(),
+					exclude: parseExclude(exclude.value),
 					core: boxes.filter(([b]) => b.checked).map(([, k]) => k).slice(0, MAX_CORE),
 					sources: { pubmed: pubmed.box.checked, citations: citations.box.checked },
 				} : null;
@@ -706,7 +785,7 @@
 	function askWithPrompt(win, init) {
 		let query = { value: init.query || "" };
 		if (!Services.prompt.prompt(win, "主題搜尋機器人", `「${init.name}」的 PubMed 檢索式（核心文獻用預設：全文納入或已讀的文獻）`, query, null, {})) return null;
-		return { action: "run", query: query.value.trim(), core: init.choices.filter(c => c.picked).map(c => c.key), sources: init.sources };
+		return { action: "run", query: query.value.trim(), exclude: init.exclude || [], core: init.choices.filter(c => c.picked).map(c => c.key), sources: init.sources };
 	}
 
 	async function testQuery(query) {
@@ -733,6 +812,7 @@
 			exists: !!bot,
 			query: bot ? bot.query : (card ? card.query : ""),
 			cardQuery: !bot && !!(card && card.query),
+			exclude: bot ? bot.exclude : [],
 			choices,
 			sources: bot ? bot.sources : { pubmed: true, citations: true },
 			test: testQuery,
@@ -748,6 +828,7 @@
 		let old = new Map((bot ? bot.core : []).map(c => [c.key, c]));
 		let saved = saveBot(collection, Object.assign({}, bot || { createdAt: runtime.now().toISOString() }, {
 			query: answer.query,
+			exclude: Array.isArray(answer.exclude) ? answer.exclude : parseExclude(answer.exclude),
 			sources: answer.sources,
 			core: answer.core.map(k => byKey.get(k)).filter(Boolean)
 				.map(c => ({ key: c.key, label: c.label, doi: c.doi, pmid: c.pmid, openalex: (old.get(c.key) || {}).openalex || "" })),
@@ -816,6 +897,21 @@
 			}
 		}
 		return { citing, warnings };
+	}
+
+	/** search-links.js targets for the Chinese databases (the user's proxy settings apply); null without words. */
+	function chineseTargets(query) {
+		let sl = ZB().searchLinks;
+		if (!query || !sl) return null;
+		try {
+			let cfg = sl.readConfig();
+			let targets = ["airiti", "ndltd", "scholar"].map(id => sl.findSource(cfg, id)).filter(Boolean).map(src => sl.buildTarget(src, query, cfg));
+			return targets.length ? { query, targets } : null;
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return null;
+		}
 	}
 
 	async function notePath(settings, collection) {
@@ -898,17 +994,20 @@
 			let merged = mergeCandidates(pubmed.records, cites.citing).filter(c => !seen.has(c.key) && !index.find(c));
 			let card = cardInfo(collection);
 			let profile = profileFrom({ cardBlocks: card && card.blocks, query: bot.query });
-			for (let c of merged) c.rank = scoreCandidate(c, profile, { now });
+			for (let c of merged) c.rank = scoreCandidate(c, profile, { now, exclude: bot.exclude });
 			merged.sort((a, b) => b.rank.score - a.rank.score);
 			let target = await notePath(settings, collection);
 			let result = {
 				at: now.toISOString(), candidates: merged, errors,
 				counts: { pubmed: merged.filter(c => c.sources.has("pubmed")).length, citations: merged.filter(c => c.sources.has("citations") && !c.sources.has("pubmed")).length },
+				chinese: chineseTargets(card && card.zh),
 			};
 			let { text, stats } = buildBotNote(target.existing, result, bot, { layout: core.layoutPref() });
 			await IOUtils.makeDirectory(target.dir, { createAncestors: true, ignoreExisting: true });
 			await IOUtils.writeUTF8(target.path, text);
 			bot.seen = [...new Set([...bot.seen, ...stats.listed, ...stats.dropped])].slice(-SEEN_LIMIT);
+			bot.notePath = [...target.dirParts, target.name].join("/");
+			bot.stats = { pending: stats.pending, high: stats.highPending, at: now.toISOString() };
 			saveBot(collection, bot);
 			let rel = [...target.dirParts, target.name + ".md"].join("/");
 			let summary = `「${collection.name}」：${stats.fresh} 篇新候選（高相關 ${stats.high} 篇），清單共 ${stats.pending} 篇待看`;
@@ -1013,6 +1112,12 @@
 		if (imported.size) {
 			let current = await IOUtils.readUTF8(target.path);
 			await IOUtils.writeUTF8(target.path, citationChase.markImported(current, imported));
+			let bot = botFor(collection);
+			if (bot) {
+				bot.imports.push({ at: runtime.now().toISOString(), n: imported.size });
+				bot.stats.pending = Math.max(0, bot.stats.pending - imported.size);
+				saveBot(collection, bot);
+			}
 		}
 		line.setText(`已匯入 ${count} 篇` + (failed.length ? `，${failed.length} 篇失敗` : ""));
 		line.setProgress(100);
@@ -1060,8 +1165,8 @@
 		PUBMED_EVERY_MS, CITATIONS_EVERY_MS, OPENALEX_FIELDS,
 		// pure
 		queryBlocks, profileFrom, decodeXML, parseEFetch, invertedAbstract, openAlexRecord, citingURL, keyOf, mergeCandidates,
-		hasTerm, designOf, tierOf, scoreCandidate, botLine, parseListed, scheduleText, buildBotSection, frontmatterFor, buildBotNote,
-		dueSources, sinceDate, normalizeBot,
+		hasTerm, excludeHit, designOf, tierOf, scoreCandidate, botLine, parseListed, scheduleText, buildBotSection, frontmatterFor, buildBotNote,
+		dueSources, sinceDate, normalizeBot, parseExclude, chineseRow, chineseQuery, botSummaries, EXCLUDE_PENALTY,
 		// Zotero
 		runtime, readBots, botFor, saveBot, deleteBot, coreChoices, setup, testQuery, run, runAll, importChecked, init, shutdown,
 	};
