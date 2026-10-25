@@ -19,6 +19,8 @@ pref("extensions.zotero-bridge.dashboard.autoUpdate", true);
 pref("extensions.zotero-bridge.dashboard.topicPages", true);
 // 🗺️ 證據地圖: a Canvas per topic page, cards grouped by effect direction (topics.js)
 pref("extensions.zotero-bridge.dashboard.canvas", true);
+pref("extensions.zotero-bridge.dashboard.planet", true);
+pref("extensions.zotero-bridge.planet.history", "{}");
 // Concept hub notes (content/concepts.js): rebuild <folder>/<concepts.folder>/*.md after each manual sync;
 // measures (and outcomes) from the structured data as concepts; alias groups, one per line: 跌倒 = Accidental Falls = falls;
 // a custom prompt for 「為概念卡片產生 AI 綜整」 (empty = built-in)

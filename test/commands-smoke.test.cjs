@@ -471,7 +471,7 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"# zotero-bridge-toolbar-group-sync",
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"—", "# zotero-bridge-toolbar-group-organize",
-		"zotero-bridge-classify-tools", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
+		"zotero-bridge-classify-tools", "zotero-bridge-cmd-planet-map", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
 		"—", "# zotero-bridge-toolbar-group-appraise",
 		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary", "zotero-bridge-cmd-pico-card", "zotero-bridge-cmd-pico-table", "zotero-bridge-cmd-grade",
 		"—", "# zotero-bridge-toolbar-group-ai",
@@ -487,7 +487,7 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 	]);
 	same(shown(collMenu, cctx).filter(x => !x.startsWith("#") && x !== "—"), [
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
-		"zotero-bridge-classify-tools", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
+		"zotero-bridge-classify-tools", "zotero-bridge-cmd-planet-map", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
 		"zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
 		"zotero-bridge-cmd-topic-bot-setup", "zotero-bridge-cmd-topic-bot-run", "zotero-bridge-cmd-topic-bot-import",
 		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary", "zotero-bridge-cmd-pico-card", "zotero-bridge-cmd-pico-table", "zotero-bridge-cmd-grade",
@@ -558,7 +558,7 @@ test("right-click commands act on what was right-clicked, as the old entries did
 	let { a, b, note, collection, other } = papers(env);
 	let calls = spies(env, ["main.run", "main.runSynthesis", "reviewDraft.run", "classify.run", "zhMeta.run", "geminiExport.run", "screening.setDecision", "screening.dedupCollection",
 		"screening.generateReport", "citationChase.chaseItems", "citationChase.chaseCollection", "citationChase.importChecked",
-		"topicBot.setup", "topicBot.run", "topicBot.importChecked",
+		"topicBot.setup", "topicBot.run", "topicBot.importChecked", "planet.openForCollection",
 		"bibliography.exportCollections", "appraisalForm.exportCollections", "searchLinks.showMore", "searchLinks.openTarget"]);
 	let itemMenu = zbSubmenu(env, "zotero-bridge-item");
 	let collMenu = zbSubmenu(env, "zotero-bridge-collection");
@@ -592,6 +592,7 @@ test("right-click commands act on what was right-clicked, as the old entries did
 	same(await fire(entry(collMenu, "zotero-bridge-cmd-topic-bot-setup"), cctx), ["topicBot.setup", collection]);
 	same(await fire(entry(collMenu, "zotero-bridge-cmd-topic-bot-run"), cctx), ["topicBot.run", collection, { manual: true }]);
 	same(await fire(entry(collMenu, "zotero-bridge-cmd-topic-bot-import"), cctx), ["topicBot.importChecked", collection]);
+	same(await fire(entry(collMenu, "zotero-bridge-cmd-planet-map"), cctx), ["planet.openForCollection", collection]);
 	same(await fire(entry(collMenu, "zotero-bridge-cmd-export-collection"), cctx), ["bibliography.exportCollections", [collection, other]]);
 	same(await fire(entry(collMenu, "zotero-bridge-appraisal-tools-summary"), cctx), ["appraisalForm.exportCollections", [collection, other]]);
 	// Each right-clicked review project

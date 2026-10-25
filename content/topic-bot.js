@@ -468,6 +468,8 @@
 			high: b.stats.high || 0,
 			imported: b.imports.filter(i => inPeriod(i.at)).reduce((n, i) => n + i.n, 0),
 			at: b.stats.at || "",
+			// each import (the planet map's island log)
+			imports: b.imports.filter(i => inPeriod(i.at)),
 		}));
 	}
 

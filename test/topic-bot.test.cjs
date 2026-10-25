@@ -231,7 +231,8 @@ test("botSummaries: what the topic page, home page and progress report read from
 		b: { name: "壓傷", path: "壓傷" },
 	};
 	assert.deepEqual(bot.botSummaries(bots, at => at >= "2026-10-10" && at <= "2026-10-24"), [
-		{ path: "碩論/跌倒", name: "跌倒", link: "Zotero/50 新文獻/跌倒 搜尋機器人", pending: 12, high: 3, imported: 3, at: "2026-10-23T08:00:00Z" },
+		{ path: "碩論/跌倒", name: "跌倒", link: "Zotero/50 新文獻/跌倒 搜尋機器人", pending: 12, high: 3, imported: 3, at: "2026-10-23T08:00:00Z",
+			imports: [{ at: "2026-10-20T00:00:00Z", n: 3 }] },
 	]);
 	assert.equal(bot.botSummaries(bots)[0].imported, 5, "all imports without a period");
 	let n = bot.normalizeBot({ exclude: "children, rat", imports: [{ at: "x", n: 0 }, { at: "2026", n: 2 }] });

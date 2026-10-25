@@ -172,7 +172,7 @@ function makeEnv({ prefs, fetch, logins = [], confirm = () => true, timers, subp
 		Groups: { getGroupIDFromLibraryID: () => null },
 		Collections: {
 			get: (ids) => {
-				let all = { 7: { name: "碩論", parentID: null }, 8: { name: "文獻回顧", parentID: 7 }, 9: { name: "EBP 報告", parentID: null } };
+				let all = { 7: { name: "碩論", parentID: null }, 8: { name: "文獻回顧", parentID: 7 }, 9: { name: "EBP 報告", parentID: null }, 10: { name: "照顧者", parentID: 7 } };
 				return Array.isArray(ids) ? ids.map(id => all[id]) : all[ids];
 			},
 			getByParent: () => [],
@@ -197,6 +197,8 @@ function makeEnv({ prefs, fetch, logins = [], confirm = () => true, timers, subp
 		},
 		logError: (e) => { errors.push(e); },
 		debug: () => {},
+		// The add-on's own files (the 群島地圖 template)
+		File: { getContentsFromURLAsync: async url => fsp.readFile(new URL(url), "utf8") },
 		// The full-text cache lives in the data directory (fulltext.js)
 		DataDirectory: dataDir ? { dir: dataDir } : undefined,
 	};
@@ -224,7 +226,7 @@ function makeEnv({ prefs, fetch, logins = [], confirm = () => true, timers, subp
 			await fsp.rename(from, to);
 		},
 	};
-	let PathUtils = { join: (...parts) => path.join(...parts), filename: p => path.basename(p), parent: p => path.dirname(p) };
+	let PathUtils = { join: (...parts) => path.join(...parts), filename: p => path.basename(p), parent: p => path.dirname(p), toFileURI: p => require("node:url").pathToFileURL(p).href };
 
 	let loginManager = loginManagerMock(logins);
 	let subprocessCalls = [];
@@ -493,6 +495,55 @@ test("a new vault is organized: the note in its collection's folder, the full te
 	// Once the pages exist the next sync links them
 	await ZB.main.run([item], { targets: ["obsidian"], ai: "reuse" });
 	assert.match(read(dir, "lee2024.md"), /^> \[!zm-nav\] \[\[Zotero\/00 首頁\|🏠 首頁\]\] › \[\[Zotero\/10 文獻\/碩論\/文獻回顧\/00 文獻回顧 總覽\|碩論 › 文獻回顧\]\] · \[\[Zotero\/10 文獻\/碩論\/00 碩論 總覽\|碩論\]\]\n/m);
+	await vm.runInContext("shutdown()", env.context);
+});
+
+test("星球與島嶼: two sub-collections make 碩論 a planet — its page with the island cards, the map beside it, 回到星球 on each island, the command opens the map", async () => {
+	let vault = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-vl-"));
+	let api = apiMock([]);
+	let env = makeEnv({ fetch: api.fetch, prefs: prefs(vault, { [P + "notion.token"]: "" }) });
+	let ZB = await start(env);
+	let lee = paper(env).item;
+	lee.fields.collectionIDs = [8];
+	let kim = paper(env).item;
+	Object.assign(kim.fields, { citationKey: "kim2023", title: "Caregiver training", DOI: "10.1/care", collectionIDs: [10] });
+	await ZB.main.run([lee, kim], { targets: ["obsidian"], ai: "missing" });
+	let settings = await ZB.main.readSettings();
+	let result = await ZB.dashboard.update(settings);
+	assert.deepEqual(env.errors, []);
+	let planetDir = path.join(vault, ...LIT, "碩論");
+	assert.deepEqual(JSON.parse(JSON.stringify(result.topics.planets)), [{ path: "碩論", file: path.join(planetDir, "00 碩論 星球地圖.html") }]);
+	// 碩論 has no notes of its own: its page is the whole planet's
+	let page = read(planetDir, "00 碩論 總覽.md");
+	assert.match(page, /^zotero_collection: "碩論"$/m);
+	assert.match(page, /^> \[!zm-board\] 🪐 星球：碩論（2 座島 · 2 篇 · 已讀 0%）$/m);
+	assert.match(page, /> > \[🗺️ 開啟群島地圖\]\(file:\/\/[^ )]*\/00%20[^ )]+\.html\) · 開發度 = /);
+	assert.match(page, /> > \[!zm-topic\] \[\[Zotero\/10 文獻\/碩論\/文獻回顧\/00 文獻回顧 總覽\|文獻回顧\]\]/);
+	let html = read(planetDir, "00 碩論 星球地圖.html");
+	let data = JSON.parse(/window\.PLANET = (.*);\n<\/script>/.exec(html)[1]);
+	assert.deepEqual(data.islands.map(is => [is.name, is.papers]).sort(), [["文獻回顧", 1], ["照顧者", 1]]);
+	assert.match(data.link, /^obsidian:\/\/open\?vault=zb-vl-[^&]+&file=Zotero%2F10%20%E6%96%87/);
+	assert.ok(!html.includes(vault), "no file paths in the map");
+	let island = read(planetDir, "文獻回顧", "00 文獻回顧 總覽.md");
+	assert.match(island, /\[\[Zotero\/10 文獻\/碩論\/00 碩論 總覽\|🪐 回到星球「碩論」（這座島 LV\d [^）]+）\]\]/);
+	// The time alone doesn't rewrite the map
+	await ZB.dashboard.update(settings);
+	assert.equal(read(planetDir, "00 碩論 星球地圖.html"), html);
+	assert.ok(JSON.parse(env.prefStore[P + "planet.history"]).islands["碩論/文獻回顧"] >= 0);
+	// 開啟群島地圖 on an island opens its planet's map; on a collection that is no planet it says why
+	let opened = [];
+	ZB.planet.runtime.launch = p => opened.push(p);
+	await ZB.planet.openForCollection({ name: "文獻回顧", parentID: 7, libraryID: 1 });
+	assert.deepEqual(opened, [path.join(planetDir, "00 碩論 星球地圖.html")]);
+	await ZB.planet.openForCollection({ name: "EBP 報告", parentID: null, libraryID: 1 });
+	assert.equal(opened.length, 1);
+	// Off with its switch: no board, no map
+	env.prefStore[P + "dashboard.planet"] = false;
+	fs.rmSync(path.join(planetDir, "00 碩論 星球地圖.html"));
+	await ZB.dashboard.update(settings);
+	assert.ok(!exists(planetDir, "00 碩論 星球地圖.html"));
+	assert.ok(!read(planetDir, "文獻回顧", "00 文獻回顧 總覽.md").includes("回到星球"));
+	assert.deepEqual(env.errors, []);
 	await vm.runInContext("shutdown()", env.context);
 });
 
