@@ -796,23 +796,32 @@
 		let maps = [];
 		let homePlanets = [];
 		let history = P ? P.readHistory() : null;
+		let quests = P ? P.readQuests() : {};
 		for (let pl of planets) {
 			try {
 				let bot = botFor(pl.path);
+				// 🎯 this week's quests: kept all week, ticked from the notes; the ones just done go to the history
+				let q = P.updateQuests(quests[pl.path], pl, now);
+				quests[pl.path] = q.entry;
+				history = P.recordQuests(history, pl.path, q.newly);
 				let data = P.planetData(pl, {
 					stats: records => topicStats({ records }, { aliases: ctx.aliases, now }), designLabel, squares: t => directionSquares(t),
 					link: path => (linkOf(path) ? core.obsidianURI(vaultName, linkOf(path)) : ""), planetLink: core.obsidianURI(vaultName, linkOf(pl.path)),
 					card: P.cardForPath(pl.path), bot, botLink: bot ? core.obsidianURI(vaultName, bot.link) : "", aliases: ctx.aliases,
-					levelUps: ((history && history.events) || []).filter(e => e.planet === pl.path), series: (history && history.series) || {}, now,
+					levelUps: ((history && history.events) || []).filter(e => e.planet === pl.path), series: (history && history.series) || {},
+					quests: q.entry, questLog: (history.quests || []).filter(x => x.planet === pl.path), noteLink: l => core.obsidianURI(vaultName, l), now,
 				});
 				history = P.nextHistory(history, pl, pl.islands.map((island, k) => ({ island, n: data.islands[k] })), now);
-				worlds.set(pl.path, { planet: pl, data });
+				worlds.set(pl.path, { planet: pl, data, quests: q.entry });
 			}
 			catch (e) {
 				Zotero.logError(e);
 			}
 		}
-		if (P && planets.length) P.saveHistory(history);
+		if (P && planets.length) {
+			P.saveHistory(history);
+			P.saveQuests(Object.fromEntries(planets.filter(pl => quests[pl.path]).map(pl => [pl.path, quests[pl.path]])));
+		}
 		for (let { topic, page } of pages) {
 			let stats = topicStats(topic, { aliases: ctx.aliases, now });
 			entries.push({ topic, stats });
@@ -852,7 +861,7 @@
 					// 🪐 星球 Canvas: the same planet inside Obsidian (phones too)
 					let planetCanvasLink = await P.writeCanvas(dir, page.dirParts, page.name,
 						P.planetCanvas(world.planet, world.data, { links, pageLink: topic.link, botLink, now }));
-					planetMd = P.planetSection(world.planet, world.data, { layout: ctx.layout, links, mapURL: map.url, canvasLink: planetCanvasLink, botLink });
+					planetMd = P.planetSection(world.planet, world.data, { layout: ctx.layout, links, mapURL: map.url, canvasLink: planetCanvasLink, botLink, quests: world.quests });
 					homePlanets.push({ name: topic.name, link: topic.link, canvasLink: planetCanvasLink, mapURL: map.url, data: world.data });
 				}
 				catch (e) {

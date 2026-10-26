@@ -291,6 +291,10 @@
 			if (g.kind === "ai") return { d: g.d, i: "🤖", s: `產生 ${g.n} 篇 AI 文獻筆記（${g.island}）` };
 			return { d: g.d, i: "⛵", s: `從搜尋機器人匯入 ${g.n} 篇` };
 		});
+		for (let q of events.quests || []) {
+			let d = dateOf(q.at);
+			if (d && d.getTime() >= since) entries.push({ d, i: "🎯", s: `完成任務：${questText(q)}（${q.island}）` });
+		}
 		for (let e of events.levelUps || []) {
 			let d = dateOf(e.at);
 			if (!d || d.getTime() < since) continue;
@@ -378,11 +382,118 @@
 		return { rows, unchanged };
 	}
 
+	// ---------- 🎯 島嶼任務: a few concrete steps a week on the islands that need them most (pure) ----------
+
+	const QUEST_VERBS = { read: "讀完", ai: "補 AI 筆記", verify: "核對評讀" };
+	const MAX_QUESTS = 4;
+	const QUESTS_PER_ISLAND = 3;
+	const QUEST_LOG = 200;
+
+	/** The Monday a week starts on (YYYY-MM-DD, local time). */
+	function weekStart(now = new Date()) {
+		let d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+		return localDay(d);
+	}
+
+	/** Whether a paper has done what a quest asks. */
+	function questDone(kind, r) {
+		if (!r) return false;
+		if (kind === "read") return READ_STATUSES.includes(r.status);
+		if (kind === "ai") return !!r.hasAI;
+		return !!r.appraisalVerified;
+	}
+
+	/**
+	 * This week's quests: the least developed islands first (not yet 🏙️ 城鎮), each with the steps levelHint names, as
+	 * specific papers — the strongest evidence, then the newest, first; at most QUESTS_PER_ISLAND an island and
+	 * MAX_QUESTS in all. A 核對評讀 quest only picks a paper whose appraisal is filled in. [{ kind, link, title, island }]
+	 */
+	function pickQuests(planet) {
+		let level = r => {
+			let n = Number.parseInt(r.evidenceLevel, 10);
+			return n >= 1 && n <= 5 ? n : 6;
+		};
+		let byEvidence = (a, b) => level(a) - level(b) || String(b.year || "").localeCompare(String(a.year || "")) || String(a.title).localeCompare(String(b.title));
+		let order = planet.islands.map(is => ({ is, n: numbers(is.records) }))
+			.filter(x => x.n.papers && stageOf(x.n.dev)[1] < 4)
+			.sort((a, b) => a.n.dev - b.n.dev || b.n.papers - a.n.papers);
+		let items = [];
+		for (let { is, n } of order) {
+			let hint = levelHint(n);
+			let mine = [];
+			let take = (kind, count, pred) => {
+				for (let r of is.records.filter(x => !x.deleted && pred(x)).sort(byEvidence).slice(0, count)) {
+					if (mine.length < QUESTS_PER_ISLAND) mine.push({ kind, link: r.link, title: r.title, island: is.name });
+				}
+			};
+			take("read", hint.read, r => !questDone("read", r));
+			take("ai", hint.ai, r => !questDone("ai", r));
+			take("verify", hint.verify, r => r.appraisal && !questDone("verify", r));
+			items.push(...mine.slice(0, MAX_QUESTS - items.length));
+			if (items.length >= MAX_QUESTS) break;
+		}
+		return items;
+	}
+
+	/**
+	 * The planet's quests this week: kept all week (a new set each Monday, or when there were none), each marked done
+	 * (with the time it was first seen done) from the notes; papers no longer on the planet drop out.
+	 * Returns { entry: { week, items: [{ kind, link, title, island, done }] }, newly: [items done since the last run] }.
+	 */
+	function updateQuests(entry, planet, now = new Date()) {
+		let week = weekStart(now);
+		let byLink = new Map(planet.records.filter(r => !r.deleted).map(r => [r.link, r]));
+		let cur = entry && entry.week === week && Array.isArray(entry.items) && entry.items.length
+			? entry : { week, items: pickQuests(planet).map(i => Object.assign(i, { done: "" })) };
+		let newly = [];
+		let items = cur.items.filter(i => byLink.has(i.link)).map((i) => {
+			if (!i.done && questDone(i.kind, byLink.get(i.link))) {
+				let d = Object.assign({}, i, { done: now.toISOString() });
+				newly.push(d);
+				return d;
+			}
+			return i;
+		});
+		return { entry: { week, items }, newly };
+	}
+
+	/** Completed quests kept in the history (the island log and the progress report read them). */
+	function recordQuests(history, planetPath, newly) {
+		let h = Object.assign({}, history || {});
+		let done = (Array.isArray(h.quests) ? h.quests : []).concat(newly.map(i => ({ at: i.done, planet: planetPath, island: i.island, kind: i.kind, title: i.title })));
+		h.quests = done.slice(-QUEST_LOG);
+		return h;
+	}
+
+	/** The quests completed in a period (YYYY-MM-DD, local days), oldest first. */
+	function questsIn(history, start, end) {
+		let done = history && Array.isArray(history.quests) ? history.quests : [];
+		return done.filter((q) => {
+			let d = dateOf(q.at);
+			let day = d ? localDay(d) : "";
+			return day && day >= start && day <= end;
+		});
+	}
+
+	/** 「讀完《Title》」 */
+	function questText(i) {
+		return `${QUEST_VERBS[i.kind] || i.kind}《${i.title}》`;
+	}
+
 	/** One progress-report line: 「運動：🌱 LV1 18 → 🏕️ LV2 31（+13，升級）」. */
 	function progressLine(r) {
 		let lv = d => `${stageOf(d)[0]} LV${stageOf(d)[1]} ${d}`;
 		let delta = r.delta > 0 ? `+${r.delta}` : String(r.delta);
 		return r.from === null ? `${r.name}：新的島，${lv(r.to)}` : `${r.name}：${lv(r.from)} → ${lv(r.to)}（${delta}${r.up ? "，升級" : ""}）`;
+	}
+
+	/** The quests for the map: kind, verb, title, island, done, a link to the note. */
+	function questData(entry, noteLink) {
+		return {
+			week: entry.week,
+			items: entry.items.map(i => ({ kind: i.kind, verb: QUEST_VERBS[i.kind] || i.kind, title: i.title, island: i.island, done: !!i.done, link: noteLink(i.link) })),
+		};
 	}
 
 	/** The last TREND_POINTS values of an island's 開發度 (the history, then today's when it differs). */
@@ -396,7 +507,8 @@
 	 * Everything the map shows, as the template's window.PLANET. opts: {
 	 *   stats(records) → topics.js topicStats (steps marked gap: true are the island's gaps),
 	 *   designLabel(d), squares(tally), link(path) → an obsidian:// URL or "", planetLink, card: the PICO card | null,
-	 *   bot: topic-bot.js botSummaries() entry | null, botLink, aliases, levelUps, series (planet.history), now }
+	 *   bot: topic-bot.js botSummaries() entry | null, botLink, aliases, levelUps, series (planet.history),
+	 *   quests: updateQuests().entry, questLog: completed quests (history.quests), noteLink(vault link) → URL, now }
 	 */
 	function planetData(planet, opts = {}) {
 		let now = opts.now || new Date();
@@ -444,7 +556,8 @@
 			bridges,
 			seas,
 			harbor: bot ? { pending: bot.pending, high: bot.high, imported: bot.imported, link: opts.botLink || "" } : null,
-			log: islandLog(planet, islands, { imports: bot ? bot.imports : [], levelUps: opts.levelUps }, now),
+			log: islandLog(planet, islands, { imports: bot ? bot.imports : [], levelUps: opts.levelUps, quests: opts.questLog }, now),
+			quests: opts.quests ? questData(opts.quests, opts.noteLink || (() => "")) : null,
 			tour: [],
 		};
 		data.tour = tourOf(data, planet);
@@ -462,6 +575,11 @@
 		let gappy = data.islands.filter(is => is.gaps.length && is !== top && is !== low).sort((a, b) => b.gaps.length - a.gaps.length)[0]
 			|| data.islands.filter(is => is.gaps.length).sort((a, b) => b.gaps.length - a.gaps.length)[0];
 		if (gappy && !tour.some(t => t.id === gappy.id)) tour.push({ id: gappy.id, text: `${gappy.name}的缺口：${gappy.gaps.join("；")}。` });
+		let open = data.quests ? data.quests.items.filter(q => !q.done) : [];
+		if (open.length) {
+			let is = data.islands.find(i => i.name === open[0].island);
+			tour.push({ id: is ? is.id : "hub", text: `本週任務還有 ${open.length} 項，先從${open[0].island}開始：${open[0].verb}《${open[0].title}》。完成後下次更新研究儀表板會自動打勾。` });
+		}
 		if (data.seas.length) tour.push({ id: "hub", text: `虛線圈起來的是未探索海域：${data.seas.map(s => s.text.replace(/：0 篇$/, "")).join("、")} 還沒有研究，先確認不是漏找。` });
 		if (data.harbor && data.harbor.pending) {
 			tour.push({ id: "harbor", text: `港口有 ${data.harbor.pending} 篇新候選等你看${data.harbor.high ? `，其中 ${data.harbor.high} 篇高相關` : ""}。勾選後才會靠岸（匯入 Zotero）。` });
@@ -573,7 +691,7 @@
 
 	/**
 	 * 「🪐 星球」 on the planet's topic page. data: planetData(planet); meta: { layout, links: { collection path →
-	 * wikilink target }, mapURL, canvasLink (vault), botLink (vault) }.
+	 * wikilink target }, mapURL, canvasLink (vault), botLink (vault), quests: updateQuests().entry }.
 	 */
 	function planetSection(planet, data, meta = {}) {
 		let links = meta.links || {};
@@ -592,6 +710,7 @@
 				top,
 				"| 島 | 階段 | 開發度 | 文獻 | 已讀 | 評讀已核對 | AI 筆記 | 最強證據 | 升級 | 缺口 |\n|---|---|---|---|---|---|---|---|---|---|\n" + rows.join("\n"),
 				seaLine, harborLine,
+				...(questLines(meta.quests) ? [`### 🎯 本週任務（${questLines(meta.quests).done}／${questLines(meta.quests).total}）`, questLines(meta.quests).lines.join("\n"), QUEST_NOTE] : []),
 			].filter(Boolean).join("\n\n");
 		}
 		let cards = withPath.map((is) => {
@@ -605,6 +724,8 @@
 			].filter(Boolean);
 			return [`> [!zm-topic] ${name(is)}`, ...lines.map((l, k) => `> ${l}${k < lines.length - 1 ? "  " : ""}`)].join("\n");
 		});
+		let quests = questLines(meta.quests);
+		if (quests) cards.push([`> [!zm-next|wide] 🎯 本週任務（${quests.done}／${quests.total}）`, ...quests.lines.map(l => `> ${l}`), `> ${QUEST_NOTE}`].join("\n"));
 		let extra = [seaLine, harborLine].filter(Boolean);
 		if (extra.length) cards.push([`> [!zm-next|wide] 海域與港口`, ...extra.map(l => `> - ${l}`)].join("\n"));
 		let body = [`> [!zm-links] 群島\n> ${top}`, ...cards].join("\n\n");
@@ -634,11 +755,21 @@
 				`**${p.data.islands.length} 座島** · ${p.data.kpis.papers} 篇 · 已讀 ${p.data.kpis.readPct}%`,
 				stages(p.data),
 				low ? `最需要開墾：${low.name}（${low.hint}）` : "",
+				p.data.quests && p.data.quests.items.length ? `🎯 本週任務 ${p.data.quests.items.filter(q => q.done).length}／${p.data.quests.items.length}` : "",
 				links(p),
 			].filter(Boolean);
 			return [`> [!zm-topic] ${wikilink(p.link, p.name)}`, ...lines.map((l, k) => `> ${l}${k < lines.length - 1 ? "  " : ""}`)].join("\n");
 		});
 		return `> [!zm-board] 🪐 我的星球\n` + cards.join("\n\n").split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
+	}
+
+	const QUEST_NOTE = "每週一換一批；依 Zotero 的閱讀狀態、AI 筆記和評讀核對自動打勾（更新研究儀表板時）。";
+
+	/** The quests as list lines with ✅／⬜ (the region is rewritten, so no checkboxes), or null without any. */
+	function questLines(entry) {
+		if (!entry || !entry.items || !entry.items.length) return null;
+		let lines = entry.items.map(i => `- ${i.done ? "✅" : "⬜"} ${QUEST_VERBS[i.kind] || i.kind} ${wikilink(i.link, i.title)} · ${i.island}`);
+		return { lines, done: entry.items.filter(i => i.done).length, total: entry.items.length };
 	}
 
 	/** 「🪐 回到星球」 for an island's page: the planet's page and the island's level (dev null: a collection inside an island). */
@@ -678,6 +809,26 @@
 			cachedTemplate = await Zotero.File.getContentsFromURLAsync((chrome ? "chrome://zotero-bridge/" : rootURI) + "content/planet/planet.html");
 		}
 		return cachedTemplate;
+	}
+
+	/** This week's quests per planet (pref planet.quests): { planet path: { week, items } }. */
+	function readQuests() {
+		try {
+			let q = JSON.parse(pref("planet.quests") || "{}");
+			return q && typeof q === "object" ? q : {};
+		}
+		catch (e) {
+			return {};
+		}
+	}
+
+	function saveQuests(quests) {
+		try {
+			setPref("planet.quests", JSON.stringify(quests));
+		}
+		catch (e) {
+			Zotero.logError(e);
+		}
 	}
 
 	function readHistory() {
@@ -790,8 +941,9 @@
 		MARK, MAP_SUFFIX, FORMULA, MAX_ISLANDS, runtime,
 		CANVAS_SUFFIX,
 		findPlanets, planetOf, islandOf, devOf, stageOf, stageLabel, levelHint, numbers, houses, islandTerms, bridgesOf, seasOf, islandLog, nextHistory,
+		weekStart, questDone, pickQuests, updateQuests, recordQuests, questsIn, questText, questLines,
 		islandProgress, progressLine, trendOf,
 		planetData, tourOf, fillTemplate, mapNote, mapLink, planetCanvas, canvasIsOurs, planetSection, homePlanets, backLink,
-		enabled, init, readHistory, saveHistory, cardForPath, writeMap, writeCanvas, openForCollection,
+		enabled, init, readHistory, saveHistory, readQuests, saveQuests, cardForPath, writeMap, writeCanvas, openForCollection,
 	};
 });

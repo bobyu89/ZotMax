@@ -371,6 +371,11 @@ test("🪐 島嶼開發度: each island's change in the period as a list (planet
 		assert.match(sections, /### 🪐 島嶼開發度\n\n- 跌倒 › 運動：🌱 LV1 24 → 🏘️ LV3 60（\+36，升級）\n- 跌倒 › 衛教：🏕️ LV2 40 → 🏕️ LV2 45（\+5）\n\n另有 1 座島沒有變化。/);
 		let board = pr.reportBoard(f, {});
 		assert.match(board, /> > \[!zm-chart\] 島嶼開發\n> > ⬆️ \*\*1\*\* 座島升級  \n> > 運動：🌱 LV1 24 → 🏘️ LV3 60（\+36，升級）/);
+		f.reading.islands.quests = [{ at: "2026-10-02T12:00:00Z", planet: "碩論/跌倒", island: "用藥", kind: "read", title: "Kim 2023" }];
+		assert.match(pr.buildSections(f, {}), /#### 🎯 完成的島嶼任務（1 項）\n\n- 讀完《Kim 2023》（用藥，2026-10-02）/);
+		assert.match(pr.reportBoard(f, {}), /> > 🎯 完成任務 \*\*1\*\* 項  \n/);
+		f.reading.islands = { rows: [], unchanged: 0, quests: [{ at: "2026-10-02T12:00:00Z", planet: "p", island: "用藥", kind: "ai", title: "X" }] };
+		assert.match(pr.reportBoard(f, {}), /> > \[!zm-chart\] 島嶼開發\n> > 🎯 完成任務 \*\*1\*\* 項$/m, "quests alone still make the card");
 		f.reading.islands = { rows: [], unchanged: 2 };
 		assert.match(pr.buildSections(f, {}), /### 🪐 島嶼開發度\n\n本期各島的開發度沒有變化。/);
 		assert.doesNotMatch(pr.reportBoard(f, {}), /島嶼開發/);
