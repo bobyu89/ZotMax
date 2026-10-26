@@ -776,7 +776,8 @@
 		let botFor = path => bots.find(b => b.path === path) || null;
 		// 星球與島嶼 (planet.js): a planet whose notes all sit in its sub-collections still gets a page
 		let P = planetModule();
-		let planets = P ? P.findPlanets(ctx.records) : [];
+		// 文獻自動分類 (classify.js) files its suggestions under its own folder: not an island
+		let planets = P ? P.findPlanets(ctx.records, { skip: [String(pref("classify.parentName") || "").trim() || "自動分類"] }) : [];
 		let groups = groupTopics(ctx.records);
 		for (let pl of planets) {
 			if (!groups.some(t => t.path === pl.path)) groups.push({ path: pl.path, name: pl.name, parent: pl.parent, records: pl.records });
@@ -897,13 +898,20 @@
 		let section = homeSection({
 			now, layout: ctx.layout, stats: ctx.stats, entries, unfiled, reviews: ctx.reviews, dashboardLink, organized, records: ctx.records,
 			conceptIndex: await conceptIndexLink(settings), latestReport: ctx.latestReport, baseLink, bots,
-			planets: P ? P.homePlanets(homePlanets, ctx.layout) : "",
+			planets: P ? P.homePlanets(homePlanets, ctx.layout, { suggest: planetSuggestion(entries) }) : "",
 		});
 		let homePath = PathUtils.join(settings.vaultPath, ...folderParts, homeName + ".md");
 		let existing = await readIfExists(homePath);
 		let text = buildPage(existing, section, HOME_NAME, { type: "home", updated: now.toISOString() });
 		if (await writeIfChanged(homePath, text, existing)) written++;
 		return { home: rel(homeName + ".md"), topics: entries.length, written, organized, planets: maps };
+	}
+
+	/** The biggest topic without sub-collections that could be a planet (≥ 6 notes), for 首頁's hint; "" otherwise. */
+	function planetSuggestion(entries) {
+		let paths = entries.map(e => e.topic.path);
+		let flat = entries.filter(e => e.stats.total >= 6 && !paths.some(p => p.startsWith(e.topic.path + "/")));
+		return flat.length ? flat[0].topic.name : "";
 	}
 
 	/** planet.js while its switch (pref dashboard.planet) is on; null otherwise. */

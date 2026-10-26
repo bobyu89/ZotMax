@@ -62,12 +62,17 @@
 	/**
 	 * Every planet in the notes: [{ path, name, parent, direct (notes in the collection itself), islands: [{ path, name,
 	 * records }] (most notes first, at most MAX_ISLANDS), hidden (islands left out), records (all, once each) }].
+	 * opts.skip: collection names that are no topic of their own (文獻自動分類's 「自動分類」 folder): neither they
+	 * nor anything below them is an island or a planet.
 	 */
-	function findPlanets(records) {
+	function findPlanets(records, opts = {}) {
+		let skip = new Set((opts.skip || []).map(n => String(n).trim().toLowerCase()).filter(Boolean));
+		let skipped = p => p.split("/").some(seg => skip.has(seg.toLowerCase()));
 		let live = (records || []).filter(r => !r.deleted);
 		let paths = new Map();
 		for (let r of live) {
 			for (let c of new Set((r.collections || []).map(cleanPath).filter(Boolean))) {
+				if (skipped(c)) continue;
 				let list = paths.get(c) || [];
 				list.push(r);
 				paths.set(c, list);
@@ -737,8 +742,8 @@
 	 * the least developed island and what it needs, links to the Canvas and the map.
 	 * list: [{ name, link (page), canvasLink, mapURL, data: planetData() }]
 	 */
-	function homePlanets(list, layout) {
-		if (!list || !list.length) return "";
+	function homePlanets(list, layout, opts = {}) {
+		if (!list || !list.length) return opts.suggest ? buildHint(opts.suggest, layout) : "";
 		let stages = data => [4, 3, 2, 1].map(lv => [lv, data.islands.filter(is => stageOf(is.dev)[1] === lv).length])
 			.filter(([, k]) => k).map(([lv, k]) => `${STAGES.find(st => st[1] === lv)[2]} ${k}`).join(" · ");
 		let lowest = data => data.islands.slice().sort((a, b) => a.dev - b.dev || b.papers - a.papers)[0];
@@ -770,6 +775,12 @@
 		if (!entry || !entry.items || !entry.items.length) return null;
 		let lines = entry.items.map(i => `- ${i.done ? "✅" : "⬜"} ${QUEST_VERBS[i.kind] || i.kind} ${wikilink(i.link, i.title)} · ${i.island}`);
 		return { lines, done: entry.items.filter(i => i.done).length, total: entry.items.length };
+	}
+
+	/** No planet yet: where one comes from, and the command that builds one from the biggest topic. */
+	function buildHint(topicName, layout) {
+		let text = `還沒有星球。星球是一個有兩個以上子分類的 Zotero 分類（子分類就是島）。可以自己在 Zotero 建子分類，或在「${topicName}」上按右鍵 → ZotMax ▸ 建造星球：把這個分類分成島，ZotMax 會依文獻的介入和標籤建議怎麼分。`;
+		return layout === "board" ? `> [!zm-board] 🪐 我的星球\n> > [!zm-next|wide] 建一顆星球\n> > ${text}` : `## 🪐 我的星球\n\n${text}`;
 	}
 
 	/** 「🪐 回到星球」 for an island's page: the planet's page and the island's level (dev null: a collection inside an island). */
