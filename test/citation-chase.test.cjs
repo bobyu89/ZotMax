@@ -106,7 +106,7 @@ test("paging: a refused later page (HTTP 401) keeps the first page; the run goes
 	let api = openAlexMock({ works: [work(1, { cited_by_count: 450 })], citing: { W1: citing } }, { fail: refused });
 	let list = await cc.listWorks(client(api.fetch), "cites:W1", 300);
 	assert.deepEqual([list.works.length, list.total, list.capped, list.stopped], [200, 450, true, ""]);
-	assert.match(list.cut, /OpenAlex 回應 401（OpenAlex 拒絕這個請求，可能需要 API key）/);
+	assert.match(list.cut, /OpenAlex 回應 401（OpenAlex 沒有 API key 時只給第一頁/);
 	// The first page refused: the list fails as before
 	let first = openAlexMock({ citing: { W1: citing } }, { fail: (url) => /cursor=\*/.test(url) ? refused("cursor=p1") : undefined });
 	await assert.rejects(cc.listWorks(client(first.fetch), "cites:W1", 300), /OpenAlex 回應 401/);
@@ -410,4 +410,26 @@ test("PRISMA Mermaid and counts table: the right-hand column for other methods",
 	assert.match(pm, /otherFtPending\["Reports awaiting assessment<br\/>\(n = 1\)"\]:::pending/);
 	assert.match(pm, /classDef pending/);
 	assert.doesNotMatch(pm, /otherRemoved/);
+});
+
+test("OpenAlex API key (optional): sent as api_key on every request, never kept in the request log; the 401 hint says where to add one", async () => {
+	assert.match(cc.seedURL({ doi: "10.5555/a" }, { apiKey: "k-123" }), /&api_key=k-123$/);
+	assert.match(cc.listURL("cites:W1", "*", { email: "me@example.com", apiKey: "k-123" }), /&mailto=me@example\.com&api_key=k-123$/);
+	assert.doesNotMatch(cc.listURL("cites:W1", "*", {}), /api_key/);
+	let seen = [];
+	let cl = client(async (url) => {
+		seen.push(url);
+		return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify({ results: [], meta: { count: 0 } }) };
+	}, { apiKey: " k-123 " });
+	await cc.listWorks(cl, "cites:W1", 10);
+	assert.match(seen[0], /api_key=k-123/);
+	assert.ok(cl.log.every(u => !u.includes("k-123")), cl.log.join("\n"));
+	assert.match(cl.log[0], /api_key=…/);
+	let refuse = status => client(async () => ({ ok: false, status, headers: { get: () => null }, text: async () => "" }));
+	await assert.rejects(refuse(401).get("https://api.openalex.org/works"), /沒有 API key 時只給第一頁：到 設定 → 搜尋 → 引文追蹤 填入免費的 API key/);
+	let keyed = client(async () => ({ ok: false, status: 403, headers: { get: () => null }, text: async () => "" }), { apiKey: "bad" });
+	await assert.rejects(keyed.get("https://api.openalex.org/works"), /確認 API key/);
+	// The topic bot's citing-works URL carries it too
+	const bot = require("../content/topic-bot.js");
+	assert.match(bot.citingURL("W1", "2026-01-01", { email: "me@example.com", apiKey: "k-123" }), /&mailto=me%40example\.com&api_key=k-123$/);
 });

@@ -517,8 +517,13 @@ test("星球與島嶼: two sub-collections make 碩論 a planet — its page wit
 	let page = read(planetDir, "00 碩論 總覽.md");
 	assert.match(page, /^zotero_collection: "碩論"$/m);
 	assert.match(page, /^> \[!zm-board\] 🪐 星球：碩論（2 座島 · 2 篇 · 已讀 0%）$/m);
-	assert.match(page, /> > \[🗺️ 開啟群島地圖\]\(file:\/\/[^ )]*\/00%20[^ )]+\.html\) · 開發度 = /);
+	assert.match(page, /> > \[🗺️ 開啟群島地圖\]\(file:\/\/[^ )]*\/00%20[^ )]+\.html\) · \[\[[^\]]+星球\.canvas\|🪐 星球 Canvas\]\] · 開發度 = /);
 	assert.match(page, /> > \[!zm-topic\] \[\[Zotero\/10 文獻\/碩論\/文獻回顧\/00 文獻回顧 總覽\|文獻回顧\]\]/);
+	// 🪐 星球 Canvas beside it, linked from the board
+	assert.match(page, /\[\[Zotero\/10 文獻\/碩論\/00 碩論 星球\.canvas\|🪐 星球 Canvas\]\]/);
+	let planetCanvas = JSON.parse(read(planetDir, "00 碩論 星球.canvas"));
+	assert.deepEqual(planetCanvas.nodes.filter(n => n.type === "group").map(n => n.label.split(" ")[1]).sort(), ["文獻回顧", "照顧者"]);
+	assert.ok(planetCanvas.nodes.some(n => n.type === "text" && n.text.includes("[[Zotero/10 文獻/碩論/文獻回顧/00 文獻回顧 總覽|文獻回顧]]")));
 	let html = read(planetDir, "00 碩論 星球地圖.html");
 	let data = JSON.parse(/window\.PLANET = (.*);\n<\/script>/.exec(html)[1]);
 	assert.deepEqual(data.islands.map(is => [is.name, is.papers]).sort(), [["文獻回顧", 1], ["照顧者", 1]]);
@@ -526,10 +531,20 @@ test("星球與島嶼: two sub-collections make 碩論 a planet — its page wit
 	assert.ok(!html.includes(vault), "no file paths in the map");
 	let island = read(planetDir, "文獻回顧", "00 文獻回顧 總覽.md");
 	assert.match(island, /\[\[Zotero\/10 文獻\/碩論\/00 碩論 總覽\|🪐 回到星球「碩論」（這座島 LV\d [^）]+）\]\]/);
-	// The time alone doesn't rewrite the map
+	// The time alone doesn't rewrite the map; a canvas with the user's own card is left alone
+	let mine = JSON.stringify(Object.assign({}, planetCanvas, { nodes: [...planetCanvas.nodes, { id: "my1", type: "text", text: "我的想法", x: 0, y: 900, width: 200, height: 60 }] }));
+	fs.writeFileSync(path.join(planetDir, "00 碩論 星球.canvas"), mine);
 	await ZB.dashboard.update(settings);
 	assert.equal(read(planetDir, "00 碩論 星球地圖.html"), html);
-	assert.ok(JSON.parse(env.prefStore[P + "planet.history"]).islands["碩論/文獻回顧"] >= 0);
+	assert.equal(read(planetDir, "00 碩論 星球.canvas"), mine);
+	let hist = JSON.parse(env.prefStore[P + "planet.history"]);
+	assert.ok(hist.islands["碩論/文獻回顧"] >= 0);
+	assert.equal(hist.series["碩論/文獻回顧"].length, 1, "one point until the 開發度 changes");
+	assert.equal(hist.names["碩論/照顧者"], "照顧者");
+	// 首頁 lists the planet with its Canvas and map
+	let home = read(vault, "Zotero", "00 首頁.md");
+	assert.match(home, /> \[!zm-board\] 🪐 我的星球\n> > \[!zm-topic\] \[\[Zotero\/10 文獻\/碩論\/00 碩論 總覽\|碩論\]\]\n> > \*\*2 座島\*\*/);
+	assert.match(home, /\[\[Zotero\/10 文獻\/碩論\/00 碩論 星球\.canvas\|🪐 Canvas\]\] · \[🗺️ 地圖\]\(file:/);
 	// 開啟群島地圖 on an island opens its planet's map; on a collection that is no planet it says why
 	let opened = [];
 	ZB.planet.runtime.launch = p => opened.push(p);

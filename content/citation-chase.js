@@ -82,14 +82,14 @@
 		let pmid = pmidOf(seed.pmid);
 		let id = doi ? "doi:" + encodeURIComponent(doi).replace(/%2F/gi, "/") : pmid ? "pmid:" + pmid : "";
 		if (!id) return null;
-		return `${API}/works/${id}${query({ select: SEED_FIELDS, mailto: opts.email })}`;
+		return `${API}/works/${id}${query({ select: SEED_FIELDS, mailto: opts.email, api_key: opts.apiKey })}`;
 	}
 
 	/** One page of a work list: filter=cited_by:W… (references) or cites:W… (citing works). */
 	function listURL(filter, cursor, opts = {}) {
 		return `${API}/works${query({
 			filter, select: WORK_FIELDS, sort: "cited_by_count:desc", "per-page": opts.perPage || PER_PAGE,
-			cursor: cursor || "*", mailto: opts.email,
+			cursor: cursor || "*", mailto: opts.email, api_key: opts.apiKey,
 		})}`;
 	}
 
@@ -138,6 +138,7 @@
 		constructor(opts = {}) {
 			this.fetch = opts.fetch;
 			this.email = String(opts.email || "").trim();
+			this.apiKey = String(opts.apiKey || "").trim();
 			this.maxRequests = opts.maxRequests || DEFAULT_MAX_REQUESTS;
 			this.maxRetries = opts.maxRetries === undefined ? MAX_RETRIES : opts.maxRetries;
 			this.sleep = opts.sleep || (ms => new Promise(r => setTimeout(r, ms)));
@@ -152,7 +153,8 @@
 				if (this.requests >= this.maxRequests) throw new RequestCapError(this.maxRequests);
 				await this.throttle();
 				this.requests++;
-				this.log.push(url);
+				// the key never lands in a log
+				this.log.push(String(url).replace(/([?&]api_key=)[^&]*/, "$1…"));
 				let res = null;
 				let error = null;
 				try {
@@ -170,7 +172,8 @@
 				if (error) throw new Error(`無法連線到 OpenAlex：${error.message || error}`);
 				if (res.status === 404) return null;
 				if (!res.ok) {
-					let hint = res.status === 429 ? "（請求太頻繁或超過每日額度，請稍後再試）" : res.status === 401 || res.status === 403 ? "（OpenAlex 拒絕這個請求，可能需要 API key）" : "";
+					let hint = res.status === 429 ? "（請求太頻繁或超過每日額度，請稍後再試）" : res.status === 401 || res.status === 403
+						? (this.apiKey ? "（OpenAlex 拒絕這個請求：請到 設定 → 搜尋 → 引文追蹤 確認 API key）" : "（OpenAlex 沒有 API key 時只給第一頁：到 設定 → 搜尋 → 引文追蹤 填入免費的 API key）") : "";
 					throw new Error(`OpenAlex 回應 ${res.status}${hint}`);
 				}
 				let text = await res.text();
@@ -199,7 +202,7 @@
 		while (works.length < cap) {
 			let json;
 			try {
-				json = await client.get(listURL(filter, cursor, { email: client.email, perPage: Math.min(PER_PAGE, cap) }));
+				json = await client.get(listURL(filter, cursor, { email: client.email, apiKey: client.apiKey, perPage: Math.min(PER_PAGE, cap) }));
 			}
 			catch (e) {
 				if (!works.length) throw e;
@@ -241,7 +244,7 @@
 				continue;
 			}
 			if (opts.onProgress) opts.onProgress(i, seed);
-			let url = seedURL(seed, { email: client.email });
+			let url = seedURL(seed, { email: client.email, apiKey: client.apiKey });
 			if (!url) {
 				report.status = "沒有 DOI 或 PMID，無法查詢";
 				continue;
@@ -596,6 +599,17 @@
 
 	// ---------- settings ----------
 
+	/** The optional OpenAlex API key (secrets.js); "" without one or when it can't be read. */
+	async function apiKey() {
+		try {
+			return String((scope.ZB && scope.ZB.secrets ? await scope.ZB.secrets.get("openalexKey") : "") || "").trim();
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return "";
+		}
+	}
+
 	function config() {
 		let get = k => Zotero.Prefs.get(PREF + k, true);
 		let num = (k, d) => {
@@ -738,7 +752,7 @@
 		try {
 			let opts = config();
 			let seeds = seedItems.map(itemIdentity);
-			let client = new OpenAlexClient({ fetch: (u, i) => fetch(u, i), email: opts.email, maxRequests: opts.maxRequests });
+			let client = new OpenAlexClient({ fetch: (u, i) => fetch(u, i), email: opts.email, apiKey: await apiKey(), maxRequests: opts.maxRequests });
 			let run = await chase(seeds, {
 				client, direction: opts.direction, maxPerSeed: opts.maxPerSeed,
 				onProgress: (i, seed) => {
@@ -915,7 +929,7 @@
 		RequestCapError, makeThrottle, OpenAlexClient, listWorks, chase,
 		libraryIndex, buildCandidates, candidateKey, doiURL, candidateLine, candidateTable, buildChaseSection, buildChaseCSV, frontmatterFor,
 		parseChecked, markImported,
-		config, chaseCollection, chaseItems, importChecked,
+		config, apiKey, chaseCollection, chaseItems, importChecked,
 		// shared with topic-bot.js
 		itemIdentity, libraryRecords, translateIdentifier,
 	};

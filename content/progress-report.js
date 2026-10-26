@@ -459,7 +459,20 @@
 		parts.push(r.appraisals.length
 			? capped(r.appraisals.map(p => paperLine(p, [p.tool, p.overall ? `整體：${p.overall}` : "", `${p.date} 核對`].filter(Boolean).join("，"))), r.appraisals.length)
 			: "本期沒有完成核對的文獻評讀表。");
+		let isl = r.islands;
+		if (isl && (isl.rows.length || isl.unchanged)) {
+			parts.push("### 🪐 島嶼開發度");
+			parts.push(isl.rows.length
+				? capped(isl.rows.map(x => `- ${x.planet ? `${x.planet.split("/").pop()} › ` : ""}${progressText(x)}`), isl.rows.length)
+				: "本期各島的開發度沒有變化。");
+			if (isl.rows.length && isl.unchanged) parts.push(`另有 ${isl.unchanged} 座島沒有變化。開發度 = 已讀 40% ＋ 評讀已核對 30% ＋ 有 AI 筆記 30%，在更新研究儀表板時記錄。`);
+		}
 		return parts.join("\n\n");
+	}
+
+	function progressText(row) {
+		let P = scope.ZB && scope.ZB.planet;
+		return P ? P.progressLine(row) : `${row.name}：${row.from === null ? "新的島" : row.from} → ${row.to}`;
 	}
 
 	function prismaLine(row, hasSnapshot) {
@@ -763,6 +776,14 @@ end
 			]));
 		}
 		let cards = [];
+		let isl = on("reading") && r && r.islands;
+		if (isl && isl.rows.length) {
+			let ups = isl.rows.filter(x => x.up).length;
+			cards.push(core.chartCard("島嶼開發", [
+				ups ? `⬆️ **${ups}** 座島升級` : `**${isl.rows.length}** 座島有進展`,
+				...isl.rows.slice(0, 4).map(x => progressText(x)),
+			]));
+		}
 		let g = facts.goals;
 		if (on("goals") && g && g.previous.length) {
 			let done = g.previous.filter(x => x.done).length;
@@ -1142,6 +1163,18 @@ end
 		return out.sort((a, b) => a.date.localeCompare(b.date));
 	}
 
+	/** Each island's 開發度 change in the period (planet.js, while its switch is on); null otherwise. */
+	function islandChanges(period) {
+		let P = scope.ZB && scope.ZB.planet;
+		try {
+			return P && P.enabled() ? P.islandProgress(P.readHistory(), period.start, period.end) : null;
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return null;
+		}
+	}
+
 	/** The topic bots (topic-bot.js) with their imports in the period, while the switch is on; [] otherwise. */
 	function topicBots(period) {
 		let ZB = scope.ZB;
@@ -1204,6 +1237,7 @@ end
 				aiNotes: byDay("aiGenerated"),
 				appraisals: verifiedAppraisals(records, period),
 				logSince: since <= period.start,
+				islands: islandChanges(period),
 			},
 			reviews: diffPrisma(reviews, prev ? prev.prisma : null),
 			hasSnapshot: !!prev,

@@ -238,3 +238,40 @@ test("botSummaries: what the topic page, home page and progress report read from
 	let n = bot.normalizeBot({ exclude: "children, rat", imports: [{ at: "x", n: 0 }, { at: "2026", n: 2 }] });
 	assert.deepEqual([n.exclude, n.imports], [["children", "rat"], [{ at: "2026", n: 2 }]]);
 });
+
+test("靠岸到哪座島: island profiles weight what belongs to one island, the clear winner is suggested, the line carries it and import reads it back", () => {
+	let islands = [
+		{ name: "運動", tagLists: [["Exercise Therapy", "Postural Balance", "Humans", "Aged"], ["Exercise Therapy", "Resistance Training", "Humans"]],
+			titles: ["Tai chi and balance training for falls"], terms: [{ name: "運動訓練", n: 2 }] },
+		{ name: "衛教", tagLists: [["Patient Education as Topic", "Humans", "Aged"], ["Patient Education as Topic", "Health Literacy"]],
+			titles: ["Video education on fall risk awareness"], terms: [] },
+		{ name: "用藥", tagLists: [["Inappropriate Prescribing", "Humans"]], titles: [], terms: [] },
+	];
+	let profiles = bot.islandProfiles(islands);
+	let w = (i, k) => (profiles[i].weights.get(k) || {}).w;
+	assert.equal(w(0, "exercise therapy"), 1, "two papers, only on this island");
+	assert.equal(w(2, "inappropriate prescribing"), 0.5, "one paper only: half");
+	assert.equal(w(0, "humans"), undefined, "check tags are skipped");
+	assert.equal(w(1, "衛教"), 1.5, "the island's own name");
+	assert.ok(!profiles[0].weights.has("study"), "title stop words are skipped");
+	assert.deepEqual(bot.titleWords("Effect of Tai-chi balance training: a randomized study"), ["tai-chi", "balance", "training"]);
+
+	let byMesh = bot.suggestIsland({ title: "Falls in nursing homes", abstract: "", mesh: ["Exercise Therapy", "Humans"] }, profiles);
+	assert.deepEqual([byMesh.name, byMesh.hits[0]], ["運動", "Exercise Therapy"], "a MeSH heading counts double");
+	assert.ok(byMesh.score >= 2);
+	let byText = bot.suggestIsland({ title: "A patient education as topic leaflet", abstract: "Improves health literacy.", mesh: [] }, profiles);
+	assert.equal(byText.name, "衛教");
+	assert.equal(bot.suggestIsland({ title: "Falls and hip fracture", abstract: "", mesh: [] }, profiles), null, "nothing matches");
+	let tie = bot.suggestIsland({ title: "", abstract: "", mesh: ["Exercise Therapy", "Patient Education as Topic"] }, profiles);
+	assert.equal(tie, null, "no clear winner");
+	assert.equal(bot.suggestIsland({ title: "x", mesh: ["Exercise Therapy"] }, profiles.slice(0, 1)), null, "one island: nothing to choose");
+
+	let c = { key: "doi:10.5555/a", title: "Balance", year: "2026", journal: "J", doi: "10.5555/a", pmid: "", sources: new Set(["pubmed"]),
+		rank: { stars: "⭐⭐", score: 40, reasons: ["命中 I"] }, island: byMesh };
+	let line = bot.botLine(c, false);
+	assert.match(line, /｜來源 PubMed｜🏝️ 建議放：運動（Exercise Therapy、falls）｜\[DOI\]/);
+	assert.equal(bot.islandOfLine(line), "運動");
+	assert.equal(bot.islandOfLine("- [x] **T**｜🏝 衛教｜[DOI](https://doi.org/10.5555/a)"), "衛教", "typed by hand, without the variation selector");
+	assert.equal(bot.islandOfLine("- [x] **T**｜[DOI](https://doi.org/10.5555/a)"), "");
+	assert.deepEqual(bot.parseListed(line).map(l => l.key), ["doi:10.5555/a"], "the line still parses");
+});

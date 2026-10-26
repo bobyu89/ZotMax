@@ -13,6 +13,7 @@
 		"zb-openrouter-key": "openrouterKey",
 		"zb-notion-token": "notionToken",
 		"zb-ncbi-key": "ncbiKey",
+		"zb-openalex-key": "openalexKey",
 	};
 	const SAVE_DELAY_MS = 600;
 

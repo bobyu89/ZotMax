@@ -354,12 +354,14 @@
 		</groupbox>
 
 		<groupbox data-zb-section="citationChase" data-zb-feature="citationChase">
-			<label data-search-strings-raw="citation chasing, OpenAlex, snowballing, references, cited by, forward, backward, 引文追蹤, 滾雪球, 往前, 往回"><html:h2>引文追蹤（OpenAlex）</html:h2></label>
-			<description>從納入研究查詢參考文獻（往回）與引用它的文獻（往前），列成 Obsidian 候選清單；勾選後再匯入 Zotero。OpenAlex 免費、不需要 API key。</description>
+			<label data-search-strings-raw="citation chasing, OpenAlex, API key, snowballing, references, cited by, forward, backward, 引文追蹤, 滾雪球, 往前, 往回, 金鑰"><html:h2>引文追蹤（OpenAlex）</html:h2></label>
+			<description>從納入研究查詢參考文獻（往回）與引用它的文獻（往前），列成 Obsidian 候選清單；勾選後再匯入 Zotero。主題搜尋機器人的「被引用」也用這裡的設定。</description>
 			<hbox align="center">
 				<label value="Email（OpenAlex polite pool，建議填）："/>
 				<html:input type="text" preference="extensions.zotero-bridge.citationChase.email" placeholder="you@example.com"/>
 			</hbox>
+			<label value="OpenAlex API key（選填，免費；openalex.org 註冊後在帳號設定取得。沒有 key 時每份清單只拿得到第一頁，被引用很多的文獻會不完整）："/>
+			<html:input id="zb-openalex-key" type="password" autocomplete="off"/>
 			<hbox align="center">
 				<label value="方向："/>
 				<menulist preference="extensions.zotero-bridge.citationChase.direction" native="true">

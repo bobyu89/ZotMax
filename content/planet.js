@@ -30,6 +30,7 @@
 	const PREF = "extensions.zotero-bridge.";
 	const MARK = "/*ZOTMAX_DATA*/null";
 	const MAP_SUFFIX = " 星球地圖.html";
+	const CANVAS_SUFFIX = " 星球.canvas";
 	const STAGES = [[75, 4, "🏙️", "城鎮"], [50, 3, "🏘️", "聚落"], [25, 2, "🏕️", "開墾中"], [0, 1, "🌱", "荒島"]];
 	const READ_STATUSES = ["已讀", "已引用"];
 	const MAX_ISLANDS = 10;
@@ -39,6 +40,9 @@
 	const LOG_DAYS = 14;
 	const MAX_LOG = 14;
 	const HISTORY_EVENTS = 60;
+	// points kept per island (a point only when its 開發度 changes)
+	const SERIES_POINTS = 120;
+	const TREND_POINTS = 12;
 	const DAY_MS = 86400000;
 	const FORMULA = "開發度 = 已讀 40% ＋ 評讀已核對 30% ＋ 有 AI 筆記 30%";
 
@@ -126,6 +130,29 @@
 	function stageLabel(dev) {
 		let [emoji, lv, name] = stageOf(dev);
 		return `LV${lv} ${emoji} ${name}`;
+	}
+
+	/**
+	 * What it takes to reach the next stage, fewest steps first (reading counts most): { to: [emoji, lv, name] | null,
+	 * read, ai, verify, text }. text: 「再讀 2 篇、補 1 篇 AI 筆記 → 🏘️ 聚落」, or what to do at 🏙️ 城鎮.
+	 */
+	function levelHint(n) {
+		let lv = stageOf(n.dev)[1];
+		if (!n.papers) return { to: null, read: 0, ai: 0, verify: 0, text: "島上還沒有文獻" };
+		if (lv === 4) return { to: null, read: 0, ai: 0, verify: 0, text: "已是 🏙️ 城鎮：接下來補這座島的缺口" };
+		let next = STAGES.find(st => st[1] === lv + 1);
+		// dev rounds: the sum has to reach (min − 0.5) × papers
+		let gap = (next[0] - 0.5) * n.papers - (40 * n.read + 30 * n.verified + 30 * n.ai);
+		let take = (left, room, worth) => {
+			let k = Math.max(0, Math.min(room, Math.ceil(left / worth)));
+			return [k, left - k * worth];
+		};
+		let [read, after] = take(gap, n.papers - n.read, 40);
+		let [ai, rest] = take(after, n.papers - n.ai, 30);
+		let [verify] = take(rest, n.papers - n.verified, 30);
+		let parts = [read ? `再讀 ${read} 篇` : "", ai ? `補 ${ai} 篇 AI 筆記` : "", verify ? `核對 ${verify} 篇評讀` : ""].filter(Boolean);
+		let to = [next[2], next[1], next[3]];
+		return { to, read, ai, verify, text: `${parts.join("、")} → ${to[0]} ${to[2]}` };
 	}
 
 	/** An island's (or planet's) numbers: papers, read, reading, verified (appraisals), ai, dev, best (CEBM). */
@@ -291,21 +318,85 @@
 		let h = history && typeof history === "object" ? history : {};
 		let devs = Object.assign({}, h.islands && typeof h.islands === "object" ? h.islands : {});
 		let events = (Array.isArray(h.events) ? h.events : []).filter(e => e && dateOf(e.at) && dateOf(e.at).getTime() >= now.getTime() - LOG_DAYS * DAY_MS);
+		let series = Object.assign({}, h.series && typeof h.series === "object" ? h.series : {});
+		let names = Object.assign({}, h.names && typeof h.names === "object" ? h.names : {});
+		let day = localDay(now);
 		for (let { island, n } of islandNumbers) {
 			let prev = devs[island.path];
 			if (Number.isFinite(prev) && stageOf(n.dev)[1] > stageOf(prev)[1]) {
 				events.push({ at: now.toISOString(), planet: planet.path, island: island.name, from: prev, to: n.dev });
 			}
 			devs[island.path] = n.dev;
+			// the island's 開發度 over time: a point when it changes (one a day), for the progress report and the map
+			let pts = (Array.isArray(series[island.path]) ? series[island.path] : []).filter(validPoint);
+			let last = pts[pts.length - 1];
+			if (!last || last[1] !== n.dev) {
+				if (last && last[0] === day) pts[pts.length - 1] = [day, n.dev];
+				else pts.push([day, n.dev]);
+			}
+			series[island.path] = pts.slice(-SERIES_POINTS);
+			names[island.path] = island.name;
 		}
-		return { islands: devs, events: events.slice(-HISTORY_EVENTS) };
+		return { islands: devs, events: events.slice(-HISTORY_EVENTS), series, names };
+	}
+
+	const validPoint = p => Array.isArray(p) && /^\d{4}-\d{2}-\d{2}$/.test(p[0]) && Number.isFinite(p[1]);
+
+	function localDay(d) {
+		return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+	}
+
+	/**
+	 * Each island's 開發度 from the start of a period (YYYY-MM-DD, the last value before it) to its end: { rows: [{ path,
+	 * planet, name, from (null: new), to, delta, up (a stage gained) }] (stage gains first, then the biggest change),
+	 * unchanged } — what the progress report shows.
+	 */
+	function islandProgress(history, start, end) {
+		let h = history && typeof history === "object" ? history : {};
+		let series = h.series && typeof h.series === "object" ? h.series : {};
+		let names = h.names && typeof h.names === "object" ? h.names : {};
+		let rows = [];
+		let unchanged = 0;
+		for (let [path, raw] of Object.entries(series)) {
+			let pts = (Array.isArray(raw) ? raw : []).filter(validPoint).sort((a, b) => a[0].localeCompare(b[0]));
+			let before = pts.filter(p => p[0] < start).pop();
+			let atEnd = pts.filter(p => p[0] <= end).pop();
+			if (!atEnd) continue;
+			let from = before ? before[1] : null;
+			let to = atEnd[1];
+			if (from === to) {
+				unchanged++;
+				continue;
+			}
+			let parts = path.split("/");
+			rows.push({
+				path, planet: parts.slice(0, -1).join("/"), name: names[path] || parts[parts.length - 1], from, to,
+				delta: to - (from === null ? 0 : from), up: from !== null && stageOf(to)[1] > stageOf(from)[1],
+			});
+		}
+		rows.sort((a, b) => (b.up - a.up) || (b.delta - a.delta) || a.path.localeCompare(b.path, "zh-Hant"));
+		return { rows, unchanged };
+	}
+
+	/** One progress-report line: 「運動：🌱 LV1 18 → 🏕️ LV2 31（+13，升級）」. */
+	function progressLine(r) {
+		let lv = d => `${stageOf(d)[0]} LV${stageOf(d)[1]} ${d}`;
+		let delta = r.delta > 0 ? `+${r.delta}` : String(r.delta);
+		return r.from === null ? `${r.name}：新的島，${lv(r.to)}` : `${r.name}：${lv(r.from)} → ${lv(r.to)}（${delta}${r.up ? "，升級" : ""}）`;
+	}
+
+	/** The last TREND_POINTS values of an island's 開發度 (the history, then today's when it differs). */
+	function trendOf(points, dev) {
+		let vals = (Array.isArray(points) ? points : []).filter(validPoint).map(p => p[1]);
+		if (vals[vals.length - 1] !== dev) vals.push(dev);
+		return vals.slice(-TREND_POINTS);
 	}
 
 	/**
 	 * Everything the map shows, as the template's window.PLANET. opts: {
 	 *   stats(records) → topics.js topicStats (steps marked gap: true are the island's gaps),
 	 *   designLabel(d), squares(tally), link(path) → an obsidian:// URL or "", planetLink, card: the PICO card | null,
-	 *   bot: topic-bot.js botSummaries() entry | null, botLink, aliases, levelUps, now }
+	 *   bot: topic-bot.js botSummaries() entry | null, botLink, aliases, levelUps, series (planet.history), now }
 	 */
 	function planetData(planet, opts = {}) {
 		let now = opts.now || new Date();
@@ -323,6 +414,8 @@
 				dirs: s && opts.squares ? opts.squares(s.directions) : "",
 				gaps: s ? s.steps.filter(x => x.gap).map(x => x.short).slice(0, MAX_GAPS) : [],
 				houses: houses(is.records),
+				hint: levelHint(n).text,
+				trend: trendOf((opts.series || {})[is.path], n.dev),
 				link: link(is.path),
 			});
 		});
@@ -365,7 +458,7 @@
 		let top = byDev[0];
 		let low = byDev[byDev.length - 1];
 		if (top) tour.push({ id: top.id, text: `最發達的島：${top.name}（${stageLabel(top.dev)}，開發度 ${top.dev}）。${top.best ? `最強證據到 CEBM ${top.best}。` : ""}` });
-		if (low && low !== top) tour.push({ id: low.id, text: `最荒涼的島：${low.name}，${low.papers} 篇、已讀 ${low.read} 篇。是範圍外，還是值得補找、補讀？` });
+		if (low && low !== top) tour.push({ id: low.id, text: `最荒涼的島：${low.name}，${low.papers} 篇、已讀 ${low.read} 篇。是範圍外，還是值得補找、補讀？升級只差：${low.hint}。` });
 		let gappy = data.islands.filter(is => is.gaps.length && is !== top && is !== low).sort((a, b) => b.gaps.length - a.gaps.length)[0]
 			|| data.islands.filter(is => is.gaps.length).sort((a, b) => b.gaps.length - a.gaps.length)[0];
 		if (gappy && !tour.some(t => t.id === gappy.id)) tour.push({ id: gappy.id, text: `${gappy.name}的缺口：${gappy.gaps.join("；")}。` });
@@ -391,6 +484,86 @@
 			+ " 依 vault 裡的文獻筆記產生；這個檔案只存在你的電腦，更新研究儀表板時重畫。";
 	}
 
+	// ---------- 星球 Canvas (pure) ----------
+
+	// Canvas colours by stage (the map's label dots): LV1 green, LV2 orange, LV3 cyan, LV4 purple
+	const CANVAS_COLORS = { 1: "4", 2: "2", 3: "5", 4: "6" };
+	const CANVAS_STAMP_RE = /由 ZotMax 自動產生（[^）]*）/g;
+
+	/**
+	 * 「<name> 星球.canvas」: the planet for Obsidian (phones included). The hub in the middle (the question, KPIs, a
+	 * link to the page), one group per island on a ring (coloured by stage) holding its card, the bridges as labelled
+	 * edges, the seas outside their island, the harbor under the hub. Every node id starts with "zm-".
+	 * opts: { links: { collection path → wikilink target }, pageLink, botLink, now }
+	 */
+	function planetCanvas(planet, data, opts = {}) {
+		let links = opts.links || {};
+		let d = opts.now || new Date();
+		let nodes = [];
+		let edges = [];
+		let angles = new Map();
+		let n = data.islands.length;
+		let RX = Math.max(760, 150 * n);
+		let RY = Math.max(560, 110 * n);
+		let ang = k => (n === 2 ? -Math.PI / 2 + (k ? 1 : -1) : -Math.PI / 2 + k * 2 * Math.PI / Math.max(1, n));
+		let hub = [
+			`## 🪐 ${opts.pageLink ? wikilink(opts.pageLink, data.title) : data.title}`,
+			data.question,
+			`**${data.kpis.papers}** 篇 · **${data.kpis.islands}** 座島 · 已讀 **${data.kpis.readPct}%** · 缺口 **${data.kpis.gaps}**`,
+			`由 ZotMax 自動產生（${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}）；有你自己的卡片後就不再覆寫。`,
+		].join("\n\n");
+		nodes.push({ id: "zm-hub", type: "text", text: hub, x: -230, y: -120, width: 460, height: 240, color: "6" });
+		data.islands.forEach((is, k) => {
+			let a = ang(k);
+			let cx = Math.round(RX * Math.cos(a));
+			let cy = Math.round(RY * Math.sin(a));
+			let path = planet.islands[k].path;
+			let lv = stageOf(is.dev)[1];
+			let gx = cx - 190;
+			let gy = cy - 170;
+			nodes.push({ id: `zm-g-${is.id}`, type: "group", label: `${stageOf(is.dev)[0]} ${is.name} · LV${lv}`, x: gx, y: gy, width: 380, height: 340, color: CANVAS_COLORS[lv] });
+			let card = [
+				`### ${links[path] ? wikilink(links[path], is.name) : is.name}`,
+				`**${stageLabel(is.dev)}** · 開發度 ${is.dev}`,
+				core.bar(is.dev, 100),
+				`${is.papers} 篇 · 已讀 ${is.read} · 核對 ${is.verified} · AI ${is.ai}${is.best ? ` · CEBM ${is.best}` : ""}`,
+				`⬆️ ${is.hint}`,
+				...is.gaps.slice(0, 2).map(g => `🧭 ${g}`),
+			].join("\n");
+			nodes.push({ id: `zm-i-${is.id}`, type: "text", text: card, x: gx + 20, y: gy + 30, width: 340, height: 290 });
+			angles.set(is.id, a);
+		});
+		for (let b of data.bridges) {
+			edges.push({ id: `zm-b-${b.a}-${b.b}`, fromNode: `zm-g-${b.a}`, toNode: `zm-g-${b.b}`, toEnd: "none", label: `🌉 ${b.label}`, color: "3" });
+		}
+		data.seas.forEach((sea, k) => {
+			let is = data.islands.find(i => i.id === sea.near);
+			let a = is ? angles.get(is.id) : Math.PI / 2 + k;
+			let x = Math.round(RX * 1.62 * Math.cos(a)) - 150;
+			let y = Math.round(RY * 1.62 * Math.sin(a)) - 45 + k * 10;
+			nodes.push({ id: `zm-sea-${k + 1}`, type: "text", text: `🌊 **未探索海域**\n${sea.text}`, x, y, width: 300, height: 90, color: "5" });
+			if (is) edges.push({ id: `zm-se-${k + 1}`, fromNode: `zm-g-${is.id}`, toNode: `zm-sea-${k + 1}`, toEnd: "none" });
+		});
+		if (data.harbor) {
+			let bot = opts.botLink ? wikilink(opts.botLink, "搜尋機器人") : "搜尋機器人";
+			nodes.push({ id: "zm-harbor", type: "text", text: `⛵ **港口**：${bot}\n待看 ${data.harbor.pending} 篇${data.harbor.high ? ` · ⭐⭐⭐ ${data.harbor.high}` : ""}`, x: -160, y: 150, width: 320, height: 90, color: "5" });
+			edges.push({ id: "zm-he", fromNode: "zm-hub", toNode: "zm-harbor", toEnd: "none" });
+		}
+		return JSON.stringify({ nodes, edges }, null, "\t");
+	}
+
+	/** A canvas only ZotMax wrote (every node id "zm-…"); null (no file) counts as ours. */
+	function canvasIsOurs(text) {
+		if (text === null || text === undefined) return true;
+		try {
+			let json = JSON.parse(text);
+			return Array.isArray(json.nodes) && json.nodes.every(nd => String(nd.id || "").startsWith("zm-"));
+		}
+		catch (e) {
+			return false;
+		}
+	}
+
 	// ---------- the topic pages (pure) ----------
 
 	/** A Markdown link to the map file (a file:// URL Obsidian opens in the browser). */
@@ -400,7 +573,7 @@
 
 	/**
 	 * 「🪐 星球」 on the planet's topic page. data: planetData(planet); meta: { layout, links: { collection path →
-	 * wikilink target }, mapURL, botLink (vault) }.
+	 * wikilink target }, mapURL, canvasLink (vault), botLink (vault) }.
 	 */
 	function planetSection(planet, data, meta = {}) {
 		let links = meta.links || {};
@@ -408,16 +581,16 @@
 		let withPath = data.islands.map((is, k) => Object.assign({ path: planet.islands[k].path }, is));
 		let head = `🪐 星球：${data.title}（${data.islands.length} 座島 · ${data.kpis.papers} 篇 · 已讀 ${data.kpis.readPct}%）`;
 		let hidden = planet.hidden ? `另有 ${planet.hidden} 個較小的子分類沒有畫成島` : "";
-		let top = [mapLink(meta.mapURL), FORMULA, hidden].filter(Boolean).join(" · ");
+		let top = [mapLink(meta.mapURL), meta.canvasLink ? wikilink(meta.canvasLink, "🪐 星球 Canvas") : "", FORMULA, hidden].filter(Boolean).join(" · ");
 		let seaLine = data.seas.length ? `🌊 未探索海域：${data.seas.map(s => s.text).join("、")}` : "";
 		let harborLine = data.harbor && meta.botLink
 			? `⛵ 港口：${wikilink(meta.botLink, "搜尋機器人")}待看 ${data.harbor.pending} 篇${data.harbor.high ? `（⭐⭐⭐ ${data.harbor.high}）` : ""}` : "";
 		if (meta.layout !== "board") {
-			let rows = withPath.map(is => `| ${name(is).replace("|", "\\|")} | ${stageLabel(is.dev)} | ${is.dev} | ${is.papers} | ${is.read} | ${is.verified} | ${is.ai} | ${is.best ? `CEBM ${is.best}` : "—"} | ${is.gaps.join("；") || "—"} |`);
+			let rows = withPath.map(is => `| ${name(is).replace("|", "\\|")} | ${stageLabel(is.dev)} | ${is.dev} | ${is.papers} | ${is.read} | ${is.verified} | ${is.ai} | ${is.best ? `CEBM ${is.best}` : "—"} | ${is.hint} | ${is.gaps.join("；") || "—"} |`);
 			return [
 				`## ${head}`,
 				top,
-				"| 島 | 階段 | 開發度 | 文獻 | 已讀 | 評讀已核對 | AI 筆記 | 最強證據 | 缺口 |\n|---|---|---|---|---|---|---|---|---|\n" + rows.join("\n"),
+				"| 島 | 階段 | 開發度 | 文獻 | 已讀 | 評讀已核對 | AI 筆記 | 最強證據 | 升級 | 缺口 |\n|---|---|---|---|---|---|---|---|---|---|\n" + rows.join("\n"),
 				seaLine, harborLine,
 			].filter(Boolean).join("\n\n");
 		}
@@ -426,6 +599,7 @@
 				`**${stageLabel(is.dev)}** · 開發度 ${is.dev}`,
 				core.bar(is.dev, 100),
 				`${is.papers} 篇 · 已讀 ${is.read} · 核對 ${is.verified} · AI ${is.ai}`,
+				`⬆️ ${is.hint}`,
 				[is.best ? `最強證據 CEBM ${is.best}` : "", is.design].filter(Boolean).join(" · "),
 				...is.gaps.slice(0, 2).map(g => `🧭 ${g}`),
 			].filter(Boolean);
@@ -435,6 +609,36 @@
 		if (extra.length) cards.push([`> [!zm-next|wide] 海域與港口`, ...extra.map(l => `> - ${l}`)].join("\n"));
 		let body = [`> [!zm-links] 群島\n> ${top}`, ...cards].join("\n\n");
 		return `> [!zm-board] ${head}\n` + body.split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
+	}
+
+	/**
+	 * 首頁's 「🪐 我的星球」: one card per planet (看板) or one line (classic) — islands, papers, how many at each stage,
+	 * the least developed island and what it needs, links to the Canvas and the map.
+	 * list: [{ name, link (page), canvasLink, mapURL, data: planetData() }]
+	 */
+	function homePlanets(list, layout) {
+		if (!list || !list.length) return "";
+		let stages = data => [4, 3, 2, 1].map(lv => [lv, data.islands.filter(is => stageOf(is.dev)[1] === lv).length])
+			.filter(([, k]) => k).map(([lv, k]) => `${STAGES.find(st => st[1] === lv)[2]} ${k}`).join(" · ");
+		let lowest = data => data.islands.slice().sort((a, b) => a.dev - b.dev || b.papers - a.papers)[0];
+		let links = p => [p.canvasLink ? wikilink(p.canvasLink, "🪐 Canvas") : "", p.mapURL ? mapLink(p.mapURL).replace("🗺️ 開啟群島地圖", "🗺️ 地圖") : ""].filter(Boolean).join(" · ");
+		if (layout !== "board") {
+			return ["## 🪐 我的星球", list.map((p) => {
+				let low = lowest(p.data);
+				return `- ${wikilink(p.link, p.name)}：${p.data.islands.length} 座島、${p.data.kpis.papers} 篇（${stages(p.data)}）${low ? `；最需要開墾：${low.name}（${low.hint}）` : ""}${links(p) ? ` · ${links(p)}` : ""}`;
+			}).join("\n")].join("\n\n");
+		}
+		let cards = list.map((p) => {
+			let low = lowest(p.data);
+			let lines = [
+				`**${p.data.islands.length} 座島** · ${p.data.kpis.papers} 篇 · 已讀 ${p.data.kpis.readPct}%`,
+				stages(p.data),
+				low ? `最需要開墾：${low.name}（${low.hint}）` : "",
+				links(p),
+			].filter(Boolean);
+			return [`> [!zm-topic] ${wikilink(p.link, p.name)}`, ...lines.map((l, k) => `> ${l}${k < lines.length - 1 ? "  " : ""}`)].join("\n");
+		});
+		return `> [!zm-board] 🪐 我的星球\n` + cards.join("\n\n").split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
 	}
 
 	/** 「🪐 回到星球」 for an island's page: the planet's page and the island's level (dev null: a collection inside an island). */
@@ -512,6 +716,20 @@
 		return { path, name, url: PathUtils.toFileURI ? PathUtils.toFileURI(path) : "file://" + path };
 	}
 
+	/**
+	 * Write 「<name> 星球.canvas」 beside the page unless the user added cards to it; only when more than the time
+	 * changed. Returns the vault link or "" (left alone).
+	 */
+	async function writeCanvas(dir, dirParts, pageName, json) {
+		let name = core.sanitizeFilename(String(pageName).replace(/ 總覽$/, "")) + CANVAS_SUFFIX;
+		let path = PathUtils.join(dir, name);
+		let old = (await IOUtils.exists(path)) ? await IOUtils.readUTF8(path) : null;
+		let link = [...dirParts, name].join("/");
+		if (!canvasIsOurs(old)) return link;
+		if (old === null || old.replace(CANVAS_STAMP_RE, "") !== json.replace(CANVAS_STAMP_RE, "")) await IOUtils.writeUTF8(path, json);
+		return link;
+	}
+
 	/** Save the level history after a run (topics.js); never throws. */
 	function saveHistory(history) {
 		try {
@@ -570,8 +788,10 @@
 
 	return {
 		MARK, MAP_SUFFIX, FORMULA, MAX_ISLANDS, runtime,
-		findPlanets, planetOf, islandOf, devOf, stageOf, stageLabel, numbers, houses, bridgesOf, seasOf, islandLog, nextHistory,
-		planetData, tourOf, fillTemplate, mapNote, mapLink, planetSection, backLink,
-		enabled, init, readHistory, saveHistory, cardForPath, writeMap, openForCollection,
+		CANVAS_SUFFIX,
+		findPlanets, planetOf, islandOf, devOf, stageOf, stageLabel, levelHint, numbers, houses, islandTerms, bridgesOf, seasOf, islandLog, nextHistory,
+		islandProgress, progressLine, trendOf,
+		planetData, tourOf, fillTemplate, mapNote, mapLink, planetCanvas, canvasIsOurs, planetSection, homePlanets, backLink,
+		enabled, init, readHistory, saveHistory, cardForPath, writeMap, writeCanvas, openForCollection,
 	};
 });
