@@ -191,6 +191,7 @@
 		let filter = `cites:${openalex}` + (since ? `,from_publication_date:${since}` : "");
 		let params = new URLSearchParams({ filter, select: OPENALEX_FIELDS, sort: "publication_date:desc", "per-page": String(opts.perPage || 200) });
 		if (opts.email) params.set("mailto", opts.email);
+		if (opts.apiKey) params.set("api_key", opts.apiKey);
 		return `${citationChase.API}/works?${params.toString().replace(/%3A/gi, ":").replace(/%2C/gi, ",")}`;
 	}
 
@@ -960,14 +961,15 @@
 	/** OpenAlex: works citing each core paper, published since the last run. */
 	async function searchCitations(bot, now) {
 		let email = citationChase.config().email;
-		let client = new citationChase.OpenAlexClient({ fetch: (u, i) => runtime.fetch(u, i), email, maxRequests: bot.core.length * 2 + 5 });
+		let apiKey = await citationChase.apiKey();
+		let client = new citationChase.OpenAlexClient({ fetch: (u, i) => runtime.fetch(u, i), email, apiKey, maxRequests: bot.core.length * 2 + 5 });
 		let since = sinceDate(bot.lastCitations, bot.days, now);
 		let citing = [];
 		let warnings = [];
 		for (let c of bot.core) {
 			try {
 				if (!c.openalex) {
-					let url = citationChase.seedURL(c, { email });
+					let url = citationChase.seedURL(c, { email, apiKey });
 					let work = url ? await client.get(url) : null;
 					c.openalex = work ? citationChase.openAlexKey(work.id) : "";
 					if (!c.openalex) {
@@ -975,7 +977,7 @@
 						continue;
 					}
 				}
-				let json = await client.get(citingURL(c.openalex, since, { email }));
+				let json = await client.get(citingURL(c.openalex, since, { email, apiKey }));
 				for (let w of (json && json.results) || []) citing.push({ record: openAlexRecord(w), core: c.label });
 			}
 			catch (e) {

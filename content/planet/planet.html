@@ -5,13 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>群島地圖</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Noto+Sans+TC:wght@400;500;700;900&display=swap">
 <!--
   ZotMax 星球地圖 (content/planet.js writes this file with the data below filled in).
   One Zotero collection is the planet; its sub-collections are the islands. Everything is drawn on a
-  canvas from window.PLANET; no network is needed apart from the fonts (system fonts stand in offline).
+  canvas from window.PLANET; it makes no network request at all (system fonts, rounded where the system has them).
 -->
 <style>
 /* Layout: the island map takes the middle, the chosen island on the left, the island log on the right, the tour below */
@@ -31,8 +28,8 @@
   --warn: #d6843a;
   --shadow: 0 10px 30px rgba(38, 78, 78, .12), 0 2px 6px rgba(38, 78, 78, .06);
   --radius: 22px;
-  --display: "Baloo 2", "Noto Sans TC", system-ui, sans-serif;
-  --body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --display: ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif;
+  --body: "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -82,6 +79,10 @@ header.top { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; jus
 .mini b { display: block; font-family: var(--display); font-size: 20px; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .mini span { font-size: 11px; color: var(--muted); }
 .formula { font-size: 12px; color: var(--muted); }
+.spark { display: block; width: 100%; height: 34px; margin-top: 6px; }
+.spark polyline { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.spark circle { fill: var(--accent); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .hint { margin-top: 8px; padding: 7px 11px; border-radius: 12px; background: var(--hint-bg); color: var(--hint-ink); font-size: 12.5px; font-weight: 700; }
 .go { display: inline-flex; align-items: center; gap: 8px; margin-top: 14px; border: 0; border-radius: 16px; padding: 11px 18px; background: var(--warm); color: #fff; font: 800 14px var(--body); cursor: pointer; box-shadow: 0 6px 16px rgba(224, 122, 79, .28); }
 .go:hover { filter: brightness(1.05); }
@@ -145,7 +146,8 @@ button:focus-visible, a:focus-visible, canvas:focus-visible { outline: 3px solid
   <div class="stage">
     <aside class="panel" id="island" aria-live="polite"></aside>
     <div class="mapbox">
-      <canvas id="map" tabindex="0" aria-label="群島地圖：點一座島看詳細資料"></canvas>
+      <canvas id="map" tabindex="0" aria-label="群島地圖：點一座島看詳細資料，或用左右方向鍵切換" aria-describedby="srlist"></canvas>
+      <ul class="sr-only" id="srlist"></ul>
       <div class="maptools" role="group" aria-label="時段">
         <span class="clock" id="clock" title="依現在時間自動切換白天、黃昏、夜晚"></span>
         <button type="button" data-time="day" aria-pressed="true">白天</button>
@@ -203,6 +205,9 @@ window.PLANET = /*ZOTMAX_DATA*/null;
   $("chips").innerHTML = [["hub", "🪐 研究問題"], ...islands.map(i => [i.id, `${stageOf(i.dev)[2]} ${i.name}`]), ...(D.harbor ? [["harbor", "⛵ 港口"]] : [])]
     .map(([id, t]) => `<button type="button" data-id="${esc(id)}" aria-pressed="false">${esc(t)}</button>`).join("");
   $("chips").addEventListener("click", e => { const b = e.target.closest("button"); if (b) select(b.dataset.id); });
+  // The map in words, for screen readers
+  $("srlist").innerHTML = islands.map((i, k) => `<li>${k + 1}. ${esc(i.name)}：LV${stageOf(i.dev)[1]} ${stageOf(i.dev)[3]}，開發度 ${i.dev}，${i.papers} 篇、已讀 ${i.read}${i.hint ? `；${esc(i.hint)}` : ""}${i.gaps && i.gaps.length ? `；缺口：${esc(i.gaps.join("、"))}` : ""}</li>`).join("")
+    + (D.harbor ? `<li>港口：搜尋機器人待看 ${D.harbor.pending} 篇</li>` : "");
 
   // ---------- the chosen island ----------
   let selected = "hub";
@@ -236,6 +241,7 @@ window.PLANET = /*ZOTMAX_DATA*/null;
         <div class="devbar" role="img" aria-label="開發度 ${is.dev}"><i style="width:${Math.max(4, is.dev)}%"></i></div>
         <div class="formula">開發度 ${is.dev}：已讀 ${is.read}／${is.papers}、評讀核對 ${is.verified}、AI 筆記 ${is.ai}</div>
         ${is.hint ? `<div class="hint">⬆️ ${esc(is.hint)}</div>` : ""}
+        ${spark(is.trend)}
         <div class="mini"><div><b>${is.papers}</b><span>篇文獻</span></div><div><b>${is.best ? "L" + is.best : "—"}</b><span>最強證據</span></div><div><b>${is.gaps.length}</b><span>缺口</span></div></div>
         ${is.design ? `<div class="sec"><h3>研究設計</h3>${esc(is.design)}</div>` : ""}
         ${is.dirs ? `<div class="sec"><h3>結論方向（AI 初判）</h3><span class="squares">${esc(is.dirs)}</span></div>` : ""}
@@ -244,6 +250,14 @@ window.PLANET = /*ZOTMAX_DATA*/null;
         <div class="sec"><h3>🧭 這座島的缺口</h3>${is.gaps.length ? `<ul class="gaps">${is.gaps.map(g => `<li>${esc(g)}</li>`).join("")}</ul>` : `<span class="formula">目前沒有規則找到的缺口</span>`}</div>
         ${open(is.link, "在 Obsidian 開啟島頁")}`;
     }
+  }
+  // The island's 開發度 over its last updates (0–100), when there are at least two
+  function spark(vals) {
+    if (!Array.isArray(vals) || vals.length < 2) return "";
+    const n = vals.length, x = k => 4 + k * (112 / (n - 1)), y = v => 30 - Math.max(0, Math.min(100, v)) * .26;
+    const pts = vals.map((v, k) => `${x(k).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+    return `<svg class="spark" viewBox="0 0 120 34" role="img" aria-label="開發度變化：${vals.join(" → ")}"><polyline points="${pts}"/><circle cx="${x(n - 1).toFixed(1)}" cy="${y(vals[n - 1]).toFixed(1)}" r="3"/></svg>
+      <div class="formula">最近 ${n} 次更新：${vals[0]} → ${vals[n - 1]}</div>`;
   }
   function select(id) {
     selected = id;
@@ -525,9 +539,9 @@ window.PLANET = /*ZOTMAX_DATA*/null;
   // Labels: placed first (islands, then the harbor, bridges and seas), then the leader lines, then the tags on top
   function tagSize(spec) {
     const fs = Math.max(W < 520 ? 10.5 : 11.5, Math.min(15, S * .44));
-    ctx.font = `${spec.strong ? 900 : 700} ${fs}px "Noto Sans TC", system-ui, sans-serif`;
+    ctx.font = `${spec.strong ? 900 : 700} ${fs}px "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif`;
     let w = ctx.measureText(spec.text).width + fs * 1.7;
-    if (spec.num) { ctx.font = `800 ${fs * .82}px "Baloo 2", "Noto Sans TC", sans-serif`; w += ctx.measureText(spec.num).width + fs * .55; }
+    if (spec.num) { ctx.font = `800 ${fs * .82}px ui-rounded, "Arial Rounded MT Bold", "PingFang TC", "Microsoft JhengHei", sans-serif`; w += ctx.measureText(spec.num).width + fs * .55; }
     if (spec.dot) w += fs * .85;
     return { fs, w, h: fs * 2.05 };
   }
@@ -564,11 +578,11 @@ window.PLANET = /*ZOTMAX_DATA*/null;
     let tx = x + fs * .85;
     ctx.textAlign = "left"; ctx.textBaseline = "middle";
     if (t.num) {
-      ctx.font = `800 ${fs * .82}px "Baloo 2", "Noto Sans TC", sans-serif`; ctx.fillStyle = P.num; ctx.fillText(t.num, tx, cy + 1.5);
+      ctx.font = `800 ${fs * .82}px ui-rounded, "Arial Rounded MT Bold", "PingFang TC", "Microsoft JhengHei", sans-serif`; ctx.fillStyle = P.num; ctx.fillText(t.num, tx, cy + 1.5);
       tx += ctx.measureText(t.num).width + fs * .55;
     }
     if (t.dot) { ctx.fillStyle = t.dot; ctx.beginPath(); ctx.arc(tx + fs * .28, cy, fs * .28, 0, 7); ctx.fill(); tx += fs * .85; }
-    ctx.font = `${t.strong ? 900 : 700} ${fs}px "Noto Sans TC", system-ui, sans-serif`; ctx.fillStyle = P.ink; ctx.fillText(t.text, tx, cy + 1);
+    ctx.font = `${t.strong ? 900 : 700} ${fs}px "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", system-ui, sans-serif`; ctx.fillStyle = P.ink; ctx.fillText(t.text, tx, cy + 1);
   }
 
   const hits = [];
@@ -724,7 +738,7 @@ window.PLANET = /*ZOTMAX_DATA*/null;
     const dg = ctx.createRadialGradient(px - S * .25, py - S * 1.35, S * .1, px, py - S * 1.0, S * .8);
     dg.addColorStop(0, "#c9c0ff"); dg.addColorStop(1, "#7a6be0");
     ctx.fillStyle = dg; ctx.beginPath(); ctx.ellipse(px, py - S * .9, S * .72, S * .66, 0, Math.PI, 0); ctx.fill();
-    ctx.fillStyle = "#fff"; ctx.font = `800 ${S * .55}px "Baloo 2", sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("?", px, py - S * 1.18);
+    ctx.fillStyle = "#fff"; ctx.font = `800 ${S * .55}px ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("?", px, py - S * 1.18);
     ctx.strokeStyle = P.trunk; ctx.lineWidth = Math.max(1.5, S * .05); ctx.beginPath(); ctx.moveTo(px + S * .3, py - S * 1.45); ctx.lineTo(px + S * .3, py - S * 2.1); ctx.stroke();
     ctx.fillStyle = "#f2b24c"; ctx.beginPath(); ctx.moveTo(px + S * .3, py - S * 2.1); ctx.lineTo(px + S * .75, py - S * 1.95); ctx.lineTo(px + S * .3, py - S * 1.8); ctx.fill();
   }

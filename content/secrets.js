@@ -28,6 +28,8 @@
 		notionToken: { pref: "notion.token", label: "Notion integration token" },
 		// PubMed new-literature watch (pubmed-watch.js); never stored as a pref, the name only serves migration
 		ncbiKey: { pref: "pubmedWatch.apiKey", label: "NCBI API key" },
+		// OpenAlex (citation-chase.js, topic-bot.js): optional; without one only the first page of a list comes back
+		openalexKey: { pref: "citationChase.apiKey", label: "OpenAlex API key" },
 	};
 
 	function checkName(name) {

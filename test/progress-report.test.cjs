@@ -355,3 +355,29 @@ test("新文獻追蹤 with the topic bots: imports in the period and what still 
 	assert.match(board, /> > \[!zm-chart\] 新文獻追蹤\n> > 🤖 機器人匯入 \*\*4\*\* 篇，待看 14 篇/);
 	assert.doesNotMatch(board, /PubMed 匯入/);
 });
+
+test("🪐 島嶼開發度: each island's change in the period as a list (planet › line) and a 本期重點 card; nothing without history", () => {
+	globalThis.ZB = { planet: require("../content/planet.js") };
+	try {
+		let f = facts();
+		f.reading.islands = {
+			rows: [
+				{ path: "碩論/跌倒/運動", planet: "碩論/跌倒", name: "運動", from: 24, to: 60, delta: 36, up: true },
+				{ path: "碩論/跌倒/衛教", planet: "碩論/跌倒", name: "衛教", from: 40, to: 45, delta: 5, up: false },
+			],
+			unchanged: 1,
+		};
+		let sections = pr.buildSections(f, {});
+		assert.match(sections, /### 🪐 島嶼開發度\n\n- 跌倒 › 運動：🌱 LV1 24 → 🏘️ LV3 60（\+36，升級）\n- 跌倒 › 衛教：🏕️ LV2 40 → 🏕️ LV2 45（\+5）\n\n另有 1 座島沒有變化。/);
+		let board = pr.reportBoard(f, {});
+		assert.match(board, /> > \[!zm-chart\] 島嶼開發\n> > ⬆️ \*\*1\*\* 座島升級  \n> > 運動：🌱 LV1 24 → 🏘️ LV3 60（\+36，升級）/);
+		f.reading.islands = { rows: [], unchanged: 2 };
+		assert.match(pr.buildSections(f, {}), /### 🪐 島嶼開發度\n\n本期各島的開發度沒有變化。/);
+		assert.doesNotMatch(pr.reportBoard(f, {}), /島嶼開發/);
+		f.reading.islands = null;
+		assert.doesNotMatch(pr.buildSections(f, {}), /島嶼開發度/, "no planets: no section");
+	}
+	finally {
+		delete globalThis.ZB;
+	}
+});

@@ -89,7 +89,7 @@ test("islandLog and nextHistory: notes added, AI notes and bot imports per day, 
 		{ day: "昨天" }, { t: "22:00", i: "🏗️", s: "衛教升級：🌱 荒島 → 🏘️ 聚落" }, { t: "21:30", i: "🤖", s: "產生 1 篇 AI 文獻筆記（衛教）" }, { t: "21:00", i: "📥", s: "1 篇文獻加入衛教" },
 	], "older than 14 days left out");
 	let first = P.nextHistory({}, pl, [{ island: pl.islands[0], n: { dev: 20 } }], NOW);
-	assert.deepEqual(first, { islands: { "碩論/跌倒/運動": 20 }, events: [] }, "no level-up on the first run");
+	assert.deepEqual(first, { islands: { "碩論/跌倒/運動": 20 }, events: [], series: { "碩論/跌倒/運動": [["2026-10-24", 20]] }, names: { "碩論/跌倒/運動": "運動" } }, "no level-up on the first run");
 	let next = P.nextHistory(first, pl, [{ island: pl.islands[0], n: { dev: 30 } }], NOW);
 	assert.deepEqual(next.events, [{ at: NOW.toISOString(), planet: "碩論/跌倒", island: "運動", from: 20, to: 30 }]);
 	assert.deepEqual(P.nextHistory(next, pl, [{ island: pl.islands[0], n: { dev: 10 } }], NOW).events.length, 1, "going down is no event");
@@ -215,4 +215,44 @@ test("planetCanvas: the hub, one coloured group and card per island, bridges as 
 	let md = P.planetSection(pl, data, { layout: "board", canvasLink: "Z/00 跌倒 星球.canvas" });
 	assert.ok(md.includes("[[Z/00 跌倒 星球.canvas|🪐 星球 Canvas]]"));
 	assert.ok(md.includes("> > ⬆️ 已是 🏙️ 城鎮：接下來補這座島的缺口"));
+});
+
+test("island history: a point a day when 開發度 changes; islandProgress per period for the progress report; the map's trend", () => {
+	let pl = P.findPlanets(archipelago())[0];
+	let run = (h, day, devs) => P.nextHistory(h, pl, pl.islands.map((island, k) => ({ island, n: { dev: devs[k] } })), new Date(day + "T09:00:00"));
+	let h = run({}, "2026-09-01", [20, 40, 0]);
+	h = run(h, "2026-09-01", [24, 40, 0]);
+	assert.deepEqual(h.series["碩論/跌倒/運動"], [["2026-09-01", 24]], "the same day replaces");
+	h = run(h, "2026-09-10", [24, 40, 0]);
+	assert.equal(h.series["碩論/跌倒/運動"].length, 1, "no point without a change");
+	h = run(h, "2026-10-05", [55, 45, 0]);
+	h = run(h, "2026-10-20", [60, 45, 30]);
+	let p = P.islandProgress(h, "2026-10-01", "2026-10-31");
+	assert.deepEqual(p.rows.map(r => [r.name, r.planet, r.from, r.to, r.delta, r.up]), [
+		["運動", "碩論/跌倒", 24, 60, 36, true], ["用藥", "碩論/跌倒", 0, 30, 30, true], ["衛教", "碩論/跌倒", 40, 45, 5, false],
+	]);
+	assert.equal(P.progressLine(p.rows[0]), "運動：🌱 LV1 24 → 🏘️ LV3 60（+36，升級）");
+	assert.equal(P.progressLine({ name: "新島", from: null, to: 30 }), "新島：新的島，🏕️ LV2 30");
+	assert.equal(P.progressLine({ name: "衛教", from: 45, to: 40, delta: -5, up: false }), "衛教：🏕️ LV2 45 → 🏕️ LV2 40（-5）");
+	let quiet = P.islandProgress(h, "2026-10-21", "2026-10-31");
+	assert.deepEqual([quiet.rows.length, quiet.unchanged], [0, 3]);
+	assert.deepEqual(P.islandProgress(h, "2026-01-01", "2026-08-31").rows, [], "nothing recorded yet");
+	assert.deepEqual(P.islandProgress(null, "2026-01-01", "2026-12-31"), { rows: [], unchanged: 0 });
+	assert.deepEqual(P.trendOf(h.series["碩論/跌倒/運動"], 70), [24, 55, 60, 70]);
+	assert.deepEqual(P.trendOf(h.series["碩論/跌倒/運動"], 60), [24, 55, 60]);
+	assert.deepEqual(P.trendOf(undefined, 10), [10]);
+	let { data } = dataFor(archipelago(), { series: h.series });
+	assert.deepEqual(data.islands[0].trend, [24, 55, 60, 77]);
+});
+
+test("homePlanets: 首頁's 「🪐 我的星球」, a card per planet (看板) or a line (classic), with the stages and the island that needs work", () => {
+	let { data } = dataFor(archipelago());
+	let list = [{ name: "跌倒", link: "Z/00 跌倒 總覽", canvasLink: "Z/00 跌倒 星球.canvas", mapURL: "file:///v/00 跌倒 星球地圖.html", data }];
+	let board = P.homePlanets(list, "board");
+	assert.match(board, /^> \[!zm-board\] 🪐 我的星球\n> > \[!zm-topic\] \[\[Z\/00 跌倒 總覽\|跌倒\]\]\n> > \*\*3 座島\*\* · 7 篇 · 已讀 57%  \n> > 🏙️ 1 · 🏘️ 1 · 🌱 1  \n> > 最需要開墾：用藥（再讀 1 篇 → 🏕️ 開墾中）  \n> > \[\[Z\/00 跌倒 星球\.canvas\|🪐 Canvas\]\] · \[🗺️ 地圖\]\(file:\/\/\/v\/00%20跌倒%20星球地圖\.html\)$/);
+	let classic = P.homePlanets(list, "classic");
+	assert.match(classic, /^## 🪐 我的星球\n\n- \[\[Z\/00 跌倒 總覽\|跌倒\]\]：3 座島、7 篇（🏙️ 1 · 🏘️ 1 · 🌱 1）；最需要開墾：用藥/);
+	assert.equal(P.homePlanets([], "board"), "");
+	let T2 = T.homeSection({ layout: "board", now: NOW, stats: null, entries: [], planets: board });
+	assert.ok(T2.includes("🪐 我的星球"));
 });

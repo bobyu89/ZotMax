@@ -537,7 +537,14 @@ test("星球與島嶼: two sub-collections make 碩論 a planet — its page wit
 	await ZB.dashboard.update(settings);
 	assert.equal(read(planetDir, "00 碩論 星球地圖.html"), html);
 	assert.equal(read(planetDir, "00 碩論 星球.canvas"), mine);
-	assert.ok(JSON.parse(env.prefStore[P + "planet.history"]).islands["碩論/文獻回顧"] >= 0);
+	let hist = JSON.parse(env.prefStore[P + "planet.history"]);
+	assert.ok(hist.islands["碩論/文獻回顧"] >= 0);
+	assert.equal(hist.series["碩論/文獻回顧"].length, 1, "one point until the 開發度 changes");
+	assert.equal(hist.names["碩論/照顧者"], "照顧者");
+	// 首頁 lists the planet with its Canvas and map
+	let home = read(vault, "Zotero", "00 首頁.md");
+	assert.match(home, /> \[!zm-board\] 🪐 我的星球\n> > \[!zm-topic\] \[\[Zotero\/10 文獻\/碩論\/00 碩論 總覽\|碩論\]\]\n> > \*\*2 座島\*\*/);
+	assert.match(home, /\[\[Zotero\/10 文獻\/碩論\/00 碩論 星球\.canvas\|🪐 Canvas\]\] · \[🗺️ 地圖\]\(file:/);
 	// 開啟群島地圖 on an island opens its planet's map; on a collection that is no planet it says why
 	let opened = [];
 	ZB.planet.runtime.launch = p => opened.push(p);

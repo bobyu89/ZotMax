@@ -540,7 +540,7 @@
 
 	/**
 	 * The home page's managed region. meta: { now, layout, stats: dashboard aggregate(), entries: [{ topic, stats }],
-	 * unfiled, reviews, dashboardLink, conceptIndex, latestReport, baseLink }
+	 * unfiled, reviews, dashboardLink, conceptIndex, latestReport, baseLink, planets: 「🪐 我的星球」 (planet.js homePlanets) }
 	 */
 	function homeSection(meta) {
 		let total = meta.stats ? meta.stats.total : 0;
@@ -552,7 +552,7 @@
 		].join("\n");
 		let start = startHere(meta.records || [], { now: meta.now, layout: meta.layout, bots: meta.bots });
 		let overview = meta.layout === "board" && meta.stats ? dashboard.overviewBoard(meta.stats, { reviews: meta.reviews }) : "";
-		return [info, ...(start ? [start] : []), ...(overview ? [overview] : []), topicsBlock(meta.entries || [], meta.layout, meta.unfiled || 0), quickLinks(meta)].join("\n\n");
+		return [info, ...(start ? [start] : []), ...(overview ? [overview] : []), ...(meta.planets ? [meta.planets] : []), topicsBlock(meta.entries || [], meta.layout, meta.unfiled || 0), quickLinks(meta)].join("\n\n");
 	}
 
 	/**
@@ -568,7 +568,7 @@
 		let start = startHere(meta.records || [], { now: meta.now, layout: "board", bots: meta.bots });
 		if (start) parts.push(start);
 		if (meta.stats && meta.stats.total) parts.push(dashboard.overviewBoard(meta.stats, { reviews: meta.reviews, compact: true }));
-		parts.push(topicsBlock(meta.entries || [], "board", meta.unfiled || 0), quickLinkBar(meta));
+		parts.push(meta.planets || "", topicsBlock(meta.entries || [], "board", meta.unfiled || 0), quickLinkBar(meta));
 		return parts.filter(Boolean).join("\n\n");
 	}
 
@@ -794,6 +794,7 @@
 		let vaultName = PathUtils.filename(settings.vaultPath);
 		let worlds = new Map();
 		let maps = [];
+		let homePlanets = [];
 		let history = P ? P.readHistory() : null;
 		for (let pl of planets) {
 			try {
@@ -802,7 +803,7 @@
 					stats: records => topicStats({ records }, { aliases: ctx.aliases, now }), designLabel, squares: t => directionSquares(t),
 					link: path => (linkOf(path) ? core.obsidianURI(vaultName, linkOf(path)) : ""), planetLink: core.obsidianURI(vaultName, linkOf(pl.path)),
 					card: P.cardForPath(pl.path), bot, botLink: bot ? core.obsidianURI(vaultName, bot.link) : "", aliases: ctx.aliases,
-					levelUps: ((history && history.events) || []).filter(e => e.planet === pl.path), now,
+					levelUps: ((history && history.events) || []).filter(e => e.planet === pl.path), series: (history && history.series) || {}, now,
 				});
 				history = P.nextHistory(history, pl, pl.islands.map((island, k) => ({ island, n: data.islands[k] })), now);
 				worlds.set(pl.path, { planet: pl, data });
@@ -852,6 +853,7 @@
 					let planetCanvasLink = await P.writeCanvas(dir, page.dirParts, page.name,
 						P.planetCanvas(world.planet, world.data, { links, pageLink: topic.link, botLink, now }));
 					planetMd = P.planetSection(world.planet, world.data, { layout: ctx.layout, links, mapURL: map.url, canvasLink: planetCanvasLink, botLink });
+					homePlanets.push({ name: topic.name, link: topic.link, canvasLink: planetCanvasLink, mapURL: map.url, data: world.data });
 				}
 				catch (e) {
 					Zotero.logError(e);
@@ -886,6 +888,7 @@
 		let section = homeSection({
 			now, layout: ctx.layout, stats: ctx.stats, entries, unfiled, reviews: ctx.reviews, dashboardLink, organized, records: ctx.records,
 			conceptIndex: await conceptIndexLink(settings), latestReport: ctx.latestReport, baseLink, bots,
+			planets: P ? P.homePlanets(homePlanets, ctx.layout) : "",
 		});
 		let homePath = PathUtils.join(settings.vaultPath, ...folderParts, homeName + ".md");
 		let existing = await readIfExists(homePath);

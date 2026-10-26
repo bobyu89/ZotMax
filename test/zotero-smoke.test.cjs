@@ -857,8 +857,8 @@ test("keys come from the login manager; batch confirm shows a cost estimate; 529
 test("settings pane loads and saves secrets through the login manager, never prefs", async () => {
 	let xhtml = fs.readFileSync(path.join(ROOT, "content", "preferences.xhtml"), "utf8");
 	let passwords = [...xhtml.matchAll(/<html:input[^>]*type="password"[^>]*>/g)].map(m => m[0]);
-	// Claude, OpenAI, OpenRouter, Notion, NCBI (PubMed watch)
-	assert.equal(passwords.length, 5);
+	// Claude, OpenAI, OpenRouter, Notion, NCBI (PubMed watch), OpenAlex (citation chasing)
+	assert.equal(passwords.length, 6);
 	for (let tag of passwords) assert.doesNotMatch(tag, /preference=/, tag);
 	assert.doesNotMatch(xhtml, /llm\.anthropicKey|llm\.openaiKey|llm\.openrouterKey|notion\.token/);
 
