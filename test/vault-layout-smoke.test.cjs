@@ -541,6 +541,11 @@ test("星球與島嶼: two sub-collections make 碩論 a planet — its page wit
 	assert.ok(hist.islands["碩論/文獻回顧"] >= 0);
 	assert.equal(hist.series["碩論/文獻回顧"].length, 1, "one point until the 開發度 changes");
 	assert.equal(hist.names["碩論/照顧者"], "照顧者");
+	// 🎯 this week's quests: kept in a pref, shown on the planet page
+	let quests = JSON.parse(env.prefStore[P + "planet.quests"]);
+	assert.equal(quests["碩論"].items.length, 2, "one unread paper on each island");
+	assert.ok(quests["碩論"].items.every(i => i.kind === "read" && !i.done));
+	assert.match(read(planetDir, "00 碩論 總覽.md"), /> > \[!zm-next\|wide\] 🎯 本週任務（0／2）\n> > - ⬜ 讀完 \[\[Zotero\/10 文獻\/碩論\//);
 	// 首頁 lists the planet with its Canvas and map
 	let home = read(vault, "Zotero", "00 首頁.md");
 	assert.match(home, /> \[!zm-board\] 🪐 我的星球\n> > \[!zm-topic\] \[\[Zotero\/10 文獻\/碩論\/00 碩論 總覽\|碩論\]\]\n> > \*\*2 座島\*\*/);

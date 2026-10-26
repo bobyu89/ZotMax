@@ -256,3 +256,62 @@ test("homePlanets: 首頁's 「🪐 我的星球」, a card per planet (看板) 
 	let T2 = T.homeSection({ layout: "board", now: NOW, stats: null, entries: [], planets: board });
 	assert.ok(T2.includes("🪐 我的星球"));
 });
+
+test("🎯 島嶼任務: this week's steps on the least developed islands, specific papers, kept all week and ticked from the notes", () => {
+	assert.equal(P.weekStart(new Date("2026-10-28T10:00:00")), "2026-10-26", "Wednesday → its Monday");
+	assert.equal(P.weekStart(new Date("2026-11-01T23:00:00")), "2026-10-26", "Sunday belongs to the week before");
+	assert.equal(P.weekStart(new Date("2026-10-26T00:10:00")), "2026-10-26");
+	let records = archipelago();
+	let pl = P.findPlanets(records)[0];
+	// 用藥 (dev 0, one unread paper) first, then 衛教 (50); 運動 is 🏙️ and gets none
+	let picked = P.pickQuests(pl);
+	assert.deepEqual(picked.map(q => [q.kind, q.title, q.island]), [["read", "F", "用藥"], ["read", "E", "衛教"]]);
+	let mon = new Date("2026-10-26T09:00:00");
+	let first = P.updateQuests(null, pl, mon);
+	assert.equal(first.entry.week, "2026-10-26");
+	assert.deepEqual(first.entry.items.map(i => i.done), ["", ""]);
+	assert.deepEqual(first.newly, []);
+	// Wednesday: F was read → ticked with the time; the set stays the same
+	records.find(r => r.title === "F").status = "已讀";
+	let wed = new Date("2026-10-28T20:00:00");
+	let second = P.updateQuests(first.entry, pl, wed);
+	assert.deepEqual(second.entry.items.map(i => [i.title, !!i.done]), [["F", true], ["E", false]]);
+	assert.deepEqual(second.newly.map(i => i.title), ["F"]);
+	assert.deepEqual(P.updateQuests(second.entry, pl, wed).newly, [], "only once");
+	// The next Monday: a new set from where things stand now
+	let next = P.updateQuests(second.entry, pl, new Date("2026-11-02T08:00:00"));
+	assert.equal(next.entry.week, "2026-11-02");
+	assert.ok(next.entry.items.every(i => !i.done));
+	// A paper removed from the planet drops out
+	let gone = P.updateQuests({ week: "2026-10-26", items: [{ kind: "read", link: "Zotero/none", title: "x", island: "運動", done: "" }] }, pl, wed);
+	assert.deepEqual(gone.entry.items, []);
+	// History, the period's quests, the log line
+	let h = P.recordQuests({ series: {} }, pl.path, second.newly);
+	assert.deepEqual(h.quests, [{ at: wed.toISOString(), planet: "碩論/跌倒", island: "用藥", kind: "read", title: "F" }]);
+	assert.deepEqual(P.questsIn(h, "2026-10-26", "2026-11-01").length, 1);
+	assert.deepEqual(P.questsIn(h, "2026-11-02", "2026-11-08"), []);
+	assert.equal(P.questText(h.quests[0]), "讀完《F》");
+	let log = P.islandLog(pl, pl.islands, { quests: h.quests }, new Date("2026-10-28T21:00:00"));
+	assert.deepEqual(log.slice(0, 2), [{ day: "今天" }, { t: "20:00", i: "🎯", s: "完成任務：讀完《F》（用藥）" }]);
+	// verify quests only pick papers with an appraisal filled in
+	assert.ok(P.pickQuests(pl).every(q => q.kind !== "verify" || records.find(r => r.link === q.link).appraisal));
+});
+
+test("🎯 quests on the planet page (✅／⬜, no checkboxes), the home card, the map data and the tour", () => {
+	let records = archipelago();
+	let pl = P.findPlanets(records)[0];
+	records.find(r => r.title === "F").status = "已讀";
+	let q = P.updateQuests({ week: "2026-10-26", items: [{ kind: "read", link: "Zotero/F.md".replace(/\.md$/, ""), title: "F", island: "用藥", done: "" }, { kind: "read", link: "Zotero/E", title: "E", island: "衛教", done: "" }] }, pl, new Date("2026-10-28T09:00:00"));
+	assert.deepEqual(q.entry.items.map(i => !!i.done), [true, false]);
+	let { data } = dataFor(records, { quests: q.entry, noteLink: l => "obsidian://x?f=" + l });
+	assert.deepEqual(data.quests.items.map(i => [i.verb, i.title, i.island, i.done, i.link]), [["讀完", "F", "用藥", true, "obsidian://x?f=Zotero/F"], ["讀完", "E", "衛教", false, "obsidian://x?f=Zotero/E"]]);
+	assert.ok(data.tour.some(t => /本週任務還有 1 項，先從衛教開始：讀完《E》/.test(t.text)));
+	let board = P.planetSection(pl, data, { layout: "board", quests: q.entry });
+	assert.ok(board.includes("> > [!zm-next|wide] 🎯 本週任務（1／2）\n> > - ✅ 讀完 [[Zotero/F|F]] · 用藥\n> > - ⬜ 讀完 [[Zotero/E|E]] · 衛教\n> > 每週一換一批"));
+	assert.doesNotMatch(board, /- \[[ x]\]/, "no checkboxes: the region is rewritten");
+	let classic = P.planetSection(pl, data, { layout: "classic", quests: q.entry });
+	assert.match(classic, /### 🎯 本週任務（1／2）\n\n- ✅ 讀完 \[\[Zotero\/F\|F\]\] · 用藥/);
+	let home = P.homePlanets([{ name: "跌倒", link: "Z/p", data }], "board");
+	assert.match(home, /^> > 🎯 本週任務 1／2$/m);
+	assert.equal(P.questLines(null), null);
+});

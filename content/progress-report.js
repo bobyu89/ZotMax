@@ -460,14 +460,24 @@
 			? capped(r.appraisals.map(p => paperLine(p, [p.tool, p.overall ? `整體：${p.overall}` : "", `${p.date} 核對`].filter(Boolean).join("，"))), r.appraisals.length)
 			: "本期沒有完成核對的文獻評讀表。");
 		let isl = r.islands;
-		if (isl && (isl.rows.length || isl.unchanged)) {
+		let quests = (isl && isl.quests) || [];
+		if (isl && (isl.rows.length || isl.unchanged || quests.length)) {
 			parts.push("### 🪐 島嶼開發度");
 			parts.push(isl.rows.length
 				? capped(isl.rows.map(x => `- ${x.planet ? `${x.planet.split("/").pop()} › ` : ""}${progressText(x)}`), isl.rows.length)
 				: "本期各島的開發度沒有變化。");
 			if (isl.rows.length && isl.unchanged) parts.push(`另有 ${isl.unchanged} 座島沒有變化。開發度 = 已讀 40% ＋ 評讀已核對 30% ＋ 有 AI 筆記 30%，在更新研究儀表板時記錄。`);
+			if (quests.length) {
+				parts.push(`#### 🎯 完成的島嶼任務（${quests.length} 項）`);
+				parts.push(capped(quests.map(q => `- ${questLabel(q)}（${q.island}，${toLocalDay(q.at)}）`), quests.length));
+			}
 		}
 		return parts.join("\n\n");
+	}
+
+	function questLabel(q) {
+		let P = scope.ZB && scope.ZB.planet;
+		return P ? P.questText(q) : q.title;
 	}
 
 	function progressText(row) {
@@ -777,12 +787,14 @@ end
 		}
 		let cards = [];
 		let isl = on("reading") && r && r.islands;
-		if (isl && isl.rows.length) {
+		let doneQuests = (isl && isl.quests) || [];
+		if (isl && (isl.rows.length || doneQuests.length)) {
 			let ups = isl.rows.filter(x => x.up).length;
 			cards.push(core.chartCard("島嶼開發", [
-				ups ? `⬆️ **${ups}** 座島升級` : `**${isl.rows.length}** 座島有進展`,
+				ups ? `⬆️ **${ups}** 座島升級` : isl.rows.length ? `**${isl.rows.length}** 座島有進展` : "",
+				doneQuests.length ? `🎯 完成任務 **${doneQuests.length}** 項` : "",
 				...isl.rows.slice(0, 4).map(x => progressText(x)),
-			]));
+			].filter(Boolean)));
 		}
 		let g = facts.goals;
 		if (on("goals") && g && g.previous.length) {
@@ -1167,7 +1179,9 @@ end
 	function islandChanges(period) {
 		let P = scope.ZB && scope.ZB.planet;
 		try {
-			return P && P.enabled() ? P.islandProgress(P.readHistory(), period.start, period.end) : null;
+			if (!P || !P.enabled()) return null;
+			let h = P.readHistory();
+			return Object.assign(P.islandProgress(h, period.start, period.end), { quests: P.questsIn(h, period.start, period.end) });
 		}
 		catch (e) {
 			Zotero.logError(e);
