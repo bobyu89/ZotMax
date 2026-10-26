@@ -501,6 +501,57 @@
 		};
 	}
 
+	// ---------- 📝 文獻探討大綱: what each island's paragraph should answer (pure, no AI) ----------
+
+	const KEY_PAPERS = 3;
+
+	/** The island's strongest papers to read and cite first: CEBM level, then design, then newest. */
+	function keyPapers(records, designLabel) {
+		let level = r => {
+			let n = Number.parseInt(r.evidenceLevel, 10);
+			return n >= 1 && n <= 5 ? n : 6;
+		};
+		return records.filter(r => !r.deleted && (r.evidenceLevel || r.studyDesign))
+			.sort((a, b) => level(a) - level(b) || String(b.year || "").localeCompare(String(a.year || "")) || String(a.title).localeCompare(String(b.title)))
+			.slice(0, KEY_PAPERS)
+			.map(r => ({ link: r.link, title: r.title, year: String(r.year || "").slice(0, 4), design: r.studyDesign ? (designLabel ? designLabel(r.studyDesign) : r.studyDesign) : "", level: level(r) < 6 ? String(level(r)) : "" }));
+	}
+
+	/**
+	 * The questions an island's paragraph in the literature review should answer, from its numbers and topicStats:
+	 * whether the results agree, how strong the evidence is, what is missing. Questions, never the paragraph itself.
+	 */
+	function writingPrompts(n, s) {
+		let out = [];
+		if (!n.papers) return out;
+		let label = s ? s.verdict.label : "";
+		if (!s || label === "尚無判斷") out.push("先讀完或產生 AI 筆記：還看不出這座島的研究結論，段落要從「研究問了什麼」寫起。");
+		else if (label === "結論分歧" || (s.directions && s.directions["不一致"])) out.push("結果為什麼不一致？比較族群、介入劑量和測量工具（GRADE 的 inconsistency）。");
+		else if (/^多數/.test(label)) out.push(`大多數研究${label.replace(/^多數/, "")}：效果在哪些族群、劑量、追蹤時間下成立？有沒有例外？`);
+		else out.push(`目前的結論是「${label}」：這個結論有多少篇、多強的研究支持？`);
+		let best = Number.parseInt(n.best, 10);
+		if (!best || best >= 3) out.push(`最強的證據${best ? `只到 CEBM ${best}` : "還沒有等級"}：寫的時候要說明證據強度有限，避免下過強的結論。`);
+		else out.push(`有 CEBM ${best} 的研究：先用它定調，再用其他研究補充或對照。`);
+		let gaps = s ? s.steps.filter(x => x.gap).map(x => x.short) : [];
+		if (gaps.length) out.push(`缺口要寫出來：${gaps.slice(0, 2).join("；")}。這可能就是你研究的理由。`);
+		if (n.papers < 3) out.push(`只有 ${n.papers} 篇：先確認是不是漏找，再決定這座島要寫成一段還是併進別段。`);
+		return out;
+	}
+
+	/** 「📝 文獻探討大綱（依島）」: one heading per island with its facts, the questions and the papers to cite first. */
+	function outlineSection(data, layout) {
+		let isl = data.islands.filter(is => is.papers);
+		if (!isl.length) return "";
+		let parts = isl.map((is) => {
+			let facts = [`${is.papers} 篇`, is.design, is.verdict].filter(Boolean).join(" · ");
+			let cite = (is.key || []).map(k => `${wikilink(k.link, k.title)}（${[k.year, k.design, k.level ? `CEBM ${k.level}` : ""].filter(Boolean).join(" · ")}）`);
+			return [`#### ${is.name}（${facts}）`, ...is.prompts.map(q => `- ❓ ${q}`), ...(cite.length ? [`- 📌 先讀、先引用：${cite.join("；")}`] : [])].join("\n");
+		});
+		let intro = "每座島寫成文獻探討的一段（或一節），由研究最多的島開始。下面是每段要回答的問題和先讀的文獻，文字由你寫；ZotMax 不替你寫段落。";
+		if (layout !== "board") return [`### 📝 文獻探討大綱（依島）`, intro, ...parts].join("\n\n");
+		return dashboard.foldSection(["## 📝 文獻探討大綱（依島）", intro, ...parts].join("\n\n"));
+	}
+
 	/** The last TREND_POINTS values of an island's 開發度 (the history, then today's when it differs). */
 	function trendOf(points, dev) {
 		let vals = (Array.isArray(points) ? points : []).filter(validPoint).map(p => p[1]);
@@ -533,6 +584,9 @@
 				houses: houses(is.records),
 				hint: levelHint(n).text,
 				trend: trendOf((opts.series || {})[is.path], n.dev),
+				verdict: s ? s.verdict.label : "",
+				prompts: writingPrompts(n, s),
+				key: keyPapers(is.records, opts.designLabel).map(k => Object.assign(k, { url: opts.noteLink ? opts.noteLink(k.link) : "" })),
 				link: link(is.path),
 			});
 		});
@@ -716,6 +770,7 @@
 				"| 島 | 階段 | 開發度 | 文獻 | 已讀 | 評讀已核對 | AI 筆記 | 最強證據 | 升級 | 缺口 |\n|---|---|---|---|---|---|---|---|---|---|\n" + rows.join("\n"),
 				seaLine, harborLine,
 				...(questLines(meta.quests) ? [`### 🎯 本週任務（${questLines(meta.quests).done}／${questLines(meta.quests).total}）`, questLines(meta.quests).lines.join("\n"), QUEST_NOTE] : []),
+				outlineSection(data, "classic"),
 			].filter(Boolean).join("\n\n");
 		}
 		let cards = withPath.map((is) => {
@@ -734,7 +789,8 @@
 		let extra = [seaLine, harborLine].filter(Boolean);
 		if (extra.length) cards.push([`> [!zm-next|wide] 海域與港口`, ...extra.map(l => `> - ${l}`)].join("\n"));
 		let body = [`> [!zm-links] 群島\n> ${top}`, ...cards].join("\n\n");
-		return `> [!zm-board] ${head}\n` + body.split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n");
+		let outline = outlineSection(data, "board");
+		return `> [!zm-board] ${head}\n` + body.split("\n").map(l => (l.trim() ? `> ${l}` : ">")).join("\n") + (outline ? `\n\n${outline}` : "");
 	}
 
 	/**
@@ -953,6 +1009,7 @@
 		CANVAS_SUFFIX,
 		findPlanets, planetOf, islandOf, devOf, stageOf, stageLabel, levelHint, numbers, houses, islandTerms, bridgesOf, seasOf, islandLog, nextHistory,
 		weekStart, questDone, pickQuests, updateQuests, recordQuests, questsIn, questText, questLines,
+		keyPapers, writingPrompts, outlineSection,
 		islandProgress, progressLine, trendOf,
 		planetData, tourOf, fillTemplate, mapNote, mapLink, planetCanvas, canvasIsOurs, planetSection, homePlanets, backLink,
 		enabled, init, readHistory, saveHistory, readQuests, saveQuests, cardForPath, writeMap, writeCanvas, openForCollection,

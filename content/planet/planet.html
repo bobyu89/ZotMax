@@ -102,6 +102,7 @@ canvas { display: block; width: 100%; height: 580px; cursor: pointer; touch-acti
 .maptools { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 4px; background: rgba(255,255,255,.88); border-radius: 99px; padding: 4px; box-shadow: 0 4px 12px rgba(0,0,0,.08); }
 .maptools button { border: 0; background: transparent; border-radius: 99px; padding: 5px 12px; font: 700 12px var(--body); color: #213439; cursor: pointer; }
 .maptools button[aria-pressed="true"] { background: #213439; color: #fff; }
+.snap { position: absolute; right: 12px; top: 12px; border: 0; border-radius: 99px; padding: 6px 12px; background: rgba(255,255,255,.88); color: #213439; font: 700 12px var(--body); cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,.08); }
 .legend { position: absolute; right: 12px; bottom: 12px; background: rgba(255,255,255,.88); color: #213439; border-radius: 16px; padding: 7px 12px; font-size: 11px; line-height: 1.7; box-shadow: 0 4px 12px rgba(0,0,0,.08); }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin: 0 2px 0 6px; }
 .log { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; max-height: 500px; overflow: auto; }
@@ -158,6 +159,7 @@ button:focus-visible, a:focus-visible, canvas:focus-visible { outline: 3px solid
         <button type="button" data-time="dusk" aria-pressed="false">黃昏</button>
         <button type="button" data-time="night" aria-pressed="false">夜晚</button>
       </div>
+      <button type="button" class="snap" id="snap" title="把目前的地圖存成 PNG（給投影片或和指導教授討論用）">🖼️ 下載圖片</button>
       <div class="legend">屋頂<span class="dot" style="background:#8f80ec"></span>已讀<span class="dot" style="background:#f2b24c"></span>閱讀中<span class="dot" style="background:#f3efe7;border:1px solid #ccc"></span>待讀<br>屋子越高＝證據等級越強 · <span style="color:#e07a4f">▶</span> 旗子＝本週任務</div>
     </div>
     <aside class="panel">
@@ -263,6 +265,8 @@ window.PLANET = /*ZOTMAX_DATA*/null;
         ${links.length ? `<div class="sec"><h3>🌉 橋（共用的概念卡）</h3>${links.map(b => `<div>${esc(b.label)} → ${esc(nameOf(b.a === id ? b.b : b.a))}</div>`).join("")}</div>` : ""}
         ${seasNear.length ? `<div class="sec"><h3>🌊 附近的未探索海域</h3>${seasNear.map(x => `<div>${esc(x.text)}</div>`).join("")}</div>` : ""}
         ${questList(QUESTS.filter(q => q.island === is.name), "這座島的本週任務")}
+        ${is.prompts && is.prompts.length ? `<div class="sec"><h3>📝 寫文獻探討時要回答</h3><ul class="gaps">${is.prompts.map(q => `<li>${esc(q)}</li>`).join("")}</ul>${
+          is.key && is.key.length ? `<div class="formula" style="margin-top:6px">先讀、先引用：${is.key.map(k => k.url ? `<a href="${esc(k.url)}">${esc(k.title)}</a>` : esc(k.title)).join("；")}</div>` : ""}</div>` : ""}
         <div class="sec"><h3>🧭 這座島的缺口</h3>${is.gaps.length ? `<ul class="gaps">${is.gaps.map(g => `<li>${esc(g)}</li>`).join("")}</ul>` : `<span class="formula">目前沒有規則找到的缺口</span>`}</div>
         ${open(is.link, "在 Obsidian 開啟島頁")}`;
     }
@@ -834,6 +838,20 @@ window.PLANET = /*ZOTMAX_DATA*/null;
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
     const ids = ["hub", ...order.map(i => i.id), ...(D.harbor ? ["harbor"] : [])];
     select(ids[(ids.indexOf(selected) + (e.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length]);
+  });
+  // 🖼️ the map as it is now, as a PNG named after the planet and the day
+  $("snap").addEventListener("click", () => {
+    const d = new Date(), p = n => String(n).padStart(2, "0");
+    cv.toBlob((blob) => {
+      if (!blob) return;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${String(D.title || "星球").replace(/[\\/:*?"<>|]/g, "_")} 星球地圖 ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.png`;
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }, "image/png");
   });
   new ResizeObserver(() => paintStatic()).observe(cv);
   if (!reduce) setInterval(() => { tick++; frame(); }, 60);
