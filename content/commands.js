@@ -330,6 +330,16 @@
 			features: ["dashboard"], needs: null, menus: ["collection"],
 			keywords: ["星球", "島嶼", "群島", "地圖", "planet", "island", "map", "開發度", "進度", "缺口", "子分類", "obsidian"],
 			run: sel => ZB().planet.openForCollection(targetCollections(sel)[0] || null) },
+		// 建造星球 (planet-build.js): a topic's papers grouped into sub-collections (islands); undo while there is a record
+		{ id: "planet-build", group: "organize", l10n: "zotero-bridge-cmd-planet-build", label: "建造星球：把這個分類分成島（目前分類）…",
+			features: ["dashboard"], needs: null, menus: ["collection"],
+			keywords: ["星球", "島嶼", "建造", "分島", "子分類", "planet", "island", "build", "分類", "主題", "子題"],
+			run: sel => ZB().planetBuild.run(targetCollections(sel)[0] || null) },
+		{ id: "planet-build-undo", group: "organize", l10n: "zotero-bridge-cmd-planet-build-undo", label: "復原上次建造星球",
+			features: ["dashboard"], needs: null, menus: [],
+			when: () => !!ZB().planetBuild.readLast(),
+			keywords: ["復原", "還原", "undo", "星球", "建造", "子分類"],
+			run: () => ZB().planetBuild.undoLast() },
 		// 整理 vault 資料夾 (vault-layout.js): the flat layout moved to 10 文獻/<collection> and the numbered folders
 		{ id: "vault-layout", group: "organize", l10n: "zotero-bridge-cmd-vault-layout", label: "整理 Obsidian 資料夾結構…",
 			features: [], needs: null, menus: [],

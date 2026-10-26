@@ -22,6 +22,7 @@ pref("extensions.zotero-bridge.dashboard.canvas", true);
 pref("extensions.zotero-bridge.dashboard.planet", true);
 pref("extensions.zotero-bridge.planet.history", "{}");
 pref("extensions.zotero-bridge.planet.quests", "{}");
+pref("extensions.zotero-bridge.planet.lastBuild", "");
 // Concept hub notes (content/concepts.js): rebuild <folder>/<concepts.folder>/*.md after each manual sync;
 // measures (and outcomes) from the structured data as concepts; alias groups, one per line: 跌倒 = Accidental Falls = falls;
 // a custom prompt for 「為概念卡片產生 AI 綜整」 (empty = built-in)

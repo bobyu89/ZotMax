@@ -145,6 +145,8 @@
 			hasStudyData: ["study_design", "evidence_level", "jbi_level", "sample_size", "appraisal_overall"].some(k => asText(f[k])),
 			dateAdded: asText(f.date_added),
 			aiGenerated: asText(f.ai_generated),
+			// "library/ABCD1234" (zotero-adapter zoteroKeyFor): the Zotero item the note belongs to
+			zoteroKey: asText(f.zotero_key),
 			suspectNames: suspectChineseNames(title, authors),
 		};
 	}

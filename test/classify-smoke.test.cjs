@@ -639,3 +639,54 @@ test("settings pane: the 文獻自動分類 section, its switches, and live vali
 	assert.equal($("#zb-feature-classifyAI-req").textContent, "要先打開「文獻自動分類」才會生效。");
 	assert.deepEqual(env.errors, []);
 });
+
+test("建造星球: islands proposed from the papers' tags, the user's names, sub-collections created and filled (nothing leaves the topic); undo takes them back", async () => {
+	let env = await setup();
+	let { ZB } = env;
+	let topic = env.addCollection("跌倒");
+	let mk = (key, tags) => {
+		let it = new env.MockItem("journalArticle", { key, title: `Paper ${key}`, tags });
+		it.addToCollection(topic.id);
+		return it;
+	};
+	mk("P1", ["Exercise Therapy", "Accidental Falls"]);
+	mk("P2", ["Exercise Therapy", "Accidental Falls"]);
+	mk("P3", ["Patient Education as Topic", "Accidental Falls"]);
+	mk("P4", ["Patient Education as Topic", "Accidental Falls", "Humans"]);
+	mk("P5", ["Accidental Falls"]);
+	let seen = null;
+	let notes = [];
+	ZB.planetBuild.runtime.notify = t => notes.push(t);
+	ZB.planetBuild.runtime.ask = (init) => {
+		seen = init;
+		// keep both, rename one
+		return [{ name: "運動介入", keys: init.islands[0].keys }, { name: init.islands[1].name, keys: init.islands[1].keys }];
+	};
+	let result = await ZB.planetBuild.run(topic);
+	assert.deepEqual(env.errors, []);
+	assert.deepEqual(JSON.parse(JSON.stringify(seen.islands.map(is => [is.name, is.keys.join(","), is.titles.length]))), [["Exercise Therapy", "P1,P2", 2], ["Patient Education as Topic", "P3,P4", 2]]);
+	assert.deepEqual([...seen.rest], ["P5"]);
+	assert.deepEqual([result.created, result.added], [2, 4]);
+	assert.deepEqual(tree(env).filter(p => p.startsWith("跌倒")), ["跌倒 [P1,P2,P3,P4,P5]", "跌倒/Patient Education as Topic [P3,P4]", "跌倒/運動介入 [P1,P2]"]);
+	assert.match(notes.pop(), /「跌倒」建好 2 座島（新建 2 個子分類，加入 4 筆）/);
+	assert.ok(ZB.planetBuild.readLast());
+	assert.ok(offered(env, "planet-build-undo"), "undo offered while there is a record");
+	// Undo: memberships back, the created sub-collections (empty again) erased, the topic untouched
+	ZB.planetBuild.runtime.confirmUndo = () => true;
+	let undone = await ZB.planetBuild.undoLast();
+	assert.deepEqual(JSON.parse(JSON.stringify(undone)), { removed: 4, deleted: 2 });
+	assert.deepEqual(tree(env).filter(p => p.startsWith("跌倒")), ["跌倒 [P1,P2,P3,P4,P5]"]);
+	assert.equal(ZB.planetBuild.readLast(), null);
+	assert.ok(!offered(env, "planet-build-undo"));
+	// Too few papers, or nothing that splits: it says so and writes nothing
+	let small = env.addCollection("小主題");
+	let one = new env.MockItem("journalArticle", { key: "S1", title: "Only", tags: ["x"] });
+	one.addToCollection(small.id);
+	assert.equal(await ZB.planetBuild.run(small), null);
+	assert.match(notes.pop(), /只有 1 篇文獻/);
+	let flat = env.addCollection("看不出子題");
+	for (let k of ["F1", "F2", "F3", "F4"]) new env.MockItem("journalArticle", { key: k, title: k, tags: ["Accidental Falls"] }).addToCollection(flat.id);
+	assert.equal(await ZB.planetBuild.run(flat), null);
+	assert.match(notes.pop(), /還看不出兩個以上的子題/);
+	assert.deepEqual(env.errors, []);
+});

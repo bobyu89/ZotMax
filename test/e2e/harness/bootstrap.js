@@ -379,6 +379,7 @@ const TESTS = [
 				zhMeta: ["analyze", "itemData", "findingsFor", "paneCount", "buildPlan", "defaultPicks", "review", "renderReview", "apply", "undoLast", "readLastRun", "run"],
 				obsidianStyle: ["css", "versionOf", "enableIn", "install", "afterSync", "describe"],
 				planet: ["findPlanets", "planetData", "levelHint", "fillTemplate", "planetSection", "planetCanvas", "writeMap", "writeCanvas", "openForCollection", "init"],
+				planetBuild: ["proposeIslands", "planBuild", "readLast", "run", "undoLast"],
 				topics: ["groupTopics", "topicStats", "topicSection", "homeSection", "buildPage", "writeAll", "afterDashboard"],
 				vaultLayout: ["planMigration", "linkMap", "rewriteLinks", "plan", "apply", "detect", "relocate", "afterMoves", "run"],
 				manualAI: ["promptText", "cleanAnswer", "checkAnswer", "renderWindow", "promptFor", "run"],
