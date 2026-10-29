@@ -73,6 +73,61 @@ test("E-utilities URLs carry db, term, JSON mode, the Entrez-date window and too
 	});
 });
 
+// Real ESearch responses (E-utilities, 2026-10-29; shortened where marked …)
+const ESEARCH_FIXTURES = {
+	plain: { count: "8636", retmax: "0", retstart: "0", idlist: [],
+		translationset: [
+			{ from: "falls", to: "\"accidental falls\"[MeSH Terms] OR (\"accidental\"[All Fields] AND \"falls\"[All Fields]) OR \"accidental falls\"[All Fields] OR \"falling\"[All Fields] OR \"falls\"[All Fields] OR \"fallings\"[All Fields]" },
+			{ from: "elderly", to: "\"aged\"[MeSH Terms] OR \"aged\"[All Fields] OR \"elderly\"[All Fields] OR \"elderlies\"[All Fields] OR \"elderly's\"[All Fields] OR \"elderlys\"[All Fields]" },
+			{ from: "exercise", to: "\"exercise\"[MeSH Terms] OR \"exercise\"[All Fields] OR \"exercises\"[All Fields] OR …" },
+		],
+		querytranslation: "(\"accidental falls\"[MeSH Terms] OR … OR \"fallings\"[All Fields]) AND (\"aged\"[MeSH Terms] OR … OR \"elderlys\"[All Fields]) AND (\"exercise\"[MeSH Terms] OR … OR \"exercisers\"[All Fields])" },
+	notFound: { count: "0", retmax: "0", retstart: "0", idlist: [],
+		translationset: [
+			{ from: "prevention", to: "\"prevent\"[All Fields] OR … OR \"prevention and control\"[Subheading] OR …" },
+			{ from: "elderly", to: "\"aged\"[MeSH Terms] OR …" },
+			{ from: "diabetes", to: "\"diabete\"[All Fields] OR \"diabetes mellitus\"[MeSH Terms] OR …" },
+		],
+		querytranslation: "\"fall\"[All Fields] AND (\"prevent\"[All Fields] OR …) AND (\"aged\"[MeSH Terms] OR …) AND \"foo\"[All Fields] AND (\"diabete\"[All Fields] OR …)",
+		errorlist: { phrasesnotfound: [], fieldsnotfound: [] },
+		warninglist: { phrasesignored: ["of", "the"], quotedphrasesnotfound: ["\"zzqqx foo\""], outputmessages: ["No items found."] } },
+	tagged: { count: "5", retmax: "0", retstart: "0", idlist: [],
+		translationset: [{ from: "Aged[majr]", to: "\"aged\"[MeSH Major Topic]" }, { from: "hand", to: "\"hand\"[MeSH Terms] OR \"hand\"[All Fields]" }],
+		querytranslation: "\"aged\"[MeSH Major Topic] AND ((\"hand\"[MeSH Terms] OR \"hand\"[All Fields]) AND \"hygien*\"[All Fields])" },
+	paren: { count: "6845808", retmax: "0", retstart: "0", idlist: [],
+		translationset: [{ from: "falls", to: "\"accidental falls\"[MeSH Terms] OR …" }, { from: "elderly", to: "\"aged\"[MeSH Terms] OR …" }, { from: "aged", to: "\"aged\"[MeSH Terms] OR \"aged\"[All Fields]" }],
+		querytranslation: "((\"accidental falls\"[MeSH Terms] OR …) AND (\"aged\"[MeSH Terms] OR … \"elderlys\"[All Fields])) OR (\"aged\"[MeSH Terms] OR \"aged\"[All Fields])",
+		warninglist: { phrasesignored: [], quotedphrasesnotfound: [], outputmessages: ["("] } },
+	noSet: { count: "150", retmax: "0", retstart: "0", idlist: [], translationset: [],
+		querytranslation: "\"pressure ulcer\"[All Fields] AND \"nurs*\"[Title/Abstract] AND \"Accidental Falls\"[MeSH Terms:noexp]" },
+};
+
+test("parseESearch: PubMed's translation set and its lists, from real responses; the warnings stay as they were", () => {
+	let plain = pw.parseESearch({ header: { type: "esearch", version: "0.3" }, esearchresult: ESEARCH_FIXTURES.plain });
+	assert.equal(plain.count, 8636);
+	assert.deepEqual(plain.translationSet.map(t => t.from), ["falls", "elderly", "exercise"]);
+	assert.match(plain.translationSet[0].to, /^"accidental falls"\[MeSH Terms\] OR/);
+	assert.deepEqual(plain.lists, { phrasesNotFound: [], phrasesIgnored: [], fieldsNotFound: [], quotedPhrasesNotFound: [], outputMessages: [] });
+	assert.deepEqual(plain.warnings, []);
+	let nf = pw.parseESearch({ esearchresult: ESEARCH_FIXTURES.notFound });
+	assert.equal(nf.count, 0);
+	assert.deepEqual(nf.lists, { phrasesNotFound: [], phrasesIgnored: ["of", "the"], fieldsNotFound: [], quotedPhrasesNotFound: ["\"zzqqx foo\""], outputMessages: ["No items found."] });
+	assert.deepEqual(nf.warnings, ["忽略的詞：of", "忽略的詞：the", "找不到片語：\"zzqqx foo\"", "No items found."]);
+	assert.deepEqual(nf.translationSet.map(t => t.from), ["prevention", "elderly", "diabetes"]);
+	let tagged = pw.parseESearch({ esearchresult: ESEARCH_FIXTURES.tagged });
+	assert.deepEqual(tagged.translationSet[0], { from: "Aged[majr]", to: "\"aged\"[MeSH Major Topic]" });
+	let paren = pw.parseESearch({ esearchresult: ESEARCH_FIXTURES.paren });
+	assert.deepEqual(paren.lists.outputMessages, ["("]);
+	assert.deepEqual(paren.warnings, ["("]);
+	let none = pw.parseESearch({ esearchresult: ESEARCH_FIXTURES.noSet });
+	assert.deepEqual(none.translationSet, []);
+	assert.match(none.translation, /"Accidental Falls"\[MeSH Terms:noexp\]/);
+	// Odd shapes are dropped, never thrown
+	let odd = pw.parseESearch({ esearchresult: { count: "1", translationset: [null, { from: 1, to: "x" }, { from: "a", to: "b" }], warninglist: { phrasesignored: [null, "of"] } } });
+	assert.deepEqual(odd.translationSet, [{ from: "a", to: "b" }]);
+	assert.deepEqual(odd.lists.phrasesIgnored, ["of"]);
+});
+
 test("parseESearch and parseESummary read NCBI's JSON; errors are thrown", () => {
 	let r = pw.parseESearch({ esearchresult: {
 		count: "3", idlist: ["3", "2", "x"], querytranslation: "\"accidental falls\"[MeSH Terms]",
@@ -80,7 +135,8 @@ test("parseESearch and parseESummary read NCBI's JSON; errors are thrown", () =>
 		errorlist: { phrasesnotfound: ["nursx"], fieldsnotfound: ["[tiabx]"] },
 	} });
 	assert.deepEqual(r, {
-		count: 3, ids: ["3", "2"], translation: "\"accidental falls\"[MeSH Terms]",
+		count: 3, ids: ["3", "2"], translation: "\"accidental falls\"[MeSH Terms]", translationSet: [],
+		lists: { phrasesNotFound: ["nursx"], phrasesIgnored: ["and"], fieldsNotFound: ["[tiabx]"], quotedPhrasesNotFound: [], outputMessages: ["No items found."] },
 		warnings: ["找不到詞彙：nursx", "找不到欄位：[tiabx]", "忽略的詞：and", "No items found."],
 	});
 	assert.throws(() => pw.parseESearch({ esearchresult: { ERROR: "Invalid query" } }), /PubMed 檢索式有誤：Invalid query/);
@@ -197,4 +253,46 @@ test("buildDigestNote (看板): the day's papers as cards above the lists, which
 	// Classic: no cards, no classes
 	let classic = pw.buildDigestNote(null, "2026-10-08", [{ name: "壓傷", entries: [entry("4")] }]);
 	assert.doesNotMatch(classic, /zm-board|cssclasses/);
+});
+
+test("queryCheckView (檢索式體檢 under 測試檢索式): notes, PubMed's reading and the count for the user's query; one notice for ZotMax's", () => {
+	const qc = require("../content/query-check.js");
+	const BANNED = /查完了|已完整|足夠|合格|不及格|分數|紅燈|綠燈/;
+	let detail = (query, fixture) => Object.assign({ query }, pw.parseESearch({ esearchresult: ESEARCH_FIXTURES[fixture] }));
+
+	// The user's query with an unmatched parenthesis: the note first, then what PubMed did with it, the count, one button
+	let paren = pw.queryCheckView(qc, detail("falls (elderly OR aged", "paren"), { type: "treatment" });
+	assert.equal(paren.user, true);
+	assert.equal(paren.title, "檢索式體檢");
+	assert.equal(paren.scope, "（只看你寫或改過的檢索式；不會改你的檢索式）");
+	assert.equal(paren.lines[0], "・括號沒有成對：左括號 1 個、右括號 0 個。PubMed 會丟掉多出來的括號，結果可能和你想的不一樣。");
+	let at = paren.lines.indexOf("PubMed 怎麼讀你的檢索式：");
+	assert.ok(at > 0);
+	assert.ok(paren.lines.includes("・「falls」→ 自動對到 MeSH「accidental falls」（也會找它底下的下位詞），原字也在所有欄位找"));
+	assert.ok(paren.lines.includes("・有括號沒配對，PubMed 把它丟掉了"));
+	assert.match(paren.lines.at(-1), /^PubMed 找到 6,845,808 篇。治療／預防題/);
+	assert.equal(paren.retest, "我改好了，再測一次");
+
+	// PubMed's own messages: ignored words, a quoted phrase it couldn't find, 0 hits
+	let nf = pw.queryCheckView(qc, detail("fall prevention of the elderly AND \"zzqqx foo\" AND diabetes[xyz]", "notFound"));
+	assert.ok(nf.lines.some(l => /^・被當成常用字略過：of、the/.test(l)), nf.lines.join("\n"));
+	assert.ok(nf.lines.some(l => /^・找不到完全相同的片語/.test(l)));
+	assert.ok(nf.lines.some(l => /^・PubMed 不認得欄位標籤 \[xyz\]/.test(l)));
+	assert.equal(nf.lines.at(-1), "PubMed 找到 0 篇。先看上面有沒有被略過的詞或找不到的片語。");
+
+	// A well-formed query: the 「沒有發現」 line; no translation → no 「PubMed 怎麼讀」 heading
+	let clean = pw.queryCheckView(qc, { query: "((falls OR fall*) AND (aged OR elderly)) NOT children", count: 12, translation: "", translationSet: [] });
+	assert.deepEqual(clean.lines, ["沒有發現結構上的提醒。", "PubMed 找到 12 篇。筆數多少沒有標準答案。可以拿 2–3 篇你知道一定要找到的文獻，看它們有沒有在結果裡。"]);
+
+	// The query ZotMax generated (whitespace and case don't matter): the notice only, no button
+	let gen = pw.queryCheckView(qc, detail("falls (elderly OR aged", "paren"), { generated: "  Falls  (ELDERLY OR aged " });
+	assert.deepEqual([gen.user, gen.lines, gen.retest], [false, ["這是 ZotMax 產生的檢索式，不做體檢；你改過之後再測，就會檢查。"], ""]);
+	// Edited after it was generated: checked again
+	assert.equal(pw.queryCheckView(qc, detail("falls (elderly OR aged", "paren"), { generated: "falls AND (elderly OR aged)" }).user, true);
+
+	// Never a judgement, never the query rewritten
+	for (let v of [paren, nf, clean, gen]) {
+		for (let line of [v.title, v.scope, ...v.lines, v.retest]) assert.doesNotMatch(line, BANNED, line);
+	}
+	assert.ok(!paren.lines.some(l => l.includes("falls (elderly OR aged)")), "no closed-up version of the query");
 });

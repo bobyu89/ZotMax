@@ -932,5 +932,7 @@
 		config, apiKey, chaseCollection, chaseItems, importChecked,
 		// shared with topic-bot.js
 		itemIdentity, libraryRecords, translateIdentifier,
+		// read by screening.js's search health check
+		notePath,
 	};
 });

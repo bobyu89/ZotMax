@@ -110,6 +110,8 @@ pref("extensions.zotero-bridge.pubmedWatch.runAI", false);
 pref("extensions.zotero-bridge.pubmedWatch.digest", true);
 // 來源/<name> tags counted as "other methods" in PRISMA 2020 (one per line or comma-separated; empty = 引文追蹤, 網站, 機構)
 pref("extensions.zotero-bridge.screening.otherSources", "");
+// 檢索健康檢查 card on the PRISMA note (content/screening.js): objective signals and the 3 things to ask a librarian
+pref("extensions.zotero-bridge.screening.healthCheck", true);
 // Citation searching with OpenAlex (content/citation-chase.js): email for the polite pool, requests
 // per run, works per study and direction, direction "both" | "backward" | "forward"
 pref("extensions.zotero-bridge.citationChase.email", "");
@@ -118,6 +120,15 @@ pref("extensions.zotero-bridge.citationChase.maxPerSeed", "200");
 pref("extensions.zotero-bridge.citationChase.direction", "both");
 pref("extensions.zotero-bridge.topicBot.bots", "{}");
 pref("extensions.zotero-bridge.topicBot.autoRun", true);
+// 檢索日誌 (content/search-log.js): the log itself is a JSON file per collection in the Zotero data folder
+// (zotero-bridge/search-log/) plus an Obsidian note, never a pref. Show 「📝 記一筆」 after opening a Chinese,
+// CINAHL or grey-literature link; leave an exploratory draft per query and day when the topic bot or a PubMed
+// watch runs; batches tagged 來源/… waiting for 「補記一筆」 in the log window (JSON array, at most 20)
+pref("extensions.zotero-bridge.searchLog.offerAfterOpen", true);
+pref("extensions.zotero-bridge.searchLog.autoDrafts", true);
+pref("extensions.zotero-bridge.searchLog.pending", "[]");
+// 檢索式體檢 after 測試檢索式 (PubMed watch, topic bot; content/query-check.js): only queries the user wrote or edited
+pref("extensions.zotero-bridge.queryCheck.enabled", true);
 // Medical-literature search links (content/search-links.js): source order and hidden sources
 // (comma-separated IDs), custom sources (JSON array of { name, url with {q}, needsAccess }), the
 // library proxy prefix (EZproxy, only for sources that need institutional access) and sources it
@@ -138,7 +149,7 @@ pref("extensions.zotero-bridge.searchLinks.meshHelper", true);
 // images.export. features.version: the one-time migrations done (0 = none yet; 1 turns everything on for
 // profiles that used the plugin before the switches existed; 2 gives 進階 profiles the v0.10.0 switches:
 // 全文筆記, 文獻自動分類, 工具列按鈕, AI 標重點 and AI 主題分類; 3 the v0.12.0 switches: 評讀陪練;
-// 4 the v0.14.0 switch: 中文文獻補強; 5 the v0.17.0 switch: 匯出給 Gemini Notebook)
+// 4 the v0.14.0 switch: 中文文獻補強; 5 the v0.17.0 switch: 匯出給 Gemini Notebook; … 9 the v0.40.0 switch: 檢索日誌與 PRISMA-S)
 pref("extensions.zotero-bridge.features.version", 0);
 pref("extensions.zotero-bridge.feature.sync", true);
 pref("extensions.zotero-bridge.feature.bibliography", true);
@@ -165,6 +176,7 @@ pref("extensions.zotero-bridge.feature.zhMeta", true);
 pref("extensions.zotero-bridge.feature.geminiExport", false);
 pref("extensions.zotero-bridge.feature.pico", true);
 pref("extensions.zotero-bridge.feature.grade", true);
+pref("extensions.zotero-bridge.feature.searchLog", true);
 // Settings pane (content/preferences.js): the tab chosen last, and a section (data-zb-section ID, e.g.
 // "notion") to open the next time the pane is on screen; the pane clears it once it has opened it
 pref("extensions.zotero-bridge.prefs.lastTab", "features");

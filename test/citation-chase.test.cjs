@@ -433,3 +433,15 @@ test("OpenAlex API key (optional): sent as api_key on every request, never kept 
 	const bot = require("../content/topic-bot.js");
 	assert.match(bot.citingURL("W1", "2026-01-01", { email: "me@example.com", apiKey: "k-123" }), /&mailto=me%40example\.com&api_key=k-123$/);
 });
+
+test("notePath is exported for screening.js's search health check (a chase note counts as citation searching)", async () => {
+	assert.equal(typeof cc.notePath, "function");
+	// With a 來源/引文追蹤 record the health check stays silent about citation searching
+	let cfg = s.normalizeConfig({});
+	let prisma = s.computePrisma([
+		{ id: 1, key: "A", title: "A", tags: ["篩選/標題摘要/納入", "篩選/全文/納入", "來源/PubMed"] },
+		{ id: 2, key: "B", title: "B", tags: ["篩選/全文/排除", "來源/引文追蹤"] },
+	], cfg);
+	assert.ok(!s.searchHealth({ prisma, cfg, log: null }).flags.some(f => f.code === "noCitationChasing"));
+	assert.ok(s.searchHealth({ prisma: s.computePrisma([prisma.included[0]], cfg), cfg, log: null }).flags.some(f => f.code === "noCitationChasing"));
+});

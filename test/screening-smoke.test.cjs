@@ -555,3 +555,137 @@ test("PRISMA without a selected collection or settings explains what is missing"
 	assert.equal(await env.context.ZB.screening.generateReport(collection), null);
 	assert.match(env.descriptions.at(-1), /請先到 設定 → ZotMax 填入 Obsidian vault 路徑/);
 });
+
+test("檢索日誌: 找重複 leaves a 去重紀錄 every run (none found, tagged, already tagged, cancelled); the PRISMA note gets 檢索紀錄對帳", async () => {
+	let env = await setup({ prefs: { "extensions.zotero-bridge.obsidian.layout": "classic" } });
+	let ZB = env.context.ZB;
+	let dataDir = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-screening-log-"));
+	ZB.searchLog.runtime.dataDir = dataDir;
+	let file = path.join(dataDir, "library_collections_COLL1.json");
+	let entries = () => JSON.parse(fs.readFileSync(file, "utf8")).entries.filter(e => !e.deleted);
+	let a = paper(env, 1, { DOI: "10.1000/ABC", tags: ["來源/PubMed"] });
+	let b = paper(env, 2, { DOI: "10.1000/abc", tags: ["來源/PubMed"] });
+	let c = paper(env, 3, { title: "Another study", tags: ["來源/華藝", "篩選/標題摘要/納入", "篩選/全文/納入"] });
+	let collection = env.addCollection(1, "跌倒預防 SR", [a, b, c]);
+	assert.deepEqual({ ...await ZB.screening.dedupCollection(collection) }, { groups: 1, tagged: 1 });
+	await ZB.screening.dedupCollection(collection);
+	let dedupes = entries().filter(e => e.kind === "dedupe");
+	assert.deepEqual(dedupes.map(e => [e.records, e.groups, e.marked, e.alreadyMarked, e.cancelled, e.status]), [[3, 1, 1, 0, false, "formal"], [3, 1, 0, 1, false, "formal"]]);
+	assert.equal(dedupes[0].rule, "DOI、PMID、標題＋年份、期刊＋年＋卷＋起始頁（ZotMax 找重複）");
+	// Cancelled, and nothing found
+	let env2 = await setup({ confirm: () => false });
+	env2.context.ZB.searchLog.runtime.dataDir = dataDir;
+	let x = paper(env2, 1, { DOI: "10.1000/x" });
+	let y = paper(env2, 2, { DOI: "10.1000/x" });
+	await env2.context.ZB.screening.dedupCollection(env2.addCollection(2, "R", [x, y]));
+	await env2.context.ZB.screening.dedupCollection(env2.addCollection(3, "R2", [paper(env2, 3)]));
+	let other = n => JSON.parse(fs.readFileSync(path.join(dataDir, `library_collections_COLL${n}.json`), "utf8")).entries;
+	assert.deepEqual(other(2).map(e => [e.groups, e.marked, e.cancelled]), [[1, 0, true]]);
+	assert.deepEqual(other(3).map(e => [e.records, e.groups, e.marked]), [[1, 0, 0]]);
+	assert.deepEqual([x.tags, y.tags], [[], []], "cancelled: nothing tagged");
+
+	// The log: 華藝 42 imported, but only 1 record tagged 來源/華藝; PubMed 2 imported, 2 tagged
+	await ZB.searchLog.append(collection, { database: "華藝線上圖書館", sourceTag: "華藝", query: "跌倒 AND 長者", hits: 50, imported: 42, date: "2026-10-01" });
+	await ZB.searchLog.append(collection, { database: "PubMed", query: "falls[tiab]", hits: 2, imported: 2, date: "2026-10-01" });
+	await ZB.searchLog.append(collection, { database: "Embase", status: "exploratory", query: "x", hits: 9, date: "2026-10-01" });
+	let out = await ZB.screening.generateReport(collection);
+	assert.deepEqual(env.errors, []);
+	assert.equal(out.result.counts.identified, 3, "identified is the tag count");
+	assert.ok(out.result.issues.some(i => i.code === "logMismatch"));
+	let codes = out.result.issues.map(i => i.code);
+	let firstInfo = out.result.issues.findIndex(i => i.level === "info");
+	assert.ok(firstInfo < 0 || codes.indexOf("logMismatch") < firstInfo, `a warning before the info-level issues: ${codes.join(",")}`);
+	let note = fs.readFileSync(path.join(env.vault, "Zotero", "Reviews", "跌倒預防 SR.md"), "utf8");
+	assert.match(note, /^prisma_identified: 3$/m);
+	assert.match(note, /- ⚠️ 檢索日誌和「來源\/」標籤的筆數對不上：華藝線上圖書館：日誌記匯入 42 筆，Zotero 有 1 筆標了 來源\/華藝/);
+	assert.match(note, /## 檢索紀錄對帳\n\n並列檢索日誌和 Zotero 的數字；ZotMax 不會改 PRISMA 的辨識數。/);
+	assert.match(note, /\| 華藝線上圖書館 \| 50 \| 42 \| 1 \| ⚠️ 匯入和標籤對不上 \|/);
+	assert.match(note, /\| PubMed \| 2 \| 2 \| 2 \| ✓ 匯入和標籤相同 \|/);
+	assert.doesNotMatch(note, /\| Embase \|/, "exploratory searches stay out");
+	assert.match(note, /檢索日誌：\[\[Zotero\/Reviews\/檢索日誌\/跌倒預防 SR\\\|跌倒預防 SR 檢索日誌\]\]/);
+	// The log note sits below Reviews, so it is not a review project of its own
+	let logNote = fs.readFileSync(path.join(env.vault, "Zotero", "Reviews", "檢索日誌", "跌倒預防 SR.md"), "utf8");
+	assert.match(logNote, /^type: "search-log"$/m);
+	assert.match(logNote, /去重紀錄（2 次）/);
+	assert.doesNotMatch(logNote, /^prisma_/m);
+	assert.deepEqual(fs.readdirSync(path.join(env.vault, "Zotero", "Reviews")).filter(f => f.endsWith(".md")), ["跌倒預防 SR.md"]);
+
+	// Off: no section, no dedupe entry
+	ZB.features.setEnabled("searchLog", false);
+	await ZB.screening.generateReport(collection);
+	note = fs.readFileSync(path.join(env.vault, "Zotero", "Reviews", "跌倒預防 SR.md"), "utf8");
+	assert.doesNotMatch(note, /檢索紀錄對帳/);
+	await ZB.screening.dedupCollection(collection);
+	assert.equal(entries().filter(e => e.kind === "dedupe").length, 2);
+	assert.deepEqual(env.errors, []);
+});
+
+test("🩺 檢索健康檢查: the card in the PRISMA note, search_health_flags, and the user's search_stop_reason kept on regeneration; off in the settings", async () => {
+	let env = await setup({ prefs: { "extensions.zotero-bridge.obsidian.layout": "classic" } });
+	let ZB = env.context.ZB;
+	ZB.searchLog.runtime.dataDir = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-screening-health-"));
+	// 引文追蹤 off (the 研究生引導 default): the card says how to turn it on
+	env.prefStore["extensions.zotero-bridge.feature.citationChase"] = false;
+	let inc = [1, 2, 3].map(n => paper(env, n, { tags: ["篩選/標題摘要/納入", "篩選/全文/納入", "來源/PubMed"] }));
+	addAINote(env, inc[0], { study_design: "Randomized controlled trial" });
+	let scholar = paper(env, 4, { tags: ["篩選/標題摘要/排除", "來源/Google Scholar"], libraryCatalog: "Google Scholar" });
+	let collection = env.addCollection(1, "照護經驗", [...inc, scholar]);
+	// A qualitative (意義／經驗) PICO card for the collection
+	ZB.pico.saveCard(collection, { type: "meaning", question: "住院長者跌倒後的經驗" });
+
+	let out = await ZB.screening.generateReport(collection);
+	assert.deepEqual(env.errors, []);
+	let notePath = path.join(env.vault, "Zotero", "Reviews", "照護經驗.md");
+	let note = fs.readFileSync(notePath, "utf8");
+	assert.match(note, /^search_health_flags: 4$/m);
+	assert.match(note, /^search_stop_reason: ""$/m);
+	assert.match(note, /\n## 🩺 檢索健康檢查\n\n只列客觀訊號和問題，不評等；要不要補查由你決定。\n\n- 目前只看到一個資料庫：PubMed。/);
+	assert.match(note, /- Google Scholar 算在「資料庫」欄（1 筆）。/);
+	assert.match(note, /- 這是質性（意義／經驗）問題，但來源和檢索日誌都沒有 CINAHL。/);
+	assert.match(note, /- 還沒有引文追蹤的紀錄.*（這個功能目前關著，要先到 設定 → 功能 打開「引文追蹤」），也可以自己翻納入研究的參考文獻。/);
+	assert.match(note, /判斷 RCT 和系統性回顧時，只算看得出研究設計的納入研究（2 篇納入研究沒有 AI 筆記，看不出研究設計，沒有算進去）。/);
+	assert.match(note, /還沒有檢索日誌：資料庫清單只看「來源\/」標籤/);
+	assert.match(note, /停止搜尋的理由：還沒寫。/);
+	assert.match(note, /### 帶去給館員或指導教授看的 3 件事\n\n1\. 檢索式：/);
+	assert.ok(note.indexOf("## 檢索紀錄對帳") < note.indexOf("## 🩺 檢索健康檢查"));
+	// Nothing moved: Scholar stays in the database column, identified is the tag count, no issue raised
+	assert.match(note, /PubMed \(n = 3\)<br\/>Google Scholar \(n = 1\)/);
+	assert.equal(out.result.other, null);
+	assert.equal(out.result.counts.identified, 4);
+	assert.ok(!out.result.issues.some(i => /^(singleDatabase|scholarAsDatabase)$/.test(i.code)));
+	// Notion (vault set): the same card, the stop-reason line from the vault
+	let page = [...env.notion.pages.values()].at(-1);
+	assert.match(JSON.stringify(page.children), /🩺 檢索健康檢查/);
+	assert.match(JSON.stringify(page.children), /停止搜尋的理由：還沒寫。請在 Obsidian 的 PRISMA 筆記屬性 search_stop_reason 寫下來。/);
+	assert.doesNotMatch(JSON.stringify(page.children), /這份筆記的屬性/);
+
+	// The user writes the stop reason in Obsidian, then chases citations (a 「… 引文追蹤」 note) and regenerates
+	let reason = "search_stop_reason: \"兩次更新檢索都沒有新的納入研究：與指導教授討論後停止\"";
+	fs.writeFileSync(notePath, note.replace("search_stop_reason: \"\"", reason));
+	fs.writeFileSync(path.join(env.vault, "Zotero", "Reviews", "照護經驗 引文追蹤.md"), "---\ntitle: \"x\"\nzotero_collection: \"library/collections/COLL1\"\n---\n# x\n");
+	await ZB.screening.generateReport(collection);
+	let note2 = fs.readFileSync(notePath, "utf8");
+	assert.equal(note2.match(/^search_stop_reason: .*$/gm).join("\n"), reason, "kept byte for byte, not duplicated");
+	assert.match(note2, /^search_health_flags: 3$/m);
+	assert.doesNotMatch(note2, /還沒有引文追蹤的紀錄/);
+	assert.match(note2, /\n停止搜尋的理由（你寫的）：兩次更新檢索都沒有新的納入研究：與指導教授討論後停止\n/);
+	await ZB.screening.generateReport(collection);
+	assert.equal(fs.readFileSync(notePath, "utf8").match(/^search_stop_reason: .*$/gm).join("\n"), reason);
+	// The progress report's line reads both keys
+	let r = ZB.progressReport.reviewRecord(ZB.core.splitFrontmatter(note2).frontmatter, "Zotero/Reviews/照護經驗.md");
+	assert.deepEqual([r.healthFlags, r.stopReason], [3, "兩次更新檢索都沒有新的納入研究：與指導教授討論後停止"]);
+
+	// Off (設定 → 篩選): no card, the flags key left as it was
+	env.prefStore["extensions.zotero-bridge.screening.healthCheck"] = false;
+	await ZB.screening.generateReport(collection);
+	let note3 = fs.readFileSync(notePath, "utf8");
+	assert.doesNotMatch(note3, /檢索健康檢查/);
+	assert.match(note3, /^search_health_flags: 3$/m);
+	assert.equal(note3.match(/^search_stop_reason: .*$/gm).join("\n"), reason);
+	// A new note with the check off gets neither key
+	let other = env.addCollection(2, "另一個回顧", [paper(env, 9, { tags: ["來源/PubMed"] })]);
+	await ZB.screening.generateReport(other);
+	let fresh = fs.readFileSync(path.join(env.vault, "Zotero", "Reviews", "另一個回顧.md"), "utf8");
+	assert.doesNotMatch(fresh, /search_stop_reason|search_health_flags|檢索健康檢查/);
+	assert.deepEqual(env.errors, []);
+});

@@ -3,3 +3,5 @@ node_modules/
 !dist/
 # Build copy of content/appraisal-tools.js for GitHub Pages (made by .github/workflows/pages.yml)
 site/appraisal-tools.js
+# Build copy of content/query-check.js for GitHub Pages (made by .github/workflows/pages.yml)
+site/query-check.js

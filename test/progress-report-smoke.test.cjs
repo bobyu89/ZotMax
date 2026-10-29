@@ -500,3 +500,29 @@ test("cancelling the cost confirm still writes the report; the prompt fallback; 
 	assert.match(noVault.descriptions[before], /請先到 設定 → ZotMax 填入 Obsidian vault 路徑/);
 	assert.deepEqual(noVault.errors, []);
 });
+
+test("檢索健康檢查 switched off (設定 → 篩選): the report drops the PRISMA note's stale flag count, the user's stop reason still shows", async () => {
+	let env = await setup();
+	let ZB = env.ZB;
+	ZB.progressReport.runtime.ask = async (win, init) => Object.assign({}, init, { ai: false, copy: false, notion: false, sections: { reading: false, writing: false, pubmed: false, goals: false } });
+	let dir = path.join(env.vault, "Zotero", "Reviews");
+	fs.mkdirSync(dir, { recursive: true });
+	let write = extra => fs.writeFileSync(path.join(dir, "跌倒.md"), reviewNote(ZB, Object.assign({
+		prisma_identified: 30, prisma_screened: 30, prisma_assessed: 10, prisma_included: 4, prisma_awaiting_screening: 0, prisma_awaiting_fulltext: 0,
+		search_health_flags: 2,
+	}, extra)));
+	let report = async () => {
+		let result = await runMenu(env);
+		assert.deepEqual(env.errors, []);
+		return fs.readFileSync(path.join(env.vault, result.relPath), "utf8").match(/^- \[\[Zotero\/Reviews\/跌倒.*$/m)[0];
+	};
+	write({});
+	assert.match(await report(), /；沒有待篩選的文獻；檢索健康檢查 2 項提醒；還沒寫停止搜尋的理由/);
+	env.prefStore["extensions.zotero-bridge.screening.healthCheck"] = false;
+	let line = await report();
+	assert.doesNotMatch(line, /檢索健康檢查|還沒寫停止搜尋的理由/);
+	write({ search_stop_reason: "兩次更新沒有新的納入研究" });
+	line = await report();
+	assert.match(line, /；沒有待篩選的文獻；停止搜尋的理由：兩次更新沒有新的納入研究/);
+	assert.doesNotMatch(line, /檢索健康檢查/);
+});

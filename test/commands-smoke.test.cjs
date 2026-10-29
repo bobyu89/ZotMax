@@ -386,7 +386,7 @@ test("catalog: unique IDs, every command and variant runnable, real switches, ke
 	same(C.GROUPS.map(g => g.label), ["同步", "整理", "找文獻", "篩選與評讀", "AI 輔助與寫作"]);
 	for (let g of C.GROUPS) assert.equal(ftlText(zh, g.l10n), g.label);
 	same(C.SECTIONS.map(s => s.id), ["features", "sync", "obsidian", "notion", "routing", "autosync", "status", "apaZh", "bibliography",
-		"concepts", "fulltext", "colors", "classify", "searchLinks", "ncbi", "pubmedWatch", "citationChase", "topicBot", "screening", "pico", "ai", "usage", "geminiNotebook"]);
+		"concepts", "fulltext", "colors", "classify", "searchLinks", "ncbi", "pubmedWatch", "citationChase", "topicBot", "searchLog", "screening", "pico", "ai", "usage", "geminiNotebook"]);
 	for (let s of C.SECTIONS) {
 		assert.equal(ftlText(zh, s.l10n), s.label, `section ${s.id}`);
 		assert.ok(ftlText(en, s.l10n), `en-US section ${s.id}`);
@@ -472,6 +472,9 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"—", "# zotero-bridge-toolbar-group-organize",
 		"zotero-bridge-classify-tools", "zotero-bridge-cmd-planet-map", "zotero-bridge-cmd-planet-build", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
+		// 檢索日誌 is on in 研究生引導 too
+		"—", "# zotero-bridge-toolbar-group-search",
+		"zotero-bridge-cmd-search-log",
 		"—", "# zotero-bridge-toolbar-group-appraise",
 		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary", "zotero-bridge-cmd-pico-card", "zotero-bridge-cmd-pico-table", "zotero-bridge-cmd-grade",
 		"—", "# zotero-bridge-toolbar-group-ai",
@@ -489,7 +492,7 @@ test("right-click and Tools menus: one ZotMax submenu each, workflow groups, two
 		"zotero-bridge-menu-sync", "zotero-bridge-menu-no-ai", "zotero-bridge-menu-obsidian", "zotero-bridge-menu-notion",
 		"zotero-bridge-classify-tools", "zotero-bridge-cmd-planet-map", "zotero-bridge-cmd-planet-build", "zotero-bridge-cmd-export-collection", "zotero-bridge-cmd-zh-meta",
 		"zotero-bridge-chase-tools-included", "zotero-bridge-chase-tools-import",
-		"zotero-bridge-cmd-topic-bot-setup", "zotero-bridge-cmd-topic-bot-run", "zotero-bridge-cmd-topic-bot-import",
+		"zotero-bridge-cmd-topic-bot-setup", "zotero-bridge-cmd-topic-bot-run", "zotero-bridge-cmd-topic-bot-import", "zotero-bridge-cmd-search-log",
 		"zotero-bridge-screen-tools-dedup", "zotero-bridge-screen-tools-prisma", "zotero-bridge-appraisal-tools-summary", "zotero-bridge-cmd-pico-card", "zotero-bridge-cmd-pico-table", "zotero-bridge-cmd-grade",
 		"zotero-bridge-menu-regenerate", "zotero-bridge-menu-synthesis", "zotero-bridge-menu-review-draft", "zotero-bridge-cmd-gemini-export",
 	]);

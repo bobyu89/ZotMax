@@ -320,6 +320,26 @@ test("card window: labels and hints by type, the composed sentence, the live 聚
 	assert.equal(env.copied.pop().text, '"older inpatients" AND "nurse-led exercise" AND falls');
 	[...root.querySelectorAll(".zb-pc-link")].find(b => b.textContent === "PubMed").click();
 	assert.equal(env.launched.pop(), "https://pubmed.ncbi.nlm.nih.gov/?term=%22older%20inpatients%22%20AND%20%22nurse-led%20exercise%22%20AND%20falls");
+	// 檢索日誌: no 「📝 記一筆」 after PubMed; one right after 華藝 (once), opening the form for this card's collection
+	assert.equal(root.querySelectorAll(".zb-pc-log").length, 0);
+	let forms = [];
+	ZB.searchLog.runtime.form = (prefill, opts) => {
+		forms.push([prefill, opts.collection]);
+		return null;
+	};
+	let airiti = [...root.querySelectorAll(".zb-pc-link")].find(b => /^華藝/.test(b.textContent));
+	airiti.click();
+	airiti.click();
+	assert.equal(root.querySelectorAll(".zb-pc-log").length, 1, "once per target");
+	assert.equal(airiti.nextSibling.className, "zb-pc-log");
+	assert.equal(airiti.nextSibling.textContent, "📝 記一筆");
+	airiti.nextSibling.click();
+	for (let i = 0; i < 50 && !forms.length; i++) await new Promise(r => setTimeout(r, 2));
+	assert.equal(forms.length, 1);
+	assert.equal(forms[0][0].database, "華藝線上圖書館");
+	assert.equal(forms[0][0].query, '65 歲以上住院病人 older inpatients AND 護理師主導運動 nurse-led exercise AND 跌倒發生率 falls');
+	assert.equal(forms[0][1], env.collection, "the card's collection");
+	env.copied.length = 0;
 	save.click();
 	let result = await running;
 	assert.equal(result.saved.p, "65 歲以上住院病人 older inpatients");
@@ -399,6 +419,21 @@ test("card window: the search targets top-down in the 6S layers, the two modes, 
 	assert.equal(env.copied.pop().text, '"older adults" AND exercise');
 	[...layers()[0].querySelectorAll(".zb-pc-link")].find(b => b.textContent === "實證護理").click();
 	assert.equal(env.launched.pop(), "https://ebn.example.tw/s?kw=%22older%20adults%22%20AND%20exercise");
+	// 檢索日誌: the user's own guideline pages (grey literature) get 「📝 記一筆」 too, prefilled as a website
+	let own = [...layers()[0].querySelectorAll(".zb-pc-link")].find(b => b.textContent === "實證護理");
+	assert.equal(own.nextSibling && own.nextSibling.className, "zb-pc-log", "a custom guideline page offers 記一筆");
+	assert.equal([...layers()[0].querySelectorAll(".zb-pc-link")].find(b => b.textContent === "臺灣護理學會（複製）").nextSibling.className, "zb-pc-log");
+	let forms = [];
+	ZB.searchLog.runtime.form = (prefill) => {
+		forms.push(prefill);
+		return null;
+	};
+	own.nextSibling.click();
+	for (let i = 0; i < 50 && !forms.length; i++) await new Promise(r => setTimeout(r, 2));
+	assert.equal(forms.length, 1);
+	assert.equal(forms[0].database, "實證護理");
+	assert.equal(forms[0].method, "website");
+	ZB.searchLog.runtime.form = null;
 	// Switching to 臨床問題: every layer says this layer may be enough
 	clinical.checked = true;
 	clinical.dispatchEvent(new doc.defaultView.Event("change", { bubbles: true }));

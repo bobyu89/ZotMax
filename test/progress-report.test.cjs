@@ -104,6 +104,7 @@ test("PRISMA snapshot and the change since the previous report", () => {
 	assert.deepEqual(review, {
 		relPath: "Zotero/Reviews/跌倒.md", link: "Zotero/Reviews/跌倒", name: "跌倒", title: "跌倒：篩選與 PRISMA 2020",
 		identified: 40, screened: 35, assessed: 10, included: 6, awaitingScreening: 3, awaitingFulltext: 0, generatedAt: "2026-10-01T00:00:00Z",
+		stopReason: "", healthFlags: null,
 	});
 	let fresh = pr.reviewRecord("title: 新回顧\nprisma_identified: 12", "Zotero/Reviews/新.md");
 	let snapshot = pr.prismaSnapshot([review]);
@@ -136,6 +137,46 @@ test("PRISMA snapshot and the change since the previous report", () => {
 	assert.equal(capped[0].date, "2026-01-07");
 	assert.deepEqual(pr.parseHistory("{oops"), []);
 	assert.deepEqual(pr.parseHistory(JSON.stringify([{ date: "x" }, { date: "2026-10-01", prisma: [], drafts: null }])), [{ date: "2026-10-01", prisma: {}, drafts: {} }]);
+});
+
+test("PRISMA line: the search health check's flag count and the user's stop reason, as one line", () => {
+	let note = (extra) => core.splitFrontmatter(core.buildFrontmatter(Object.assign({
+		title: "跌倒", type: "review-screening", prisma_identified: 40, prisma_screened: 35, prisma_assessed: 10, prisma_included: 6,
+		prisma_awaiting_screening: 0, prisma_awaiting_fulltext: 0,
+	}, extra), null)).frontmatter;
+	let line = r => pr.buildSections({ reviews: pr.diffPrisma([r], null), hasSnapshot: false }, { reading: false, writing: false, pubmed: false, goals: false });
+	// Both keys read
+	let r = pr.reviewRecord(note({ search_health_flags: 2, search_stop_reason: "連續兩次更新檢索沒有新的納入研究" }), "Zotero/Reviews/跌倒.md");
+	assert.equal(r.healthFlags, 2);
+	assert.equal(r.stopReason, "連續兩次更新檢索沒有新的納入研究");
+	assert.match(line(r), /納入 6；沒有待篩選的文獻；檢索健康檢查 2 項提醒；停止搜尋的理由：連續兩次更新檢索沒有新的納入研究\n/);
+	// Checked, nothing flagged, no reason yet
+	r = pr.reviewRecord(note({ search_health_flags: 0 }) + "\nsearch_stop_reason: \"\"", "Zotero/Reviews/跌倒.md");
+	assert.equal(r.healthFlags, 0);
+	assert.equal(r.stopReason, "");
+	assert.match(line(r), /沒有待篩選的文獻；還沒寫停止搜尋的理由\n/);
+	assert.doesNotMatch(line(r), /檢索健康檢查/);
+	// Never checked (an older note, or the setting off): no health words at all
+	r = pr.reviewRecord(note({}), "Zotero/Reviews/跌倒.md");
+	assert.equal(r.healthFlags, null);
+	assert.match(line(r), /沒有待篩選的文獻\n/);
+	assert.doesNotMatch(line(r), /停止搜尋|檢索健康檢查/);
+	// A reason without the check is still shown; a block scalar is read whole, as one line
+	r = pr.reviewRecord(note({}) + "\nsearch_stop_reason: |\n  第一行理由\n  第二行", "Zotero/Reviews/跌倒.md");
+	assert.equal(r.stopReason, "第一行理由 第二行");
+	assert.match(line(r), /；停止搜尋的理由：第一行理由 第二行\n/);
+	r = pr.reviewRecord({ search_stop_reason: ["A", "B"], search_health_flags: "1" }, "Zotero/Reviews/x.md");
+	assert.deepEqual([r.stopReason, r.healthFlags], ["A；B", 1]);
+	// Read as screening.js's card reads it: a folded plain scalar whole, a flow list as written
+	const sc = require("../content/screening.js");
+	for (let raw of ["search_stop_reason: 兩次更新\n  沒有新的納入研究", "search_stop_reason: [第一輪, 第二輪]", "search_stop_reason: >-\n  折疊\n  的理由"]) {
+		let fm = note({}) + "\n" + raw;
+		r = pr.reviewRecord(fm, "Zotero/Reviews/跌倒.md");
+		assert.equal(r.stopReason, sc.frontmatterText(fm, "search_stop_reason"), raw);
+	}
+	assert.equal(pr.reviewRecord(note({}) + "\nsearch_stop_reason: 兩次更新\n  沒有新的納入研究", "x.md").stopReason, "兩次更新 沒有新的納入研究");
+	// No 0.40.0 banned words in the line
+	for (let w of ["查完了", "已完整", "足夠", "合格", "不及格", "分數", "紅燈", "綠燈"]) assert.ok(!line(r).includes(w), w);
 });
 
 test("drafts: only the user's own text counts (no frontmatter, plugin regions, comments, headings or citations)", () => {
