@@ -630,3 +630,92 @@ test("settings pane lists the source IDs and problems with the search settings",
 	observed.find(o => o.name === "extensions.zotero-bridge.searchLinks.custom").fn();
 	assert.equal(pre.textContent.split("\n").at(-1), `cdc｜CDC（實測可帶入檢索詞，CI 實測 ${CI_DATE}：OK）`);
 });
+
+test("檢索日誌: 「📝 記一筆」 after a Chinese, CINAHL or grey-literature link (item pane, quick search); never after PubMed; off with the option", async () => {
+	let env = await setup({ fetch: ncbiMock(), prompts: ["壓力性損傷"], selects: [0, 0, null] });
+	let { ZB } = env.context;
+	let SL = ZB.searchLinks;
+	let dataDir = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-search-log-"));
+	ZB.searchLog.runtime.dataDir = dataDir;
+	let forms = [];
+	ZB.searchLog.runtime.form = (prefill) => {
+		forms.push(prefill);
+		return null;
+	};
+	// Which sources offer it
+	let can = id => SL.canLog({ id });
+	assert.deepEqual(["airiti", "ndltd", "cinahl", "cochrane", "embase", "nice", "guideline-pdf", "clinicaltrials"].map(can), Array(8).fill(true));
+	assert.deepEqual(["pubmed", "pubmed-sr", "mesh", "europepmc", "related", "nope"].map(can), Array(6).fill(false));
+	env.prefStore["extensions.zotero-bridge.searchLinks.custom"] = JSON.stringify([{ name: "學校館藏", url: "https://lib.example.edu.tw/s?q={q}" }]);
+	assert.equal(SL.canLog({ id: SL.readConfig().all.find(s => s.name === "學校館藏").id }), true, "the user's own sources");
+
+	// Quick search: after 華藝 opens, the next list starts with 記一筆; used once, it is gone
+	let r = await SL.quickSearch();
+	let selects = env.dialogs.filter(d => d.type === "select");
+	assert.equal(selects.length, 3);
+	assert.match(selects[0].list[0], /^華藝線上圖書館/);
+	assert.equal(selects[1].list[0], "📝 記一筆檢索日誌：華藝線上圖書館（剛開啟）");
+	assert.ok(!selects[2].list.some(l => l.startsWith("📝")), "gone after use");
+	assert.equal(forms.length, 1);
+	assert.deepEqual([forms[0].database, forms[0].sourceTag, forms[0].query, forms[0].hits, forms[0].status], ["華藝線上圖書館", "華藝", "壓力性損傷", null, "formal"]);
+	assert.deepEqual([...r.picked].slice(0, 2), [selects[0].list[0], "📝 記一筆檢索日誌：華藝線上圖書館（剛開啟）"]);
+
+	// Item pane: one button at the end of the row, for the link opened last; none after PubMed
+	let item = paper(env);
+	addAINote(env, item, STUDY);
+	let doc = new JSDOM("<div id=b></div>").window.document;
+	let body = doc.getElementById("b");
+	env.panes[0].onRender({ doc, body, item, setSectionSummary: () => {} });
+	let rows = [...body.querySelectorAll('[data-zb-sub="search"] .zb-sp-body > div')].filter(d => d.querySelector("a[data-source]"));
+	let click = el => el.dispatchEvent(new doc.defaultView.MouseEvent("click", { bubbles: true, cancelable: true }));
+	click(rows[0].querySelector("a[data-source=pubmed]"));
+	assert.equal(rows[0].querySelector("[data-zb=log-link]"), null, "PubMed has 測試檢索式 instead");
+	click(rows[0].querySelector("a[data-source=embase]"));
+	click(rows[0].querySelector("a[data-source=cochrane]"));
+	let buttons = rows[0].querySelectorAll("[data-zb=log-link]");
+	assert.equal(buttons.length, 1, "one per row");
+	assert.equal(buttons[0].textContent, "📝 記一筆：Cochrane Library");
+	assert.equal(rows[0].lastChild, buttons[0], "at the end of the row");
+	click(rows[1].querySelector("a[data-source=cinahl]"));
+	let cinahl = rows[1].querySelector("[data-zb=log-link]");
+	assert.equal(cinahl.textContent, "📝 記一筆：CINAHL");
+	click(cinahl);
+	await new Promise(r2 => setTimeout(r2, 10));
+	assert.deepEqual([forms[1].database, forms[1].platform, forms[1].query], ["CINAHL", "EBSCOhost", '"older inpatients" AND falls']);
+
+	// The option off, then the switch off: no button
+	env.prefStore["extensions.zotero-bridge.searchLog.offerAfterOpen"] = false;
+	assert.equal(can("airiti"), false);
+	env.prefStore["extensions.zotero-bridge.searchLog.offerAfterOpen"] = true;
+	ZB.features.setEnabled("searchLog", false);
+	assert.equal(can("airiti"), false);
+	assert.deepEqual(env.errors, []);
+});
+
+test("存成 PubMed 新文獻追蹤: the MeSH query ZotMax built is kept as `generated` (the 檢索式體檢 waits for an edit); the user's own keywords get none", async () => {
+	let MESH_QUERY = '("Accidental Falls"[Mesh] OR "fall prevention"[tiab]) AND ("Aged"[Mesh] OR "older adults"[tiab])';
+	let raw = env => JSON.parse(env.prefStore["extensions.zotero-bridge.pubmedWatch.watches"] || "[]");
+	// Objects from the plugin's vm context compare by value
+	let same = (actual, expected) => assert.deepEqual(JSON.parse(JSON.stringify(actual)), expected);
+	let mesh = await setup({
+		fetch: ncbiMock(),
+		prompts: ["fall prevention, older adults", "跌倒預防"],
+		selects: [list => list.indexOf("💾 存成 PubMed 新文獻追蹤…"), null],
+	});
+	await mesh.context.ZB.searchLinks.quickSearch();
+	same(raw(mesh).map(w => [w.name, w.query, w.generated]), [["跌倒預防", MESH_QUERY, MESH_QUERY]]);
+	// pubmed-watch.js reads the same watch as before (normalizeWatch leaves `generated` out)
+	same(Object.keys(mesh.context.ZB.pubmedWatch.readWatches().watches[0]).sort(), ["collection", "days", "enabled", "id", "name", "query", "since"]);
+	assert.deepEqual(mesh.errors, []);
+
+	// MeSH helper off: the watch holds the keywords as typed, which are the user's
+	let own = await setup({
+		fetch: ncbiMock(),
+		prompts: ["falls AND nurs*", "跌倒"],
+		selects: [list => list.indexOf("💾 存成 PubMed 新文獻追蹤…"), null],
+		prefs: { "extensions.zotero-bridge.searchLinks.meshHelper": false },
+	});
+	await own.context.ZB.searchLinks.quickSearch();
+	same(raw(own).map(w => [w.name, w.query, "generated" in w]), [["跌倒", "falls AND nurs*", false]]);
+	assert.deepEqual(own.errors, []);
+});

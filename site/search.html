@@ -93,6 +93,12 @@ pre.q {
 }
 pre.q.empty { color: var(--ink-2); font-family: var(--font-ui); }
 .out ul { margin: 0; padding-left: 1.2em; font-size: 13px; color: var(--ink-2); }
+.concept .qc-hint { line-height: 1.5; }
+
+/* 檢查我改過的檢索式：只看結構，不改檢索式 */
+#qc-input { font-family: var(--font-mono); font-size: 13px; line-height: 1.6; min-height: 96px; }
+#qc-notes { margin: 0; padding-left: 1.2em; font-size: 14px; line-height: 1.6; }
+#qc-notes:empty { display: none; }
 
 /* 已存檢索 */
 ul.saved { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
@@ -207,24 +213,28 @@ details.statuscard .body { padding: 0 18px 18px; }
       <div class="pico">
         <div class="concept" data-k="p">
           <div class="ct"><span class="letter" aria-hidden="true">P</span><div><b>族群／問題</b><span>Population / Problem</span></div></div>
-          <textarea id="p-terms" rows="2" placeholder="older adults, elderly, aged" aria-label="P 同義詞"></textarea>
+          <textarea id="p-terms" rows="2" placeholder="older adults, elderly, aged" aria-label="P 同義詞" aria-describedby="p-hint"></textarea>
           <div class="meshrow"><input type="text" id="p-mesh" placeholder="MeSH 主題詞（選填）例：Aged" aria-label="P 的 MeSH 主題詞"><a href="#" class="meshlink" data-k="p" target="_blank" rel="noopener">查 MeSH ↗</a></div>
+          <p class="small qc-hint" id="p-hint" hidden></p>
         </div>
         <div class="concept" data-k="i">
           <div class="ct"><span class="letter" aria-hidden="true">I</span><div><b>介入措施</b><span>Intervention</span></div></div>
-          <textarea id="i-terms" rows="2" placeholder="exercise, physical activity, balance training" aria-label="I 同義詞"></textarea>
+          <textarea id="i-terms" rows="2" placeholder="exercise, physical activity, balance training" aria-label="I 同義詞" aria-describedby="i-hint"></textarea>
           <div class="meshrow"><input type="text" id="i-mesh" placeholder="MeSH 主題詞（選填）例：Exercise" aria-label="I 的 MeSH 主題詞"><a href="#" class="meshlink" data-k="i" target="_blank" rel="noopener">查 MeSH ↗</a></div>
+          <p class="small qc-hint" id="i-hint" hidden></p>
         </div>
         <div class="concept" data-k="c">
           <div class="ct"><span class="letter" aria-hidden="true">C</span><div><b>對照（選填）</b><span>Comparison</span></div></div>
-          <textarea id="c-terms" rows="2" placeholder="usual care, standard care" aria-label="C 同義詞"></textarea>
+          <textarea id="c-terms" rows="2" placeholder="usual care, standard care" aria-label="C 同義詞" aria-describedby="c-hint"></textarea>
           <div class="meshrow"><input type="text" id="c-mesh" placeholder="MeSH 主題詞（選填）" aria-label="C 的 MeSH 主題詞"><a href="#" class="meshlink" data-k="c" target="_blank" rel="noopener">查 MeSH ↗</a></div>
           <label class="inc"><input type="checkbox" id="c-include" checked> 放進檢索式（取消會找到更多篇，對照組常寫得不一致）</label>
+          <p class="small qc-hint" id="c-hint" hidden></p>
         </div>
         <div class="concept" data-k="o">
           <div class="ct"><span class="letter" aria-hidden="true">O</span><div><b>結果</b><span>Outcome</span></div></div>
-          <textarea id="o-terms" rows="2" placeholder="falls, accidental falls, fall rate" aria-label="O 同義詞"></textarea>
+          <textarea id="o-terms" rows="2" placeholder="falls, accidental falls, fall rate" aria-label="O 同義詞" aria-describedby="o-hint"></textarea>
           <div class="meshrow"><input type="text" id="o-mesh" placeholder="MeSH 主題詞（選填）例：Accidental Falls" aria-label="O 的 MeSH 主題詞"><a href="#" class="meshlink" data-k="o" target="_blank" rel="noopener">查 MeSH ↗</a></div>
+          <p class="small qc-hint" id="o-hint" hidden></p>
         </div>
       </div>
 
@@ -274,6 +284,21 @@ details.statuscard .body { padding: 0 18px 18px; }
           <p class="small">沒有欄位標籤，篩選條件請在各網站的介面設定。Google Scholar 會忽略大部分括號，結果僅供探索。</p>
         </div>
       </div>
+
+      <details class="more" id="qcBox">
+        <summary>檢查我改過的檢索式</summary>
+        <div class="body">
+          <p class="small">貼上你自己寫或改過的 PubMed 檢索式。這裡只看結構，不會改你的檢索式，也不連 PubMed。</p>
+          <textarea id="qc-input" rows="4" spellcheck="false" autocomplete="off" aria-label="要檢查的 PubMed 檢索式" placeholder="例：(falls[tiab] OR &quot;accidental falls&quot;[Mesh]) AND (exercis*[tiab] OR &quot;Exercise&quot;[Mesh])"></textarea>
+          <div class="row">
+            <button class="btn small" type="button" id="qc-run">檢查</button>
+            <button class="btn small ghost" type="button" id="qc-pubmed">在 PubMed 執行</button>
+          </div>
+          <div class="note warn" id="qc-missing" hidden><p>載入不到檢查工具（query-check.js），請重新整理頁面。</p></div>
+          <ul id="qc-notes" aria-live="polite"></ul>
+          <p class="small">PubMed 怎麼解讀你的檢索式（哪些詞對到 MeSH、哪些被略過），在 ZotMax 外掛的「測試檢索式」看得到。</p>
+        </div>
+      </details>
     </section>
 
     <div class="side">
@@ -339,6 +364,7 @@ details.statuscard .body { padding: 0 18px 18px; }
 
 <div id="toast" role="status" aria-live="polite"></div>
 
+<script src="query-check.js"></script>
 <script>
 /*
  * 醫學文獻快速搜尋：資料庫網址格式與狀態
@@ -372,6 +398,9 @@ details.statuscard .body { padding: 0 18px 18px; }
  *   WHO ICTRP              首頁  https://trialsearch.who.int/                   （?SearchAll= 只找到完全相符的片語，結果遠少於搜尋框）；CI：OK
  *
  * EZproxy 前綴只套用到 access === 'inst'（需機構權限）的來源。
+ *
+ * 「檢查我改過的檢索式」和 PICO 欄位提示來自 query-check.js（window.ZBQueryCheck，與外掛共用的
+ * content/query-check.js；GitHub Pages 部署時複製到 site/）。載入不到時只有這兩塊停用，其他功能照常。
  */
 (function (global) {
   'use strict';
@@ -649,6 +678,8 @@ details.statuscard .body { padding: 0 18px 18px; }
   var $ = function (id) { return doc.getElementById(id); };
   var store = makeStore();
   api.store = store;
+  // 檢索式體檢（query-check.js）；載入不到時為 null
+  var QC = global.ZBQueryCheck || null;
 
   var toastTimer;
   function toast(msg) {
@@ -877,6 +908,19 @@ details.statuscard .body { padding: 0 18px 18px; }
       var t = splitTerms(p[a.dataset.k].terms)[0];
       a.href = buildUrl('mesh', t ? t.replace(TAG_RE, '') : '').url;
     });
+    renderHints(p);
+  }
+
+  // PICO 欄位提示（純文字，不是燈號）：有 MeSH 沒有自由詞、沒用截字；片語本頁會自動加引號。
+  // C 沒放進檢索式時不提示
+  function renderHints(p) {
+    ['p', 'i', 'c', 'o'].forEach(function (k) {
+      var el = $(k + '-hint');
+      var on = QC && (k !== 'c' || p.includeC !== false);
+      var hints = on ? QC.picoHints({ terms: splitTerms(p[k].terms), mesh: splitTerms(p[k].mesh) }, { autoQuote: true }) : [];
+      el.textContent = hints.join(' ');
+      el.hidden = !hints.length;
+    });
   }
   picoIds.forEach(function (id) { $(id).addEventListener('input', renderPico); });
   picoChecks.forEach(function (id) { $(id).addEventListener('change', renderPico); });
@@ -918,6 +962,30 @@ details.statuscard .body { padding: 0 18px 18px; }
     });
   });
   $('clearPicoBtn').addEventListener('click', function () { writePico({}); });
+
+  // ---------- 檢查我改過的檢索式 ----------
+  // 只列結構提醒（最多 3 條），不改寫、不連 PubMed；輸入框的內容只由使用者改
+  var qcInput = $('qc-input'), qcRun = $('qc-run');
+  function checkQuery() {
+    if (!QC) return [];
+    var text = qcInput.value;
+    var ul = $('qc-notes'); ul.replaceChildren();
+    if (!text.trim()) { toast('先貼上你的 PubMed 檢索式'); qcInput.focus(); return []; }
+    var notes = QC.lint(text);
+    (notes.length ? notes.map(function (n) { return n.text; }) : ['沒有發現結構上的提醒。']).forEach(function (t) {
+      var li = doc.createElement('li'); li.textContent = t; ul.appendChild(li);
+    });
+    qcRun.textContent = '我改好了，再測一次';
+    return notes;
+  }
+  api.checkQuery = checkQuery;
+  qcRun.addEventListener('click', checkQuery);
+  $('qc-pubmed').addEventListener('click', function () {
+    var text = qcInput.value.trim();
+    if (!text) { toast('先貼上你的 PubMed 檢索式'); qcInput.focus(); return; }
+    if (!api.open(buildUrl('pubmed', text).url)) toast('瀏覽器擋下了新分頁，請允許彈出式視窗');
+  });
+  if (!QC) { $('qc-missing').hidden = false; qcRun.disabled = true; }
 
   // ---------- EZproxy ----------
   var proxyInput = $('proxy');
