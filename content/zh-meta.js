@@ -20,7 +20,11 @@
  * 學位類別, 校名) is reported with no suggestion and where to look: nothing is looked up online in this
  * version and nothing is invented. Items that are not Chinese (apa-zh's isChineseItem: the title decides)
  * get one finding at most: an English title with a Chinese language field (Airiti marks every record zh), which
- * the Word style 「APA 7 中英混排」 (word-style.js) would format with Chinese rules.
+ * the Word style 「APA 7 中英混排」 (word-style.js) would format with Chinese rules. Except a Chinese article as
+ * PubMed delivers it (《護理雜誌》 Hu Li Za Zhi: NLM's English title in [ ], pinyin authors, language chi): its
+ * language is right, so the user is asked to paste the Chinese title and names, and the only fix offered keeps
+ * the English title in Extra as 「PubMed title: …」 (not CSL original-title, which APA prints as 「Original work
+ * published as …」). Pinyin dropped from a mixed name goes to Extra too (original-author: Chen || Mei-Ling).
  *
  * Nothing is written without the review window: apply() writes the ticked fixes of each item in one
  * transaction and keeps what it changed (zhMeta.lastRun), so 「復原上一次中文文獻修正」 puts those
@@ -55,7 +59,7 @@
 	/** Labels of the fields the review window shows. */
 	const FIELD_LABELS = {
 		creators: "作者", title: "篇名", publicationTitle: "期刊名", date: "日期", volume: "卷期", pages: "頁碼",
-		DOI: "DOI", language: "語言", itemType: "文獻類型", thesisType: "學位類別", publisher: "校名",
+		DOI: "DOI", language: "語言", itemType: "文獻類型", thesisType: "學位類別", publisher: "校名", extra: "其他",
 	};
 	const TYPE_LABELS = {
 		journalArticle: "期刊文章", thesis: "學位論文", report: "報告", document: "文件", book: "書籍", bookSection: "書籍章節",
@@ -260,6 +264,81 @@
 	const TRAD_LABEL = /^(?:繁體中文|正體中文|繁中|traditional chinese|chinese \(traditional\))$/i;
 	const SIMP_LABEL = /^(?:简体中文|簡體中文|简中|simplified chinese|chinese \(simplified\))$/i;
 
+	/** Does the language field say Chinese (a code such as zh, chi, zh-TW, or a label such as 中文)? */
+	function isZhLanguage(lang) {
+		let s = str(lang).trim();
+		return !!s && (GENERIC_ZH.test(s) || /^zh[-_]/i.test(s) || TRAD_LABEL.test(s) || SIMP_LABEL.test(s));
+	}
+
+	// ---------- PubMed records of Chinese-language journals ----------
+
+	/**
+	 * Chinese-language journals indexed in MEDLINE. PubMed gives their articles NLM's English translation
+	 * of the title (in [ ]), romanized authors and the language "chi", so the record looks English.
+	 * Only journals verified as MEDLINE-indexed; to add one: { name, issn: ["NNNNNNNX"] (no hyphen),
+	 * names: [its own names], alsoNames: [names other journals share] }, each with letters and digits only,
+	 * lower case. A record's journal matches when it is one or more of these in a row with at least one of
+	 * names (PubMed's 「Hu li za zhi The journal of nursing」); 「Journal of Nursing」 alone is an English title
+	 * of several journals and does not match.
+	 */
+	const PUBMED_ZH_JOURNALS = [
+		{ name: "護理雜誌", issn: ["0047262X"], names: ["hulizazhi", "護理雜誌"], alsoNames: ["thejournalofnursing", "journalofnursing"] },
+	];
+
+	/** A journal name with letters and digits only, lower case: 「《Hu Li Za Zhi》」 → hulizazhi. */
+	function journalKey(name) {
+		return halfWidth(name).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+	}
+
+	/** The entry of PUBMED_ZH_JOURNALS the record's journal (name, abbreviation or ISSN) is, or null. */
+	function pubmedZhJournal(data) {
+		if (!data) return null;
+		let issns = (halfWidth(data.ISSN).toUpperCase().match(/\d{4}-?\d{3}[\dX]/g) || []).map(s => s.replace("-", ""));
+		let keys = [data.publicationTitle, data.journalAbbreviation].map(journalKey).filter(Boolean);
+		for (let j of PUBMED_ZH_JOURNALS) {
+			if (issns.some(i => j.issn.includes(i))) return j;
+			let any = `(?:${[...j.names, ...(j.alsoNames || [])].join("|")})*`;
+			let re = new RegExp(`^${any}(?:${j.names.join("|")})${any}$`, "u");
+			if (keys.some(k => re.test(k))) return j;
+		}
+		return null;
+	}
+
+	/**
+	 * NLM's translated title without the outer [ ] and the period after them: 「[Effects of X].」 → Effects of X;
+	 * null without brackets, or when the first [ closes before the end (「[X] and [Y]」 is two bracketed parts).
+	 */
+	function bracketedTitle(title) {
+		let m = /^\s*\[(.+)\]\s*\.?\s*$/su.exec(str(title));
+		if (!m || !m[1].trim()) return null;
+		let depth = 0;
+		for (let ch of m[1]) {
+			if (ch === "[") depth++;
+			else if (ch === "]" && --depth < 0) return null;
+		}
+		return depth === 0 ? m[1].trim() : null;
+	}
+
+	/**
+	 * Is this a Chinese-language article as PubMed delivers it? The language says Chinese and, besides,
+	 * the title is in [ ] (how NLM marks a translated title) or the journal is in PUBMED_ZH_JOURNALS
+	 * (translators may drop the brackets). Returns { journal, bracketed, english } or null; english is
+	 * the translated title to keep (brackets and the final period dropped).
+	 */
+	function pubmedTranslatedTitle(data) {
+		if (!data || !isZhLanguage(data.language)) return null;
+		let inBrackets = bracketedTitle(data.title);
+		let journal = pubmedZhJournal(data);
+		if (!inBrackets && !journal) return null;
+		let english = inBrackets || str(data.title).trim().replace(/\.$/, "").trim();
+		return english ? { journal, bracketed: !!inBrackets, english } : null;
+	}
+
+	/** Is there a 「<name>: …」 line in Extra already (PubMed title, original-title…)? */
+	function hasExtraLine(extra, name) {
+		return new RegExp(`^\\s*${name}\\s*:`, "im").test(str(extra));
+	}
+
 	// ---------- thesis ----------
 
 	/**
@@ -317,16 +396,45 @@
 		return `姓「${str(c.lastName)}」名「${str(c.firstName)}」`;
 	}
 
-	function creatorFinding(index, c, replacement, confidence, problem, hint) {
-		return {
-			id: `creators-${index}`, field: "creators", label: FIELD_LABELS.creators, problem, confidence, hint,
-			current: creatorText(c), suggested: replacement.map(creatorText).join("、"),
-			changes: { creator: { index, replacement } },
-		};
+	/**
+	 * The romanized (pinyin) part of a name that mixes Chinese and pinyin, as a CSL Extra name: 「Chen || Mei-Ling」
+	 * (family || given) when the record tells which part is the surname (a comma, the two Zotero fields, or
+	 * only the given name hyphenated), else the romanized text as it is (one literal name). "" without one.
+	 */
+	function romanizedName(c) {
+		let latin = s => halfWidth(s).replace(/[\p{Script=Han}·‧・]+/gu, " ").replace(/[()[\]「」『』]/g, " ")
+			.replace(/\s+/g, " ").trim().replace(/^[,;\s]+|[,;\s]+$/g, "");
+		let text;
+		if (c.name === undefined) {
+			let family = latin(c.lastName);
+			let given = latin(c.firstName);
+			if (family && given) return `${family} || ${given}`;
+			text = family || given;
+		}
+		else text = latin(c.name);
+		if (!text) return "";
+		let parts = text.split(/\s*,\s*/).filter(Boolean);
+		if (parts.length === 2) return `${parts[0]} || ${parts[1]}`;
+		let words = text.split(" ");
+		if (words.length === 2 && words[0].includes("-") !== words[1].includes("-")) {
+			return words[1].includes("-") ? `${words[0]} || ${words[1]}` : `${words[1]} || ${words[0]}`;
+		}
+		return text;
 	}
 
-	/** At most one finding per creator; English names are left alone. */
-	function analyzeCreator(c, index) {
+	/** extraLines: CSL lines the fix adds to Extra (leave out a line Extra already has; applyChanges skips it anyway). */
+	function creatorFinding(index, c, replacement, confidence, problem, hint, extraLines) {
+		let changes = { creator: { index, replacement } };
+		let suggested = replacement.map(creatorText).join("、");
+		if (extraLines && extraLines.length) {
+			changes.extraLines = extraLines;
+			suggested += `；「其他」欄加上「${extraLines.join("」「")}」`;
+		}
+		return { id: `creators-${index}`, field: "creators", label: FIELD_LABELS.creators, problem, confidence, hint, current: creatorText(c), suggested, changes };
+	}
+
+	/** At most one finding per creator; English names are left alone. extra: the item's Extra (lines already there are not offered again). */
+	function analyzeCreator(c, index, extra = "") {
 		let single = c.name !== undefined;
 		let last = str(single ? c.name : c.lastName);
 		let first = single ? "" : str(c.firstName);
@@ -344,13 +452,19 @@
 						: "用空白分開的幾個名字看起來是不同的人；如果其實是一個人的名字，就不要勾。");
 			}
 		}
-		// Chinese and English (pinyin) in one name: keep the Chinese name
+		// Chinese and English (pinyin) in one name: keep the Chinese name, and the pinyin in Extra first
 		if (LATIN.test(last + first)) {
 			let runs = `${last} ${first}`.replace(/　/g, " ").replace(/(\p{Script=Han})\s+(?=\p{Script=Han})/gu, "$1")
 				.match(/[\p{Script=Han}·‧・]+/gu) || [];
 			if (runs.length === 1 && HAN_NAME.test(runs[0])) {
+				let roman = romanizedName(c);
+				let line = roman ? `original-author: ${roman}` : "";
+				let have = !!line && str(extra).split(/\r?\n/).some(l => l.trim() === line);
+				let keep = have ? `拼音已經以「${line}」記在「其他」欄，不會重複寫入。`
+					: line ? "拼音先以「original-author:」記在「其他」欄，不會丟掉（只記這一位的拼音；「其他」欄原有內容保留）。" : "";
 				return creatorFinding(index, c, [one(runs[0])], "check", "中文姓名和英文拼音混在一起",
-					"中文 APA 只寫中文姓名；如果這位其實是外籍作者，就不要勾。");
+					`中文 APA 只寫中文姓名。${keep}如果這位其實是外籍作者，就不要勾。`,
+					line && !have ? [line] : []);
 			}
 			return null;
 		}
@@ -499,15 +613,51 @@
 	 * opts.hasField(itemType, field): whether the type has the field (Zotero.ItemFields inside Zotero).
 	 * Returns [] for items that are not Chinese.
 	 */
-	/** An English item whose language says Chinese: the Word style would use the Chinese layout. */
+	/**
+	 * An English item whose language says Chinese: the Word style would use the Chinese layout. Unless it is
+	 * a Chinese article PubMed gave an English translated title (pubmedTranslatedTitle): then the language is
+	 * right, and the user is asked for the Chinese title and names instead (ZotMax does not translate).
+	 */
 	function englishLanguage(data) {
 		if (!data) return [];
 		let lang = str(data.language).trim();
-		if (!lang || !(GENERIC_ZH.test(lang) || /^zh[-_]/i.test(lang) || TRAD_LABEL.test(lang) || SIMP_LABEL.test(lang))) return [];
+		if (!isZhLanguage(lang)) return [];
 		if (guessLanguage(data.title) !== "en") return [];
+		let pubmed = pubmedTranslatedTitle(data);
+		if (pubmed) return [translatedTitleFinding(data, pubmed)];
 		return [{ id: "language", field: "language", label: FIELD_LABELS.language, problem: "英文文獻的語言寫成中文", confidence: "check", current: lang, suggested: "en",
 			hint: "華藝等資料庫常把英文文章也標成中文。語言是中文時，Word 的「APA 7 中英混排」樣式會用中文格式（「、」「等」）；英文文章請改成 en。",
 			changes: { fields: { language: "en" } } }];
+	}
+
+	// The Extra label the English title is kept under: not a CSL variable, so no citation style prints it
+	const PUBMED_TITLE = "PubMed title";
+
+	/**
+	 * The one finding for a Chinese article with PubMed's English title: keep the language, paste the Chinese
+	 * title and names yourself; the offered fix only keeps the English title in Extra, and only while Extra has
+	 * no such line. The line is 「PubMed title: …」, a note Zotero and citeproc leave alone: CSL original-title
+	 * would make the APA style add 「(Original work published as …)」 to the reference.
+	 */
+	function translatedTitleFinding(data, pubmed) {
+		let why = [];
+		if (pubmed.bracketed) why.push("篇名外面有 [ ]（PubMed 標示英譯篇名的方式）");
+		if (pubmed.journal) why.push(`期刊是《${pubmed.journal.name}》`);
+		let ask = `語言欄是中文，${why.join("，")}，這多半是中文文章：PubMed 只收英譯篇名和拼音作者名。語言不要改成 en。`
+			+ "請從 PDF 第一頁或華藝的文章頁，把中文篇名和中文作者姓名自己貼進 Zotero；ZotMax 不翻譯，也不猜中文篇名。";
+		let line = `${PUBMED_TITLE}: ${pubmed.english}`;
+		// The fix writes only Extra, so the review window shows Extra (「其他」) as what changes, not the title
+		let finding = { id: "title-translated", field: "extra", label: FIELD_LABELS.extra, problem: "可能是中文文章，PubMed 給的是英譯篇名", confidence: "check",
+			current: str(data.extra), suggested: "", hint: ask, changes: null };
+		if (hasExtraLine(data.extra, PUBMED_TITLE) || hasExtraLine(data.extra, "original-title")) {
+			finding.hint += "「其他」欄已經記著英譯篇名，不會重複寫入。";
+			return finding;
+		}
+		return Object.assign(finding, {
+			suggested: `「其他」欄加上「${line}」`,
+			hint: `${ask}勾選這項，會先把英譯篇名以「${PUBMED_TITLE}:」記在「其他」欄（原有內容保留），之後換成中文篇名也不會遺失；引用格式不會印出這一行。`,
+			changes: { extraLines: [line] },
+		});
 	}
 
 	function analyze(data, opts = {}) {
@@ -528,7 +678,7 @@
 		}
 
 		(data.creators || []).forEach((c, i) => {
-			let f = analyzeCreator(c, i);
+			let f = analyzeCreator(c, i, data.extra);
 			if (f) add(f);
 		});
 		for (let f of titleFindings(data)) add(f);
@@ -686,17 +836,32 @@
 	/**
 	 * What applying these findings writes: { itemType, fields: { name: value }, creators } (itemType and
 	 * creators null when unchanged). Later findings on the same field win; a creator's replacement can be
-	 * several creators (a split).
+	 * several creators (a split). extraLines (CSL lines such as 「original-author: Chen || Mei-Ling」) are added
+	 * to the end of Extra, after any other change to it, and only when Extra does not have that line yet;
+	 * the lines already there stay.
 	 */
 	function applyChanges(data, findings) {
 		let out = { itemType: null, fields: {}, creators: null };
 		let replace = new Map();
+		let lines = [];
 		for (let f of findings) {
 			let ch = f && f.changes;
 			if (!ch) continue;
 			if (ch.itemType && ch.itemType !== data.itemType) out.itemType = ch.itemType;
 			Object.assign(out.fields, ch.fields || {});
 			if (ch.creator) replace.set(ch.creator.index, ch.creator.replacement);
+			if (ch.extraLines) lines.push(...ch.extraLines.filter(l => str(l).trim()));
+		}
+		if (lines.length) {
+			let base = out.fields.extra !== undefined ? str(out.fields.extra) : str(data.extra);
+			let have = new Set(base.split(/\r?\n/).map(l => l.trim()));
+			let add = [];
+			for (let l of lines) {
+				if (have.has(l.trim())) continue;
+				have.add(l.trim());
+				add.push(l.trim());
+			}
+			if (add.length) out.fields.extra = [base.replace(/\s+$/, ""), ...add].filter(Boolean).join("\n");
 		}
 		if (replace.size) {
 			out.creators = [];
@@ -875,7 +1040,8 @@
 	// ---------- Zotero ----------
 
 	// The fields analyze() reads (publisher separately: the thesis 「大學」 is mapped to it)
-	const FIELDS = ["title", "date", "volume", "issue", "pages", "DOI", "url", "extra", "language", "publicationTitle", "thesisType", "libraryCatalog"];
+	const FIELDS = ["title", "date", "volume", "issue", "pages", "DOI", "url", "extra", "language", "publicationTitle", "journalAbbreviation", "ISSN",
+		"thesisType", "libraryCatalog"];
 
 	function pref(key) {
 		return Zotero.Prefs.get(PREF + key, true);
@@ -1266,6 +1432,7 @@
 		DIALOG_URL, DIALOG_ROOT, LAST_RUN_PREF, FIELD_LABELS, TYPE_LABELS, CONFIDENCE_LABELS,
 		halfWidth, normalizePages, splitVolume, cleanVolume, cleanIssue, rocYear, normalizeDOI, detectDOI, guessLanguage, zhVariant,
 		guessThesis, degreeOf, splitCreators, analyzeCreator, tidyTitle, chinesePart, isChinese, analyze, applyChanges, defaultPicks, describePicks,
+		PUBMED_ZH_JOURNALS, isZhLanguage, journalKey, pubmedZhJournal, bracketedTitle, pubmedTranslatedTitle, romanizedName,
 		renderReview,
 		itemData, findingsFor, paneCount, buildPlan, apply, undoLast, readLastRun, review, run,
 	};

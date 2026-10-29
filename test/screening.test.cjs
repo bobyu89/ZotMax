@@ -115,6 +115,102 @@ test("findDuplicates: DOI, then title + year; different DOIs never match by titl
 	assert.ok(!groups.some(gr => [d, e, f, g, h].some(r => gr.keep === r || gr.duplicates.includes(r))));
 });
 
+test("pmidOf / firstPage / citationKeys: PMID from the record or Extra; journal, year, volume and first page only when all four are there", () => {
+	assert.equal(s.pmidOf({ pmid: "37000000" }), "37000000");
+	assert.equal(s.pmidOf({ extra: "DOI: 10.1/x\nPMID: 37000000\n" }), "37000000");
+	assert.equal(s.pmidOf({ extra: "PMCID: PMC123" }), "");
+	assert.equal(s.pmidOf({}), "");
+	assert.equal(s.firstPage("45-56"), "45");
+	assert.equal(s.firstPage("４５－５６"), "45");
+	assert.equal(s.firstPage(" 45 – 56 "), "45");
+	assert.equal(s.firstPage("e1023"), "e1023");
+	assert.equal(s.firstPage("S12-S20"), "s12");
+	assert.equal(s.firstPage(""), "");
+	assert.equal(s.firstPage("n/a"), "");
+	let r = { publication: "Hu li za zhi The journal of nursing", journalAbbreviation: "Hu Li Za Zhi", year: "2023", volume: "70", pages: "45-56" };
+	assert.deepEqual(s.citationKeys(r), ["hulizazhithejournalofnursing|2023|70|45", "hulizazhi|2023|70|45"]);
+	assert.deepEqual(s.citationKeys(Object.assign({}, r, { journalAbbreviation: "HU LI ZA ZHI." })), ["hulizazhithejournalofnursing|2023|70|45", "hulizazhi|2023|70|45"]);
+	for (let missing of ["volume", "pages", "year"]) assert.deepEqual(s.citationKeys(Object.assign({}, r, { [missing]: "" })), [], missing);
+	assert.deepEqual(s.citationKeys(Object.assign({}, r, { publication: "", journalAbbreviation: "" })), []);
+});
+
+test("findDuplicates: the same PMID, or the same journal, year, volume and first page; partial data never matches; candidates only", () => {
+	// Same PMID (one from the record, one from Extra), different titles: a PubMed and an Airiti copy
+	let pm1 = rec([], { title: "[Effects of a nurse-led fall prevention program]", pmid: "37000000", hasAbstract: true });
+	let pm2 = rec([], { title: "護理人員跌倒預防衛教之成效", extra: "PMID: 37000000" });
+	let pm3 = rec([], { title: "Another paper on falls in hospitals", extra: "PMID: 37000001" });
+	// Same journal, year, volume and first page after normalization (case, spacing, punctuation, en dash, full-width)
+	let c1 = rec([], { title: "Delirium screening by nurses in the ICU", publication: "Journal of Critical Care Nursing", volume: "12", pages: "101-110" });
+	let c2 = rec([], { title: "ICU delirium screening by nursing staff", publication: "journal of critical-care nursing.", volume: " 12 ", pages: "１０１–１１０" });
+	// Partial data: missing volume, missing pages, missing year, other first page, other journal
+	let p1 = rec([], { title: "Pressure injury prevention bundle", publication: "Wound Care Journal", volume: "", pages: "5-9" });
+	let p2 = rec([], { title: "A bundle to prevent pressure injury", publication: "Wound Care Journal", volume: "", pages: "5-9" });
+	let p3 = rec([], { title: "Oral care and pneumonia prevention", publication: "Nursing Times", volume: "3", pages: "" });
+	let p4 = rec([], { title: "Pneumonia prevention with oral care", publication: "Nursing Times", volume: "3", pages: "" });
+	let p5 = rec([], { title: "Hand hygiene audit in wards", publication: "Infection Nursing", volume: "8", pages: "20-25", year: "" });
+	let p6 = rec([], { title: "Auditing hand hygiene on wards", publication: "Infection Nursing", volume: "8", pages: "20-25", year: "" });
+	let p7 = rec([], { title: "Sleep quality in ICU nurses", publication: "Sleep Nursing", volume: "4", pages: "30-35" });
+	let p8 = rec([], { title: "ICU nurses and their sleep", publication: "Sleep Nursing", volume: "4", pages: "36-40" });
+	let p9 = rec([], { title: "Burnout among nurses in Taiwan", publication: "Nursing Research", volume: "4", pages: "30-35" });
+	let groups = s.findDuplicates([pm1, pm2, pm3, c1, c2, p1, p2, p3, p4, p5, p6, p7, p8, p9], CFG);
+	assert.equal(groups.length, 2);
+	let pmid = groups.find(g => [g.keep, ...g.duplicates].includes(pm1));
+	assert.deepEqual([pmid.keep, ...pmid.duplicates].map(r => r.id).sort(), [pm1.id, pm2.id].sort());
+	assert.deepEqual(pmid.basis, ["PMID 相同"]);
+	assert.equal(pmid.note, "可能是中英文版本，請確認", "a Chinese and an English title");
+	let cite = groups.find(g => [g.keep, ...g.duplicates].includes(c1));
+	assert.deepEqual([cite.keep, ...cite.duplicates].map(r => r.id).sort(), [c1.id, c2.id].sort());
+	assert.deepEqual(cite.basis, ["期刊、年、卷、起始頁相同"]);
+	assert.equal(cite.note, undefined, "two English titles: no note");
+	for (let r of [pm3, p1, p2, p3, p4, p5, p6, p7, p8, p9]) assert.ok(!groups.some(g => g.keep === r || g.duplicates.includes(r)), r.title);
+	// Nothing in the records changes (no merge, no tag): the groups only point at them
+	assert.deepEqual(pm2.tags, []);
+
+	// The abbreviation counts as the journal's name: the Airiti copy (journal in Chinese, abbreviation as NLM writes it) and the PubMed copy
+	let airiti = rec([], { title: "護理人員跌倒預防衛教之成效", publication: "護理雜誌", journalAbbreviation: "Hu Li Za Zhi", year: "2023", volume: "70", pages: "45-56" });
+	let pubmed = rec([], { title: "[Effects of a nurse-led fall prevention program].", publication: "Hu li za zhi The journal of nursing", journalAbbreviation: "Hu Li Za Zhi", year: "2023", volume: "70", pages: "45-56" });
+	let other = rec([], { title: "護理人員之睡眠品質", publication: "護理雜誌", year: "2023", volume: "70", pages: "45-56" });
+	groups = s.findDuplicates([airiti, pubmed, other], CFG);
+	assert.equal(groups.length, 1);
+	assert.deepEqual([groups[0].keep, ...groups[0].duplicates].map(r => r.id).sort(), [airiti.id, pubmed.id, other.id].sort(),
+		"護理雜誌 2023;70:45 is one article: the third record matches the Airiti one by journal name");
+	assert.deepEqual(groups[0].basis, ["期刊、年、卷、起始頁相同"]);
+	assert.equal(groups[0].note, "可能是中英文版本，請確認");
+
+	// Several bases in one group are all listed
+	let x = rec([], { title: "Music therapy for anxiety in ventilated patients", doi: "10.1000/m", pmid: "1", publication: "J Nurs", volume: "1", pages: "1-2" });
+	let y = rec([], { title: "Music therapy for anxiety in ventilated patients.", doi: "10.1000/M", extra: "PMID: 1", publication: "J. Nurs.", volume: "1", pages: "1-9" });
+	groups = s.findDuplicates([x, y], CFG);
+	assert.deepEqual(groups[0].basis.sort(), ["DOI 相同", "PMID 相同", "標題與年份相同", "期刊、年、卷、起始頁相同"].sort());
+	assert.equal(groups[0].note, undefined);
+	// Two different DOIs on one page are two articles (a letter and the authors' reply): no group
+	let letter = rec([], { title: "Letter A on trial X", year: "2020", doi: "10.1056/NEJMc2001", publication: "N Engl J Med", volume: "382", pages: "1234-1236" });
+	let reply = rec([], { title: "Reply to letters on trial X", year: "2020", doi: "10.1056/NEJMc2002", publication: "N Engl J Med", volume: "382", pages: "1234-1236" });
+	assert.deepEqual(s.findDuplicates([letter, reply], CFG), []);
+	// A copy without a DOI still matches the record that has one
+	let noDoi = rec([], { title: "Letter A on trial X (copy)", year: "2020", publication: "N Engl J Med", volume: "382", pages: "1234" });
+	groups = s.findDuplicates([letter, noDoi], CFG);
+	assert.deepEqual(groups.map(g => g.basis), [["期刊、年、卷、起始頁相同"]]);
+	// Different issues (a journal that starts each issue at page 1): no group; one issue missing still matches
+	let i1 = rec([], { title: "Effect A on B", year: "2020", publication: "J Foo", volume: "12", issue: "1", pages: "5-9" });
+	let i2 = rec([], { title: "Totally different C on D", year: "2020", publication: "J Foo", volume: "12", issue: "2", pages: "5-12" });
+	let i3 = rec([], { title: "Effect of A on B", year: "2020", publication: "J Foo", volume: "12", issue: "", pages: "5-9" });
+	assert.deepEqual(s.findDuplicates([i1, i2], CFG), []);
+	assert.equal(s.findDuplicates([i1, i3], CFG).length, 1);
+});
+
+test("findDuplicates: the 中英文 note only for a Chinese and an English title, not Japanese or Korean", () => {
+	let ja = rec([], { title: "日本語のタイトル", year: "2020", doi: "10.1000/a" });
+	let en = rec([], { title: "English title", year: "2020", doi: "10.1000/a" });
+	let ko = rec([], { title: "한국어 제목 漢字", year: "2020", doi: "10.1000/b" });
+	let en2 = rec([], { title: "Korean paper in English", year: "2020", doi: "10.1000/b" });
+	let zh = rec([], { title: "中文篇名", year: "2020", doi: "10.1000/c" });
+	let jaLatin = rec([], { title: "COVID-19 と看護", year: "2020", doi: "10.1000/c" });
+	let groups = s.findDuplicates([ja, en, ko, en2, zh, jaLatin], CFG);
+	assert.equal(groups.length, 3);
+	for (let g of groups) assert.equal(g.note, undefined, g.keep.title);
+});
+
 function review() {
 	nextID = 1;
 	let records = [

@@ -359,6 +359,117 @@ test("card window: labels and hints by type, the composed sentence, the live 聚
 	assert.deepEqual(env.errors, []);
 });
 
+test("card window: the search targets top-down in the 6S layers, the two modes, the user's guideline pages, the type helper as text only", async () => {
+	let env = await setup({ [P + "pico.guidelineLinks"]: "臺灣護理學會|https://www.twna.org.tw/\n壞的|ftp://x.org/\n實證護理|https://ebn.example.tw/s?kw={q}" });
+	let { ZB } = env;
+	// A card saved before the modes existed, whose notes say it is for a systematic review
+	env.prefStore[P + "pico.cards"] = JSON.stringify({ [CARD_KEY]: { type: "treatment", p: "older adults", i: "exercise", o: "falls", notes: "碩士論文：系統性回顧" } });
+	env.selection.collection = env.collection;
+	let running = ZB.commands.execute("pico-card", ZB.commands.fromWindow(null, "toolbar"));
+	let root = await openedDialog(env, "zb-pico-card");
+	let doc = root.ownerDocument;
+	assert.equal(root.querySelector("#zb-pc-search-h").textContent, "帶到資料庫搜尋：先上層");
+	let review = doc.getElementById("zb-pc-mode-review");
+	let clinical = doc.getElementById("zb-pc-mode-clinical");
+	assert.equal(review.checked, true, "the old card's notes mention a review");
+	assert.equal(doc.querySelector('label[for="zb-pc-mode-review"]').textContent, "論文／系統性回顧");
+	assert.equal(doc.querySelector('label[for="zb-pc-mode-clinical"]').textContent, "臨床問題");
+	assert.equal(review.type, "radio");
+	assert.equal(review.name, clinical.name, "one radio group");
+	let layers = () => [...root.querySelectorAll(".zb-pc-layer")];
+	assert.deepEqual(layers().map(li => li.dataset.zbLayer), ["guideline", "summary", "review", "study"]);
+	assert.equal(root.querySelector(".zb-pc-layers").tagName.toLowerCase(), "ol", "numbered top-down");
+	assert.deepEqual(layers().map(li => li.querySelector(".zb-pc-label").textContent), ["指引", "摘要型資源", "系統性回顧", "單篇研究"]);
+	let notes = () => layers().map(li => li.querySelector(".zb-pc-layer-note").textContent);
+	assert.deepEqual(notes(), Array(4).fill("每一層都要查，並記下查了什麼"));
+	assert.match(root.querySelector(".zb-pc-mode-lead").textContent, /^論文／系統性回顧：每一層都要查/);
+	assert.doesNotMatch(root.querySelector("#zb-pc-search-h").parentNode.textContent, /可以停/, "a review never hears it can stop");
+	let names = li => [...li.querySelectorAll(".zb-pc-link")].map(b => b.textContent);
+	assert.deepEqual(names(layers()[0]), ["NICE", "RNAO 最佳實務指引", "G-I-N 國際指引圖書館", "Google 指引 PDF", "臺灣護理學會（複製）", "實證護理"], "the malformed line is ignored");
+	assert.deepEqual(names(layers()[2]), ["Cochrane Library", "PubMed 系統性回顧"]);
+	assert.deepEqual(names(layers()[3]), ["PubMed", "CINAHL", "Google Scholar"]);
+	assert.match(layers()[0].textContent, /這層只用 P、I 的詞（不放 C、O）："older adults" AND exercise/);
+	// The links: P AND I for guidelines, the whole string AND systematic[sb] for reviews; the user's page copies the words
+	[...layers()[0].querySelectorAll(".zb-pc-link")].find(b => b.textContent === "G-I-N 國際指引圖書館").click();
+	assert.equal(env.launched.pop(), "https://guidelines.ebmportal.com/?q=%22older%20adults%22%20AND%20exercise");
+	[...layers()[2].querySelectorAll(".zb-pc-link")].find(b => b.textContent === "PubMed 系統性回顧").click();
+	assert.equal(env.launched.pop(), "https://pubmed.ncbi.nlm.nih.gov/?term=%28%22older%20adults%22%20AND%20exercise%20AND%20falls%29%20AND%20systematic%5Bsb%5D");
+	[...layers()[0].querySelectorAll(".zb-pc-link")].find(b => b.textContent === "臺灣護理學會（複製）").click();
+	assert.equal(env.launched.pop(), "https://www.twna.org.tw/");
+	assert.equal(env.copied.pop().text, '"older adults" AND exercise');
+	[...layers()[0].querySelectorAll(".zb-pc-link")].find(b => b.textContent === "實證護理").click();
+	assert.equal(env.launched.pop(), "https://ebn.example.tw/s?kw=%22older%20adults%22%20AND%20exercise");
+	// Switching to 臨床問題: every layer says this layer may be enough
+	clinical.checked = true;
+	clinical.dispatchEvent(new doc.defaultView.Event("change", { bubbles: true }));
+	assert.deepEqual(notes(), Array(4).fill("這層找到可用的就可以停"));
+	assert.match(root.querySelector(".zb-pc-mode-lead").textContent, /^臨床問題：從上層往下找/);
+	// The type helper explains; it never changes the type or a field
+	let helper = root.querySelector(".zb-pc-helper");
+	assert.equal(helper.querySelector("summary").textContent, "不確定是哪一種？看這幾個問題");
+	assert.deepEqual([...helper.querySelectorAll("li")].map(li => li.dataset.zbType), ["treatment", "diagnosis", "etiology", "prognosis", "meaning"]);
+	assert.match(helper.querySelector('[data-zb-type="meaning"]').textContent, /是 → 意義／經驗（質性）/);
+	assert.equal(helper.querySelectorAll("button, input, select").length, 0, "text only");
+	helper.querySelector('[data-zb-type="meaning"]').click();
+	assert.equal(doc.getElementById("zb-pc-type").value, "treatment");
+	// Saved with the mode
+	root.querySelector(".zb-cl-apply").click();
+	let result = await running;
+	assert.equal(result.saved.mode, "clinical");
+	assert.equal(JSON.parse(env.prefStore[P + "pico.cards"])[CARD_KEY].mode, "clinical", "the choice is kept even though the notes mention a review");
+	running = ZB.commands.execute("pico-card", ZB.commands.fromWindow(null, "toolbar"));
+	root = await openedDialog(env, "zb-pico-card", 2);
+	assert.equal(root.ownerDocument.getElementById("zb-pc-mode-clinical").checked, true);
+	root.querySelector(".zb-cl-cancel").click();
+	await running;
+	assert.deepEqual(env.errors, []);
+});
+
+test("card window: a new card starts as 臨床問題; meaning and diagnosis questions get their search hints", async () => {
+	let env = await setup();
+	let { ZB } = env;
+	env.selection.collection = env.collection;
+	let running = ZB.commands.execute("pico-card", ZB.commands.fromWindow(null, "toolbar"));
+	let root = await openedDialog(env, "zb-pico-card");
+	let doc = root.ownerDocument;
+	assert.equal(doc.getElementById("zb-pc-mode-clinical").checked, true);
+	assert.equal(root.querySelector(".zb-pc-layers").hidden, true, "no layers before anything is written");
+	let typeSelect = doc.getElementById("zb-pc-type");
+	typeSelect.value = "meaning";
+	typeSelect.dispatchEvent(new doc.defaultView.Event("change"));
+	type(doc.getElementById("zb-pc-p"), "家屬 family caregivers");
+	type(doc.getElementById("zb-pc-i"), "照顧經驗 caregiving experience");
+	let checks = () => [...root.querySelectorAll(".zb-pc-checks li")].map(li => li.textContent);
+	assert.ok(checks().some(t => /^質性問題：.*CINAHL/.test(t)), JSON.stringify(checks()));
+	assert.equal(root.querySelector(".zb-pc-layers").hidden, false);
+	assert.equal(root.querySelector(".zb-pc-mode-lead").hidden, false, "the lead shows with the layers");
+	// The guideline layer names both sets of words: the English sites get one, 臺灣政府 the other
+	let guideline = root.querySelector('[data-zb-layer="guideline"]').textContent;
+	assert.match(guideline, /英文資料庫："family caregivers" AND "caregiving experience"；中文網站和自訂指引網址：家屬 family caregivers AND 照顧經驗 caregiving experience/);
+	// A complete diagnosis card is all clear; accuracy words in a field bring the hint
+	typeSelect.value = "diagnosis";
+	typeSelect.dispatchEvent(new doc.defaultView.Event("change"));
+	type(doc.getElementById("zb-pc-p"), "社區老人 older adults");
+	type(doc.getElementById("zb-pc-i"), "PHQ-9");
+	type(doc.getElementById("zb-pc-c"), "精神科醫師診斷 psychiatric interview");
+	type(doc.getElementById("zb-pc-o"), "憂鬱 depression");
+	type(doc.getElementById("zb-pc-setting"), "社區");
+	type(doc.getElementById("zb-pc-question"), "社區老人用 PHQ-9 篩檢憂鬱準不準？");
+	assert.deepEqual(checks(), ["看起來聚焦了：每個要素都有，問題句也寫好了。"]);
+	type(doc.getElementById("zb-pc-o"), "憂鬱 depression, sensitivity");
+	assert.ok(checks().some(t => /^診斷準確度的問題：sensitivity、specificity 這類準確度的詞通常不放進檢索式/.test(t)), JSON.stringify(checks()));
+	assert.ok(!checks().some(t => /質性問題|看起來聚焦了/.test(t)));
+	// P and I in Chinese only: the summary layer stays in the order, with a note instead of links
+	type(doc.getElementById("zb-pc-p"), "社區老人");
+	type(doc.getElementById("zb-pc-i"), "憂鬱量表");
+	let summaryLayer = root.querySelector('[data-zb-layer="summary"]');
+	assert.match(summaryLayer.textContent, /P、I 沒有英文詞，這層的英文資料庫未列出。/);
+	assert.equal(summaryLayer.querySelectorAll(".zb-pc-link").length, 0);
+	root.querySelector(".zb-cl-apply").click();
+	assert.equal((await running).saved.mode, "clinical");
+	assert.deepEqual(env.errors, []);
+});
+
 test("card window without 醫學資料庫搜尋連結: no links, a hint where they would be", async () => {
 	let env = await setup({ [P + "feature.searchLinks"]: false });
 	let { ZB } = env;
@@ -369,6 +480,10 @@ test("card window without 醫學資料庫搜尋連結: no links, a hint where th
 	type(root.ownerDocument.getElementById("zb-pc-i"), "exercise");
 	assert.equal(root.querySelectorAll(".zb-pc-link").length, 0);
 	assert.match(root.querySelector("#zb-pc-search-h").parentNode.textContent, /「醫學資料庫搜尋連結」關著/);
+	// No layers: neither the mode's radios nor its lead about layers
+	assert.equal(root.querySelector(".zb-pc-mode").hidden, true);
+	assert.equal(root.querySelector(".zb-pc-mode-lead").hidden, true);
+	assert.equal(root.querySelector(".zb-pc-layers").hidden, true);
 	root.querySelector(".zb-cl-cancel").click();
 	assert.equal(JSON.stringify(await running), '{"cancelled":true}');
 	assert.deepEqual(env.errors, []);

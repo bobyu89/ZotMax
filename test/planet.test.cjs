@@ -14,10 +14,10 @@ const P = require("../content/planet.js");
 const NOW = new Date("2026-10-24T10:00:00");
 let nextKey = 1;
 
-function note(title, { col, status = "待讀", level, design = "RCT", i = "", o = "", ai = true, verified, added = "2026-09-01T00:00:00Z", aiAt = "2026-09-02T00:00:00Z" } = {}) {
+function note(title, { col, status = "待讀", level, design = "RCT", i = "", o = "", dir = "", ai = true, verified, added = "2026-09-01T00:00:00Z", aiAt = "2026-09-02T00:00:00Z" } = {}) {
 	let full = { title, creators: [{ lastName: "Lin", firstName: "Ya", creatorType: "author" }], year: "2024", libraryPath: "library", key: `K${nextKey++}`,
 		collections: [].concat(col), itemType: "journalArticle", dateAdded: added, fullTextStatus: "ok", doi: "10.5555/x" };
-	let opts = ai ? Object.assign({ study: { study_design: design, evidence_level: level, intervention: i, outcomes: o }, aiModel: "m", aiGeneratedAt: aiAt },
+	let opts = ai ? Object.assign({ study: Object.assign({ study_design: design, evidence_level: level, intervention: i, outcomes: o }, dir ? { effect_direction: dir } : {}), aiModel: "m", aiGeneratedAt: aiAt },
 		verified ? { appraisal: { verified: true, tool: "CASP", overall: "納入" } } : {}) : {};
 	let fm = Object.assign(core.managedFrontmatter(full, opts), { status });
 	return d.noteRecord(core.splitFrontmatter(core.buildFrontmatter(fm, null)).frontmatter, `Zotero/${title}.md`);
@@ -327,13 +327,233 @@ test("📝 文獻探討大綱: per island the facts, the questions its paragraph
 	assert.match(data.islands[1].prompts.join("\n"), /最強的證據只到 CEBM 2|有 CEBM 2 的研究/);
 	// Split results ask why
 	let split = P.writingPrompts({ papers: 4, best: "3" }, { verdict: { label: "結論分歧" }, directions: {}, steps: [{ gap: true, short: "沒有 RCT" }] });
-	assert.deepEqual(split, ["結果為什麼不一致？比較族群、介入劑量和測量工具（GRADE 的 inconsistency）。", "最強的證據只到 CEBM 3：寫的時候要說明證據強度有限，避免下過強的結論。", "缺口要寫出來：沒有 RCT。這可能就是你研究的理由。"]);
+	assert.deepEqual(split, ["結果為什麼不一致？比較族群、介入劑量和測量工具（GRADE 的 inconsistency）。", "最強的證據只到 CEBM 3：寫的時候要說明證據強度有限，避免下過強的結論。", "缺口：沒有 RCT。為什麼重要？誰會在乎？既有研究背後有什麼你不同意的假設？（Sandberg & Alvesson, 2011）"]);
 	assert.deepEqual(P.writingPrompts({ papers: 0 }, null), []);
 	let board = P.planetSection(pl, data, { layout: "board" });
 	assert.match(board, /\n\n> \[!zm-ref\]- 文獻探討大綱（依島）\n> 每座島寫成文獻探討的一段/);
-	assert.match(board, /\n> #### 運動（3 篇 · RCT 3 · [^）]+）\n> - ❓ /);
+	assert.match(board, /\n> #### 運動（3 篇 · RCT 3 · [^）]+）\n> - ✍️ 這一段你的主張是什麼？[^\n]+\n> - ❓ /);
 	assert.match(board, /> - 📌 先讀、先引用：\[\[Zotero\/A\|A\]\]（2024 · RCT · CEBM 1）；\[\[Zotero\/B\|B\]\]/);
 	let classic = P.planetSection(pl, data, { layout: "classic" });
 	assert.match(classic, /\n\n### 📝 文獻探討大綱（依島）\n\n每座島寫成文獻探討的一段/);
-	assert.match(classic, /\n\n#### 用藥（1 篇[^\n]*\n- ❓ 先讀完或產生 AI 筆記/);
+	assert.match(classic, /\n\n#### 用藥（1 篇[^\n]*\n- ✍️ [^\n]+\n- ❓ 先讀完或產生 AI 筆記/);
+});
+
+// 0.39.0 主張鷹架: an island with directions, two verified appraisals pointing one way and the rest another
+function scaffolded() {
+	return [
+		note("V1", { col: "Q/運動", level: "1", dir: "無差異", verified: true }),
+		note("V2", { col: "Q/運動", level: "2", dir: "無差異", verified: true }),
+		note("U1", { col: "Q/運動", level: "2", dir: "有效" }),
+		note("U2", { col: "Q/運動", level: "3", dir: "有效" }),
+		note("N1", { col: "Q/運動", ai: false }),
+		note("E1", { col: "Q/衛教", level: "3", dir: "有效", verified: true }),
+		note("E2", { col: "Q/衛教", level: "4", dir: "有效" }),
+	];
+}
+
+test("主張鷹架: the gap asks why it matters (problematization), every island asks for the claim and where to write it", () => {
+	let gap = P.writingPrompts({ papers: 4, best: "2" }, { verdict: { label: "多數有效" }, directions: {}, steps: [{ gap: true, short: "沒有 RCT" }, { gap: true, short: "缺口：衛教 × 跌倒" }, { gap: true, short: "第三個" }] });
+	let line = gap.find(q => q.startsWith("缺口："));
+	assert.equal(line, "缺口：沒有 RCT；缺口：衛教 × 跌倒。為什麼重要？誰會在乎？既有研究背後有什麼你不同意的假設？（Sandberg & Alvesson, 2011）");
+	assert.ok(!gap.some(q => /研究的理由/.test(q)), "no more 「這可能就是你研究的理由」");
+	assert.ok(!gap.includes(P.CLAIM_PROMPT), "the claim only with the scaffold");
+	let claimed = P.writingPrompts({ papers: 4, best: "2" }, { verdict: { label: "多數有效" }, directions: {}, steps: [] }, { claim: true });
+	assert.equal(claimed[0], P.CLAIM_PROMPT);
+	assert.match(P.CLAIM_PROMPT, /^這一段你的主張是什麼？.*「✍️ 我的筆記」/);
+	assert.deepEqual(P.writingPrompts({ papers: 0 }, null, { claim: true }), []);
+	// The page's 「✍️ 我的筆記」 is the one topics.js keeps below the managed block: the outline links to it, has no field of its own
+	let { pl, data } = dataFor(scaffolded());
+	assert.ok(data.islands.every(is => is.prompts[0] === P.CLAIM_PROMPT));
+	for (let layout of ["board", "classic"]) {
+		let md = P.planetSection(pl, data, { layout });
+		assert.ok(md.includes("✍️ 這一段你的主張是什麼？用一句話寫在星球主題頁最下面的「[[#✍️ 我的筆記|✍️ 我的筆記]]」"), layout);
+		assert.doesNotMatch(md, /- \[[ x]\]|主張[：:]\s*$|_{3,}/m, `${layout}: nothing to fill in inside the generated block`);
+	}
+	let page = T.buildPage(null, P.planetSection(pl, data, { layout: "board" }), "Q", { type: "topic" });
+	assert.ok(page.indexOf("## ✍️ 我的筆記") > page.indexOf(core.MARK_END), "the place it points to is outside the rewritten block");
+});
+
+test("主張鷹架: each island's studies by direction (AI 初判) with CEBM and 已核對, in both layouts", () => {
+	let groups = P.directionGroups(scaffolded().filter(r => r.collections.includes("Q/運動")));
+	assert.deepEqual(groups.map(g => [g.direction, g.n, g.items.map(k => [k.title, k.level, k.verified])]), [
+		["有效", 2, [["U1", "2", false], ["U2", "3", false]]],
+		["無差異", 2, [["V1", "1", true], ["V2", "2", true]]],
+		["未判定", 1, [["N1", "", false]]],
+	]);
+	let many = Array.from({ length: 10 }, (_, k) => Object.assign(note(`M${k}`, { col: "Q/x", level: "2", dir: "有效" })));
+	let g = P.directionGroups(many)[0];
+	assert.deepEqual([g.n, g.items.length, g.more], [10, 4, 6], "compact: at most 4 a direction");
+	let { pl, data } = dataFor(scaffolded());
+	let board = P.planetSection(pl, data, { layout: "board" });
+	assert.ok(board.includes("> - 🧭 方向（AI 初判）：\n> \t- 有效（2 篇）\n> \t\t- [[Zotero/U1|U1]]（CEBM 2）\n> \t\t- [[Zotero/U2|U2]]（CEBM 3）\n> \t- 無差異（2 篇）\n> \t\t- [[Zotero/V1|V1]]（CEBM 1 · 已核對）\n> \t\t- [[Zotero/V2|V2]]（CEBM 2 · 已核對）\n> \t- 未判定（1 篇）\n> \t\t- [[Zotero/N1|N1]]"));
+	assert.match(board, /\n\n> \[!zm-ref\]- 文獻探討大綱（依島）\n/, "still inside the folded section");
+	let classic = P.planetSection(pl, data, { layout: "classic" });
+	assert.ok(classic.includes("\n- 🧭 方向（AI 初判）：\n\t- 有效（2 篇）\n\t\t- [[Zotero/U1|U1]]（CEBM 2）"));
+	assert.ok(classic.includes("\t- 有效（2 篇）\n\t\t- [[Zotero/E1|E1]]（CEBM 3 · 已核對）\n\t\t- [[Zotero/E2|E2]]（CEBM 4）"));
+	// Short lines: one study a line, the rest counted
+	let more = { name: "多", papers: 10, prompts: [], groups: P.directionGroups(many) };
+	let md = P.outlineSection({ islands: [more] }, "classic");
+	assert.ok(md.includes("\t\t- [[Zotero/M3|M3]]（CEBM 2）\n\t\t- 另 6 篇"));
+	assert.ok(md.split("\n").every(l => l.length < 200), "no long line");
+});
+
+test("主張鷹架: the quality contrast only with ≥2 verified appraisals whose direction differs from the rest; never by appraisal_overall", () => {
+	let isl = scaffolded().filter(r => r.collections.includes("Q/運動"));
+	let want = { verified: { direction: "無差異", k: 2, n: 2 }, others: { n: 2, tally: [{ direction: "有效", n: 2 }] } };
+	assert.deepEqual(P.qualityContrast(isl), want);
+	let { data } = dataFor(scaffolded());
+	let contrast = q => q.startsWith("已核對評讀的研究和其他研究方向不同");
+	assert.equal(data.islands[0].prompts.filter(contrast).length, 1);
+	assert.equal(data.islands[0].prompts.find(contrast), "已核對評讀的研究和其他研究方向不同（方向是 AI 初判）：已核對且已判定方向的 2 篇中 2 篇為「無差異」；其他已判定方向的 2 篇：「有效」2 篇。品質較好的研究怎麼說？");
+	assert.ok(!data.islands[1].prompts.some(contrast), "衛教: one verified only");
+	// One verified study: no contrast
+	assert.equal(P.qualityContrast([isl[0], isl[2], isl[3]]), null);
+	// Same direction: no contrast
+	let same = [note("a", { col: "Q/y", dir: "有效", verified: true }), note("b", { col: "Q/y", dir: "有效", verified: true }), note("c", { col: "Q/y", dir: "有效" })];
+	assert.equal(P.qualityContrast(same), null);
+	// The verified ones split evenly: no single direction to contrast
+	let tie = [note("a", { col: "Q/y", dir: "有效", verified: true }), note("b", { col: "Q/y", dir: "有害", verified: true }), note("c", { col: "Q/y", dir: "無差異" })];
+	assert.equal(P.qualityContrast(tie), null);
+	// Nothing judged among the others: no contrast
+	assert.equal(P.qualityContrast([isl[0], isl[1], isl[4]]), null);
+	// appraisal_overall (include／exclude) plays no part: unverified with 納入 still counts as unverified
+	let overall = [isl[0], isl[1], Object.assign({}, isl[2], { appraisal: "納入" }), Object.assign({}, isl[3], { appraisal: "排除" })];
+	assert.deepEqual(P.qualityContrast(overall), want);
+	// A verified study without a direction doesn't count: one judged verified study is not enough
+	let unjudged = [note("a", { col: "Q/y", dir: "有效", verified: true }), note("b", { col: "Q/y", verified: true }), note("c", { col: "Q/y", dir: "無差異" })];
+	assert.equal(P.qualityContrast(unjudged), null);
+	// Counts, not 「多為」: 3 verified with 2 one way; of many others only 1 is judged
+	let counted = [note("a", { col: "Q/y", dir: "無差異", verified: true }), note("b", { col: "Q/y", dir: "無差異", verified: true }), note("c", { col: "Q/y", dir: "有效", verified: true }),
+		note("d", { col: "Q/y", dir: "有效" }), ...Array.from({ length: 5 }, (_, k) => note(`x${k}`, { col: "Q/y" }))];
+	let c = P.qualityContrast(counted);
+	assert.deepEqual(c, { verified: { direction: "無差異", k: 2, n: 3 }, others: { n: 1, tally: [{ direction: "有效", n: 1 }] } });
+	let line = P.writingPrompts({ papers: 8, best: "2" }, null, { contrast: c }).find(contrast);
+	assert.ok(line.includes("已核對且已判定方向的 3 篇中 2 篇為「無差異」；其他已判定方向的 1 篇：「有效」1 篇。"), line);
+	assert.ok(!/多為/.test(line));
+	assert.ok(!data.islands.some(is => is.prompts.some(q => /支持|不支持/.test(q))), "no 支持／不支持: ZotMax doesn't know the claim");
+});
+
+test("主張鷹架: the GRADE table's certainty once at the top of the outline, else the CEBM ≠ certainty line", () => {
+	let grade = [{ outcome: "跌倒發生率", rating: "⊕⊕◯◯ 低" }, { outcome: "平衡能力", rating: "⊕⊕⊕◯ 中" }, { outcome: " ", rating: "x" }];
+	let { pl, data } = dataFor(scaffolded(), { grade });
+	assert.deepEqual(data.certainty, [{ outcome: "跌倒發生率", rating: "⊕⊕◯◯ 低" }, { outcome: "平衡能力", rating: "⊕⊕⊕◯ 中" }]);
+	for (let layout of ["board", "classic"]) {
+		let md = P.planetSection(pl, data, { layout });
+		let line = "證據確定性（GRADE 表，以整個星球為單位）：跌倒發生率 ⊕⊕◯◯ 低；平衡能力 ⊕⊕⊕◯ 中";
+		assert.equal(md.split(line).length, 2, `${layout}: once`);
+		assert.ok(md.indexOf(line) < md.indexOf("#### 運動"), `${layout}: above the islands`);
+		assert.ok(!md.includes("CEBM 等級是研究設計"), layout);
+	}
+	let none = dataFor(scaffolded());
+	assert.deepEqual(none.data.certainty, []);
+	for (let layout of ["board", "classic"]) {
+		let md = P.planetSection(none.pl, none.data, { layout });
+		assert.equal(md.split("CEBM 等級是研究設計，不是證據確定性").length, 2, layout);
+		assert.ok(md.includes("GRADE 證據確定性（目前分類）") && md.includes("Murad et al., 2016"), layout);
+		assert.ok(md.indexOf("CEBM 等級是研究設計") < md.indexOf("#### 運動"), layout);
+		assert.ok(!md.includes("📊"), `${layout}: 📊 means 研究儀表板 elsewhere`);
+	}
+	assert.deepEqual(P.certaintyLines({ scaffold: true, certainty: [] }), [P.CEBM_NOTE]);
+	// The GRADE feature off: its command is hidden, so the line points to the setting instead
+	let off = dataFor(scaffolded(), { gradeOn: false });
+	assert.equal(off.data.gradeOn, false);
+	for (let layout of ["board", "classic"]) {
+		let md = P.planetSection(off.pl, off.data, { layout });
+		assert.ok(md.includes(P.CEBM_NOTE_OFF) && !md.includes("GRADE 證據確定性（目前分類）"), layout);
+	}
+	assert.equal(dataFor(scaffolded()).data.gradeOn, true, "default on");
+});
+
+test("主張鷹架: the setting prompt only when the PICO card's 情境 is filled in", () => {
+	let card = { question: "q", p: "住院長者", i: "運動", c: "", o: "跌倒", setting: "區域醫院內科病房，\n多為 70 歲以上、護病比 1:9 的病人與家屬" };
+	assert.equal(P.settingOf(card), "區域醫院內科病房， 多為 70 歲以上、護病比 1:9 的病…", "one line, 30 characters");
+	assert.equal(P.settingOf({ setting: "  " }), "");
+	assert.equal(P.settingOf(null), "");
+	assert.equal(P.settingOf({ setting: "x".repeat(29) + "😀abc" }), "x".repeat(29) + "😀…", "cut by code points, never half a character");
+	let both = dataFor(scaffolded(), { card });
+	let on = both.data;
+	let setting = q => q.startsWith("你的情境是");
+	// The map's island panels each show it
+	assert.ok(on.islands.every(is => is.prompts.filter(setting).length === 1));
+	assert.match(on.islands[0].prompts.find(setting), /^你的情境是「區域醫院內科病房，[^」]+」：這些研究的場域和你的有什麼不同（護病比、病人特性、健保給付）？結果能套用到你的場域嗎？（Burchett et al., 2011）$/);
+	// The outline asks it once, at the top with the certainty line (the PICO card is per planet)
+	for (let layout of ["board", "classic"]) {
+		let md = P.planetSection(both.pl, on, { layout });
+		assert.equal(md.split("你的情境是「").length, 2, `${layout}: once`);
+		assert.ok(md.indexOf("你的情境是「") < md.indexOf("#### 運動"), `${layout}: above the islands`);
+	}
+	let off = dataFor(scaffolded(), { card: Object.assign({}, card, { setting: "" }) }).data;
+	assert.ok(off.islands.every(is => !is.prompts.some(setting)));
+	assert.ok(dataFor(scaffolded()).data.islands.every(is => !is.prompts.some(setting)), "no card");
+});
+
+test("主張鷹架: the switch off gives 0.38.0's outline (bar the gap wording); the map's island panel shows the prompts escaped", () => {
+	let card = { setting: "內科病房" };
+	let grade = [{ outcome: "跌倒", rating: "⊕⊕◯◯ 低" }];
+	let { pl, data } = dataFor(scaffolded(), { scaffold: false, card, grade });
+	assert.equal(data.scaffold, false);
+	assert.deepEqual(data.certainty, []);
+	assert.ok(data.islands.every(is => !is.groups.length && !is.prompts.includes(P.CLAIM_PROMPT) && !is.prompts.some(q => /已核對評讀|你的情境是/.test(q))));
+	for (let layout of ["board", "classic"]) {
+		let md = P.planetSection(pl, data, { layout });
+		assert.ok(!/📊|🧭 方向（AI 初判）|✍️ 這一段/.test(md.split("文獻探討大綱")[1]), layout);
+		assert.match(md, /- ❓ /);
+	}
+	// The map: the same prompts, as text in <li>, through esc()
+	let tpl = fs.readFileSync(path.join(__dirname, "../content/planet/planet.html"), "utf8");
+	assert.ok(tpl.includes("is.prompts.map(q => `<li>${esc(q)}</li>`)"));
+	let on = dataFor(scaffolded(), { card: { setting: "<b>病房</b>" } }).data;
+	let html = P.fillTemplate(tpl, on);
+	let back = vm.runInNewContext(`(${/window\.PLANET = (.*);\n<\/script>/.exec(html)[1]})`);
+	assert.equal(JSON.stringify(back.islands[0].prompts), JSON.stringify(on.islands[0].prompts));
+	assert.ok(back.islands[0].prompts.some(q => q.includes("「<b>病房</b>」")), "kept as text; the panel escapes it");
+});
+
+test("gradeForPath / scaffoldOn: the planet collection's GRADE table as ratings (feature on), the switch read defensively", () => {
+	const G = require("../content/grade.js");
+	let saved = { ZB: globalThis.ZB, Zotero: globalThis.Zotero };
+	let prefs = {};
+	let enabled = { grade: true };
+	let table = { outcomes: [{ name: "跌倒發生率", design: "rct", domains: { rob: { level: 1, reason: "x" }, imprecision: { level: 1, reason: "y" } } }, { name: "" }] };
+	try {
+		globalThis.Zotero = {
+			Prefs: { get: k => prefs[k] },
+			Libraries: { userLibraryID: 1 },
+			Collections: { getByLibrary: () => [{ key: "C1", path: "碩論/跌倒" }, { key: "C2", path: "其他" }] },
+		};
+		globalThis.ZB = {
+			adapter: { collectionPath: c => c.path },
+			pico: {},
+			features: { isEnabled: id => !!enabled[id] },
+			grade: Object.assign({}, G, { tableFor: c => (c.key === "C1" ? G.normalizeTable(table) : null) }),
+		};
+		assert.deepEqual(P.gradeForPath("碩論/跌倒"), [{ outcome: "跌倒發生率", rating: "⊕⊕◯◯ 低" }]);
+		// Only what the user judged: a start level is said to be one, an outcome without studies is not rated
+		table.outcomes.push({ name: "平衡能力", design: "rct", studies: ["K1"] }, { name: "住院天數", design: "obs" }, { name: "自我效能", design: "obs", studies: ["K2"], upgrades: { large: { level: 1, reason: "效果大" } } });
+		assert.deepEqual(P.gradeForPath("碩論/跌倒"), [
+			{ outcome: "跌倒發生率", rating: "⊕⊕◯◯ 低" },
+			{ outcome: "平衡能力", rating: "⊕⊕⊕⊕ 高（起始等級，尚未評升降級）" },
+			{ outcome: "住院天數", rating: "尚未評等（還沒勾選研究）" },
+			{ outcome: "自我效能", rating: "⊕⊕⊕◯ 中" },
+		]);
+		assert.equal(P.outcomeRating({ name: "x", design: "rct", domains: { rob: { level: 0, reason: "低偏誤" } } }, G), "⊕⊕⊕⊕ 高", "a reason counts as a judgment");
+		assert.equal(P.gradeOn(), true);
+		enabled.grade = false;
+		assert.equal(P.gradeOn(), false);
+		enabled.grade = true;
+		assert.equal(P.gradeForPath("其他"), null, "no table");
+		assert.equal(P.gradeForPath("沒有"), null, "no collection");
+		enabled.grade = false;
+		assert.equal(P.gradeForPath("碩論/跌倒"), null, "the GRADE feature off");
+		assert.equal(P.scaffoldOn(), true, "unset: on");
+		prefs["extensions.zotero-bridge.planet.outlineScaffold"] = false;
+		assert.equal(P.scaffoldOn(), false);
+		globalThis.Zotero = undefined;
+		assert.equal(P.scaffoldOn(), true, "no Zotero: on");
+		assert.equal(P.gradeForPath("碩論/跌倒"), null);
+	}
+	finally {
+		globalThis.ZB = saved.ZB;
+		globalThis.Zotero = saved.Zotero;
+	}
 });

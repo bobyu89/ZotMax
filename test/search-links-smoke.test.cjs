@@ -515,6 +515,7 @@ test("醫學文獻快速搜尋… (toolbar, 快速指令): MeSH suggestions, ope
 	assert.equal(select.list[0], `PubMed（MeSH 檢索式）：${MESH_QUERY.slice(0, 89)}…`);
 	assert.equal(select.list[1], "PubMed");
 	assert.ok(select.list.includes("CINAHL（需機構權限）"));
+	assert.ok(["PubMed 系統性回顧", "RNAO 最佳實務指引", "G-I-N 國際指引圖書館"].every(n => select.list.includes(n)), "the 6S sources are in the list too");
 	assert.equal(select.list.indexOf("華藝線上圖書館（開首頁＋複製檢索詞）") > select.list.indexOf("CDC"), true, "Chinese sources last for English keywords");
 	assert.deepEqual(env.launched, ["https://pubmed.ncbi.nlm.nih.gov/?term=" + env.context.ZB.searchLinks.encodeQuery(MESH_QUERY)]);
 	assert.deepEqual(env.clipboard, [MESH_QUERY]);

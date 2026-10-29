@@ -417,3 +417,218 @@ test("defaultPicks: only sure fixes start ticked; describePicks counts fixes, it
 	assert.equal(Z.describePicks(Z.defaultPicks(plan), 1), "已勾選 2 項修正，會改動 2 篇文獻。另有 1 項資料要你自己補（不會自動填入）。");
 	assert.equal(Z.describePicks([], 0), "還沒有勾選任何修正。");
 });
+
+// ---------- PubMed records of Chinese-language journals (《護理雜誌》 Hu Li Za Zhi) ----------
+
+// A 《護理雜誌》 article as PubMed delivers it: NLM's English title in [ ], pinyin authors, language chi
+function huLi(over = {}) {
+	return Object.assign({
+		itemType: "journalArticle",
+		title: "[Effects of a Nurse-Led Fall Prevention Program in Hospitalized Older Adults].",
+		creators: [{ lastName: "Chen", firstName: "Mei-Ling", creatorType: "author" }, { lastName: "Lin", firstName: "Hsiao-Hua", creatorType: "author" }],
+		date: "2023-04", publicationTitle: "Hu li za zhi The journal of nursing", journalAbbreviation: "Hu Li Za Zhi", ISSN: "0047-262X",
+		volume: "70", issue: "2", pages: "45-56", DOI: "10.6224/JN.202304_70(2).07", extra: "PMID: 37000000", language: "chi",
+	}, over);
+}
+
+test("pubmedZhJournal / bracketedTitle / pubmedTranslatedTitle: brackets, journal name, abbreviation or ISSN, but only with a Chinese language", () => {
+	assert.equal(Z.pubmedZhJournal(huLi()).name, "護理雜誌");
+	for (let over of [
+		{ publicationTitle: "Hu Li Za Zhi", journalAbbreviation: "", ISSN: "" }, { publicationTitle: "", journalAbbreviation: "Hu Li Za Zhi", ISSN: "" },
+		{ publicationTitle: "《護理雜誌》", journalAbbreviation: "", ISSN: "" }, { publicationTitle: "護理雜誌 The Journal of Nursing", journalAbbreviation: "", ISSN: "" },
+		{ publicationTitle: "", journalAbbreviation: "", ISSN: "0047262x" }, { publicationTitle: "", journalAbbreviation: "", ISSN: "2224-8986, 0047-262X" },
+	]) assert.equal((Z.pubmedZhJournal(huLi(over)) || {}).name, "護理雜誌", JSON.stringify(over));
+	for (let over of [
+		{ publicationTitle: "Journal of Nursing", journalAbbreviation: "", ISSN: "" }, { publicationTitle: "The Journal of Nursing", journalAbbreviation: "J Nurs", ISSN: "" },
+		{ publicationTitle: "長庚護理", journalAbbreviation: "", ISSN: "1015-8383" }, { publicationTitle: "Journal of Advanced Nursing", journalAbbreviation: "J Adv Nurs", ISSN: "0309-2402" },
+	]) assert.equal(Z.pubmedZhJournal(huLi(over)), null, JSON.stringify(over));
+
+	assert.equal(Z.bracketedTitle("[Effects of X on Y]."), "Effects of X on Y");
+	assert.equal(Z.bracketedTitle(" [Effects of X: a [pilot] study] "), "Effects of X: a [pilot] study");
+	assert.equal(Z.bracketedTitle("Effects of X on Y."), null);
+	assert.equal(Z.bracketedTitle("[ ]"), null);
+	// Two bracketed parts are not one translated title: nothing to strip
+	assert.equal(Z.bracketedTitle("[Effects of X] and [Y]"), null);
+	assert.equal(Z.bracketedTitle("[Effects of X]] and [[Y]."), null);
+	assert.equal(Z.pubmedTranslatedTitle(huLi({ title: "[Effects of X] and [Y]", publicationTitle: "", journalAbbreviation: "", ISSN: "" })), null);
+	assert.deepEqual(plain(Z.pubmedTranslatedTitle(huLi({ title: "[Effects of X] and [Y]" }))).english, "[Effects of X] and [Y]", "the journal still tells; the title is kept as it is");
+
+	assert.deepEqual(plain(Z.pubmedTranslatedTitle(huLi())), { journal: plain(Z.PUBMED_ZH_JOURNALS[0]), bracketed: true, english: "Effects of a Nurse-Led Fall Prevention Program in Hospitalized Older Adults" });
+	// Brackets alone are enough; so is the journal alone (a translator may have dropped the brackets)
+	let bare = { publicationTitle: "Some Journal", journalAbbreviation: "", ISSN: "" };
+	assert.equal(Z.pubmedTranslatedTitle(huLi(bare)).bracketed, true);
+	let stripped = Z.pubmedTranslatedTitle(huLi({ title: "Effects of a Nurse-Led Fall Prevention Program in Hospitalized Older Adults." }));
+	assert.equal(stripped.bracketed, false);
+	assert.equal(stripped.english, "Effects of a Nurse-Led Fall Prevention Program in Hospitalized Older Adults");
+	// Neither: an ordinary English article
+	assert.equal(Z.pubmedTranslatedTitle(huLi(Object.assign({ title: "Effects of a program." }, bare))), null);
+	// The language must say Chinese
+	for (let language of ["en", "eng", "", "ja"]) assert.equal(Z.pubmedTranslatedTitle(huLi({ language })), null, language);
+	for (let language of ["chi", "zh", "zho", "zh-TW", "中文", "Chinese"]) assert.ok(Z.isZhLanguage(language), language);
+});
+
+test("a 《護理雜誌》 PubMed record never gets 「en」: one finding asks for the Chinese title and names and keeps the English title in Extra", () => {
+	let cases = {
+		"brackets, name, abbreviation and ISSN": huLi(),
+		"no brackets": huLi({ title: "Effects of a Nurse-Led Fall Prevention Program in Hospitalized Older Adults." }),
+		"ISSN only": huLi({ title: "Effects of a Nurse-Led Fall Prevention Program in Hospitalized Older Adults.", publicationTitle: "", journalAbbreviation: "" }),
+		"abbreviation only": huLi({ title: "Effects of a Nurse-Led Fall Prevention Program in Hospitalized Older Adults.", publicationTitle: "", ISSN: "" }),
+		"brackets only": huLi({ publicationTitle: "", journalAbbreviation: "", ISSN: "" }),
+		"language zh": huLi({ language: "zh" }),
+	};
+	for (let [name, data] of Object.entries(cases)) {
+		assert.equal(Z.isChinese(data), false, name);
+		let found = Z.analyze(data);
+		assert.equal(found.length, 1, name);
+		let f = found[0];
+		assert.equal(f.id, "title-translated", name);
+		assert.equal(f.field, "extra", "the fix writes only Extra: the review window shows 「其他」, not the title");
+		assert.equal(f.label, "其他");
+		assert.equal(f.current, data.extra);
+		assert.equal(f.confidence, "check", name);
+		assert.ok(!found.some(x => x.changes && x.changes.fields && x.changes.fields.language === "en"), `${name}: no 「en」`);
+		assert.match(f.hint, /中文篇名和中文作者姓名/);
+		assert.match(f.hint, /ZotMax 不翻譯/);
+		assert.match(f.hint, /不要改成 en/);
+		assert.deepEqual(plain(f.changes), { extraLines: ["PubMed title: Effects of a Nurse-Led Fall Prevention Program in Hospitalized Older Adults"] }, name);
+		assert.match(f.suggested, /PubMed title: Effects of a Nurse-Led/);
+		assert.match(f.hint, /引用格式不會印出這一行/);
+		// Applying it keeps every Extra line and adds the PubMed title at the end
+		assert.deepEqual(plain(Z.applyChanges(data, found)), { itemType: null, creators: null,
+			fields: { extra: "PMID: 37000000\nPubMed title: Effects of a Nurse-Led Fall Prevention Program in Hospitalized Older Adults" } }, name);
+	}
+	assert.match(Z.analyze(huLi())[0].hint, /篇名外面有 \[ \].*期刊是《護理雜誌》/);
+	assert.doesNotMatch(Z.analyze(cases["ISSN only"])[0].hint, /篇名外面有/);
+	assert.doesNotMatch(Z.analyze(cases["brackets only"])[0].hint, /期刊是/);
+	assert.equal(Z.applyChanges(huLi({ extra: "" }), Z.analyze(huLi({ extra: "" }))).fields.extra,
+		"PubMed title: Effects of a Nurse-Led Fall Prevention Program in Hospitalized Older Adults");
+});
+
+test("an English title already kept in Extra (PubMed title or original-title) is never duplicated: the finding stays, without a fix", () => {
+	for (let kept of ["PubMed title: Effects of a nurse-led program", "original-title: Effects of a nurse-led program"]) {
+		let data = huLi({ extra: `PMID: 37000000\n${kept}` });
+		let found = Z.analyze(data);
+		assert.deepEqual(ids(found), ["title-translated"]);
+		assert.equal(found[0].changes, null, "nothing to write: the user pastes the Chinese title");
+		assert.match(found[0].hint, /已經記著英譯篇名，不會重複寫入/);
+		assert.deepEqual(plain(Z.applyChanges(data, found)), { itemType: null, fields: {}, creators: null });
+	}
+	// Case and spacing of the label do not matter
+	assert.equal(Z.analyze(huLi({ extra: "pubmed TITLE : Something" }))[0].changes, null);
+	assert.equal(Z.analyze(huLi({ extra: "Original-Title : Something" }))[0].changes, null);
+	// The same line coming twice (or already in Extra) is written once
+	let line = "PubMed title: Effects of a Nurse-Led Fall Prevention Program in Hospitalized Older Adults";
+	let f = { changes: { extraLines: [line] } };
+	assert.equal(Z.applyChanges(huLi(), [f, f]).fields.extra, `PMID: 37000000\n${line}`);
+	assert.deepEqual(plain(Z.applyChanges(huLi({ extra: `PMID: 1\n${line}` }), [f]).fields), {});
+});
+
+test("a genuine English article with a Chinese language label still gets the 「en」 suggestion", () => {
+	let english = {
+		itemType: "journalArticle", title: "Effects of a nurse-led program on falls: a randomized controlled trial.",
+		creators: [{ lastName: "Smith", firstName: "John", creatorType: "author" }], publicationTitle: "Journal of Advanced Nursing",
+		journalAbbreviation: "J Adv Nurs", ISSN: "0309-2402", language: "chi", extra: "",
+	};
+	let found = Z.analyze(english);
+	assert.deepEqual([found.length, found[0].id, found[0].suggested], [1, "language", "en"]);
+	assert.deepEqual(plain(found[0].changes), { fields: { language: "en" } });
+	// 「The Journal of Nursing」 alone is not enough to call it 《護理雜誌》
+	assert.equal(Z.analyze(Object.assign({}, english, { publicationTitle: "The Journal of Nursing", journalAbbreviation: "", ISSN: "" }))[0].suggested, "en");
+	// Once the user pastes the Chinese title, the item is Chinese and checked as such (no 「en」, no translated-title finding)
+	let pasted = huLi({ title: "護理人員跌倒預防衛教之成效", extra: "PMID: 37000000\noriginal-title: Effects of a nurse-led program" });
+	assert.equal(Z.isChinese(pasted), true);
+	let zh = Z.analyze(pasted);
+	assert.ok(!zh.some(f => f.id === "title-translated" || f.suggested === "en"));
+	assert.equal(byID(zh, "language").suggested, "zh-TW");
+});
+
+test("romanizedName: the pinyin of a mixed name as a CSL Extra name (family || given when the record tells, else literal)", () => {
+	const cases = [
+		[{ name: "陳美玲(Chen, Mei-Ling)" }, "Chen || Mei-Ling"],
+		[{ name: "陳美玲（Chen, Mei-Ling）" }, "Chen || Mei-Ling"],
+		[{ name: "陳美玲 Chen Mei-Ling" }, "Chen || Mei-Ling"],
+		[{ name: "陳美玲 Mei-Ling Chen" }, "Chen || Mei-Ling"],
+		[{ lastName: "陳美玲 Chen", firstName: "Mei-Ling" }, "Chen || Mei-Ling"],
+		[{ lastName: "Chen", firstName: "Mei-Ling 陳美玲" }, "Chen || Mei-Ling"],
+		[{ lastName: "陳美玲", firstName: "Chen Mei Ling" }, "Chen Mei Ling"],
+		[{ name: "陳美玲 Chen MeiLing" }, "Chen MeiLing"],
+		[{ name: "陳美玲" }, ""],
+	];
+	for (let [c, want] of cases) assert.equal(Z.romanizedName(c), want, JSON.stringify(c));
+});
+
+test("pinyin dropped from a mixed name is written to Extra first (original-author), once, keeping the other Extra lines", () => {
+	let f = Z.analyzeCreator({ name: "陳美玲(Chen, Mei-Ling)", creatorType: "author" }, 0);
+	assert.equal(f.confidence, "check");
+	assert.deepEqual(plain(f.changes), { creator: { index: 0, replacement: [{ name: "陳美玲", creatorType: "author" }] }, extraLines: ["original-author: Chen || Mei-Ling"] });
+	assert.match(f.suggested, /^「陳美玲」（單一欄位）；「其他」欄加上「original-author: Chen \|\| Mei-Ling」$/);
+	assert.match(f.hint, /original-author/);
+	assert.match(f.hint, /只記這一位的拼音/);
+	assert.doesNotMatch(f.hint, /引用格式還用得到/, "no citation style prints original-author: the hint does not promise it");
+	// The same line already in Extra: no Extra change offered, and the suggestion does not promise one
+	let again = Z.analyzeCreator({ name: "陳美玲(Chen, Mei-Ling)", creatorType: "author" }, 0, "PMID: 1\noriginal-author: Chen || Mei-Ling");
+	assert.deepEqual(plain(again.changes), { creator: { index: 0, replacement: [{ name: "陳美玲", creatorType: "author" }] } });
+	assert.equal(again.suggested, "「陳美玲」（單一欄位）");
+	assert.match(again.hint, /已經以「original-author: Chen \|\| Mei-Ling」記在「其他」欄，不會重複寫入/);
+	let viaAnalyze = Z.analyze(clean({ creators: [{ name: "陳美玲(Chen, Mei-Ling)", creatorType: "author" }], DOI: "", url: "", extra: "PMID: 1\noriginal-author: Chen || Mei-Ling" }));
+	assert.equal(byID(viaAnalyze, "creators-0").suggested, "「陳美玲」（單一欄位）");
+
+	let data = clean({
+		creators: [{ name: "陳美玲(Chen, Mei-Ling)", creatorType: "author" }, { lastName: "林小華 Lin", firstName: "Hsiao-Hua", creatorType: "author" }],
+		extra: "PMID: 37000000\noriginal-author: Lin || Hsiao-Hua", DOI: "", url: "",
+	});
+	let findings = Z.analyze(data);
+	assert.deepEqual(ids(findings), ["creators-0", "creators-1"]);
+	let out = Z.applyChanges(data, findings);
+	assert.deepEqual(plain(out.creators), [{ name: "陳美玲", creatorType: "author" }, { name: "林小華", creatorType: "author" }]);
+	// One line per creator, an identical line not written again, the existing lines kept in place
+	assert.equal(out.fields.extra, "PMID: 37000000\noriginal-author: Lin || Hsiao-Hua\noriginal-author: Chen || Mei-Ling");
+	// With the DOI moved out of Extra in the same run: the DOI line goes, the pinyin line is still added
+	data = clean({ creators: [{ name: "陳美玲(Chen, Mei-Ling)", creatorType: "author" }], DOI: "", url: "", extra: "DOI: 10.6224/JN.202304_70(2).07\nPMID: 1" });
+	findings = Z.analyze(data);
+	out = Z.applyChanges(data, findings);
+	assert.equal(out.fields.DOI, "10.6224/JN.202304_70(2).07");
+	assert.equal(out.fields.extra, "PMID: 1\noriginal-author: Chen || Mei-Ling");
+	// Order of the findings does not matter
+	assert.equal(Z.applyChanges(data, findings.slice().reverse()).fields.extra, "PMID: 1\noriginal-author: Chen || Mei-Ling");
+	// Not ticking the creator fix writes nothing to Extra
+	assert.equal(Z.applyChanges(data, findings.filter(x => x.id === "DOI")).fields.extra, "PMID: 1");
+});
+
+test("the Extra line the 《護理雜誌》 fix writes is not printed by the APA styles (CSL original-title would be)", () => {
+	// Rendered with citeproc-js, as Zotero's Word plugin does; Zotero hands the rest of Extra to citeproc as note
+	const fs = require("node:fs");
+	const path = require("node:path");
+	const CSL = require("citeproc");
+	const locales = path.join(__dirname, "fixtures", "csl-locales");
+	let render = (file, item) => {
+		let sys = {
+			retrieveLocale: l => fs.readFileSync(path.join(locales, /^zh/.test(l) ? "locales-zh-TW.xml" : "locales-en-US.xml"), "utf8"),
+			retrieveItem: () => item,
+		};
+		let e = new CSL.Engine(sys, fs.readFileSync(path.join(__dirname, "..", "content", "styles", file), "utf8"), "en-US");
+		e.setOutputFormat("text");
+		e.updateItems([item.id]);
+		return e.makeBibliography()[1].join("");
+	};
+	let data = huLi({ extra: "PMID: 37000000" });
+	let line = Z.analyze(data)[0].changes.extraLines[0];
+	assert.match(line, /^PubMed title: /);
+	for (let file of ["apa-7-zh-tw.csl", "apa-7-zh-tw-twna.csl"]) {
+		// Before and after the user pastes the Chinese title, in the English branch (chi, en) and the Chinese one (zh-TW)
+		for (let language of ["chi", "en", "zh-TW"]) {
+			for (let title of [data.title, "護理人員跌倒預防衛教之成效"]) {
+				let item = { id: "hu", type: "article-journal", language, title, "container-title": "護理雜誌", volume: "70", page: "45-56",
+					issued: { "date-parts": [[2023]] }, author: [{ family: "Chen", given: "Mei-Ling" }] };
+				let kept = render(file, Object.assign({}, item, { note: `PMID: 37000000\n${line}` }));
+				assert.doesNotMatch(kept, /Original work published|Hospitalized Older Adults\)/, `${file} ${language} ${title}: ${kept}`);
+				assert.equal(kept, render(file, Object.assign({}, item, { note: "PMID: 37000000" })), `${file} ${language}: the line changes nothing`);
+			}
+		}
+		// Why not original-title: the English branch adds 「(Original work published as …)」
+		let orig = render(file, { id: "hu", type: "article-journal", language: "en", title: "護理人員跌倒預防衛教之成效", "container-title": "護理雜誌",
+			volume: "70", page: "45-56", issued: { "date-parts": [[2023]] }, author: [{ family: "Chen", given: "Mei-Ling" }],
+			note: "original-title: Effects of a Nurse-Led Fall Prevention Program" });
+		assert.match(orig, /Original work published as Effects of a Nurse-Led/, file);
+	}
+});

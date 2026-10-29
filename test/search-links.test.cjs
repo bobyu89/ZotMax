@@ -31,6 +31,7 @@ test("every built-in source builds the expected URL", () => {
 	let expected = {
 		"pubmed": `https://pubmed.ncbi.nlm.nih.gov/?term=${e}`,
 		"pubmed-cq": `https://pubmed.ncbi.nlm.nih.gov/clinical/?term=${e}`,
+		"pubmed-sr": `https://pubmed.ncbi.nlm.nih.gov/?term=${sl.encodeQuery("(fall prevention) AND systematic[sb]")}`,
 		"mesh": `https://www.ncbi.nlm.nih.gov/mesh/?term=${e}`,
 		"cinahl": `https://search.ebscohost.com/login.aspx?direct=true&db=rzh&bquery=${e}&type=1&searchMode=And&site=ehost-live`,
 		"embase": "https://www.embase.com/",
@@ -49,6 +50,8 @@ test("every built-in source builds the expected URL", () => {
 		"tw-gov": `https://www.google.com/search?q=${sl.encodeQuery("fall prevention site:mohw.gov.tw OR site:hpa.gov.tw")}`,
 		"nice": `https://www.nice.org.uk/search?q=${e}`,
 		"cdc": `https://search.cdc.gov/search/?query=${e}`,
+		"rnao": `https://www.google.com/search?q=${sl.encodeQuery("fall prevention site:rnao.ca/bpg")}`,
+		"gin": `https://guidelines.ebmportal.com/?q=${e}`,
 	};
 	let cfg = sl.normalizeConfig({});
 	assert.equal(cfg.sources.length, sl.BUILTIN.length);
@@ -66,6 +69,33 @@ test("every built-in source builds the expected URL", () => {
 	}
 	assert.equal(target("guideline-pdf", "跌倒").query, "跌倒 (guideline OR 指引 OR 指南) filetype:pdf");
 	assert.deepEqual(cfg.sources.filter(s => s.needsAccess).map(s => s.id), ["cinahl", "embase", "jbi", "uptodate"]);
+});
+
+test("6S sources: PubMed systematic reviews, RNAO and G-I-N guidelines; free, encoded, the Boolean string kept whole", () => {
+	let q = '("older adults" OR elderly) AND exercise';
+	let sr = target("pubmed-sr", q);
+	assert.equal(sr.query, '(("older adults" OR elderly) AND exercise) AND systematic[sb]', "the whole string in brackets before the filter");
+	assert.equal(sr.url, "https://pubmed.ncbi.nlm.nih.gov/?term=%28%28%22older%20adults%22%20OR%20elderly%29%20AND%20exercise%29%20AND%20systematic%5Bsb%5D");
+	let rnao = target("rnao", "跌倒 falls");
+	assert.equal(rnao.query, "跌倒 falls site:rnao.ca/bpg");
+	assert.equal(rnao.url, "https://www.google.com/search?q=%E8%B7%8C%E5%80%92%20falls%20site%3Arnao.ca%2Fbpg");
+	assert.equal(target("gin", "pressure ulcer").url, "https://guidelines.ebmportal.com/?q=pressure%20ulcer");
+	assert.equal(target("gin", "a&b=c#d").url, "https://guidelines.ebmportal.com/?q=a%26b%3Dc%23d", "no extra parameters");
+	for (let id of ["pubmed-sr", "rnao", "gin"]) {
+		let s = sl.BUILTIN.find(x => x.id === id);
+		assert.equal(s.needsAccess, undefined, `${id} is free`);
+		assert.equal(s.find, undefined, `${id} is not offered for "find this paper"`);
+		assert.equal(s.ci, undefined, `${id}: not live-checked yet`);
+		assert.equal(target(id, "falls").copy, false);
+	}
+	// Placed among their kind: the SR filter after PubMed's, the guidelines after NICE; CDC stays last
+	let ids = sl.BUILTIN.map(s => s.id);
+	assert.equal(ids.indexOf("pubmed-sr"), ids.indexOf("pubmed-cq") + 1);
+	assert.deepEqual(ids.slice(ids.indexOf("nice"), ids.indexOf("nice") + 3), ["nice", "rnao", "gin"]);
+	assert.equal(ids.at(-1), "cdc");
+	let lines = sl.describeSources(sl.normalizeConfig({}));
+	assert.ok(lines.includes("gin｜G-I-N 國際指引圖書館（實測可帶入檢索詞）"), "no CI result shown before the live check has run");
+	assert.ok(lines.includes("rnao｜RNAO 最佳實務指引（常見公開格式）"));
 });
 
 test("the library proxy wraps only sources that need institutional access", () => {

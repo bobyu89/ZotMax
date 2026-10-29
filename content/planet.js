@@ -504,26 +504,104 @@
 	// ---------- 📝 文獻探討大綱: what each island's paragraph should answer (pure, no AI) ----------
 
 	const KEY_PAPERS = 3;
+	// The AI notes' effect_direction (topics.js DIRECTIONS), in the order the outline lists them
+	const DIRECTIONS = ["有效", "無差異", "有害", "不一致"];
+	const UNJUDGED = "未判定";
+	const GROUP_PAPERS = 4;
+	const SETTING_CHARS = 30;
+	// Where the user's own sentence survives: 「✍️ 我的筆記」 sits below the managed block of every topic page (topics.js buildPage)
+	const USER_HEADING = "✍️ 我的筆記";
+	const CLAIM_PROMPT = `這一段你的主張是什麼？用一句話寫在星球主題頁最下面的「${USER_HEADING}」（大綱每次更新都會重寫，寫在那裡才留得住）。`;
+	const CEBM_NOTE = "CEBM 等級是研究設計，不是證據確定性：每個結果的確定性要用 GRADE 判斷（指令「GRADE 證據確定性（目前分類）」；Murad et al., 2016 新證據金字塔）。";
+	// The same with the GRADE feature off: its command is hidden then, so point to the setting instead
+	const CEBM_NOTE_OFF = "CEBM 等級是研究設計，不是證據確定性：每個結果的確定性要用 GRADE 判斷（可在設定開啟「GRADE 證據確定性」功能；Murad et al., 2016 新證據金字塔）。";
+
+	/** CEBM 1–5 of a record; 6 without one (sorts last). */
+	function levelNum(r) {
+		let n = Number.parseInt(r.evidenceLevel, 10);
+		return n >= 1 && n <= 5 ? n : 6;
+	}
+
+	/** Strongest CEBM level first, then newest, then by title. */
+	function byStrength(a, b) {
+		return levelNum(a) - levelNum(b) || String(b.year || "").localeCompare(String(a.year || "")) || String(a.title).localeCompare(String(b.title));
+	}
 
 	/** The island's strongest papers to read and cite first: CEBM level, then design, then newest. */
 	function keyPapers(records, designLabel) {
-		let level = r => {
-			let n = Number.parseInt(r.evidenceLevel, 10);
-			return n >= 1 && n <= 5 ? n : 6;
-		};
 		return records.filter(r => !r.deleted && (r.evidenceLevel || r.studyDesign))
-			.sort((a, b) => level(a) - level(b) || String(b.year || "").localeCompare(String(a.year || "")) || String(a.title).localeCompare(String(b.title)))
+			.sort(byStrength)
 			.slice(0, KEY_PAPERS)
-			.map(r => ({ link: r.link, title: r.title, year: String(r.year || "").slice(0, 4), design: r.studyDesign ? (designLabel ? designLabel(r.studyDesign) : r.studyDesign) : "", level: level(r) < 6 ? String(level(r)) : "" }));
+			.map(r => ({ link: r.link, title: r.title, year: String(r.year || "").slice(0, 4), design: r.studyDesign ? (designLabel ? designLabel(r.studyDesign) : r.studyDesign) : "", level: levelNum(r) < 6 ? String(levelNum(r)) : "" }));
+	}
+
+	function directionOf(r) {
+		return DIRECTIONS.includes(r.direction) ? r.direction : UNJUDGED;
+	}
+
+	/**
+	 * The island's studies by the AI note's effect direction (an AI first reading): [{ direction, n, items: [{ link,
+	 * title, level, verified }] (≤GROUP_PAPERS, strongest first), more }], 有效 … 不一致 then 未判定, empty groups left out.
+	 */
+	function directionGroups(records) {
+		let live = records.filter(r => !r.deleted);
+		return [...DIRECTIONS, UNJUDGED].map((direction) => {
+			let list = live.filter(r => directionOf(r) === direction).sort(byStrength);
+			return {
+				direction, n: list.length, more: Math.max(0, list.length - GROUP_PAPERS),
+				items: list.slice(0, GROUP_PAPERS).map(r => ({ link: r.link, title: r.title, level: levelNum(r) < 6 ? String(levelNum(r)) : "", verified: !!r.appraisalVerified })),
+			};
+		}).filter(g => g.n);
+	}
+
+	/** The judged directions of some records, most common first: [{ direction, n }]; [] when none is judged. */
+	function directionTally(records) {
+		let t = new Map();
+		for (let r of records) if (directionOf(r) !== UNJUDGED) t.set(r.direction, (t.get(r.direction) || 0) + 1);
+		return DIRECTIONS.filter(d => t.get(d)).map(d => ({ direction: d, n: t.get(d) })).sort((a, b) => b.n - a.n);
+	}
+
+	/**
+	 * Studies whose appraisal the user verified point another way than the rest. Counted on studies with a judged
+	 * direction only: ≥2 verified, one most common direction among them, and it is not among the most common
+	 * directions of the unverified ones (which need ≥1 judged). { verified: { direction, k, n }, others: { n, tally:
+	 * [{ direction, n }] } } (k of n verified point that way; n judged others) or null. Never ranks quality by
+	 * appraisal_overall (that is the include／exclude decision).
+	 */
+	function qualityContrast(records) {
+		let live = records.filter(r => !r.deleted && directionOf(r) !== UNJUDGED);
+		let checked = live.filter(r => r.appraisalVerified);
+		if (checked.length < 2) return null;
+		let mine = directionTally(checked);
+		let rest = live.filter(r => !r.appraisalVerified);
+		let others = directionTally(rest);
+		if (!others.length || (mine[1] && mine[1].n === mine[0].n)) return null;
+		if (others.some(o => o.n === others[0].n && o.direction === mine[0].direction)) return null;
+		return { verified: { direction: mine[0].direction, k: mine[0].n, n: checked.length }, others: { n: rest.length, tally: others } };
+	}
+
+	/** The PICO card's 情境, on one line and short; "" when not filled in. */
+	function settingOf(card) {
+		let s = String((card && card.setting) || "").replace(/\s+/g, " ").trim();
+		// By code points, so a character outside the BMP is never cut in half
+		let a = Array.from(s);
+		return a.length > SETTING_CHARS ? a.slice(0, SETTING_CHARS).join("") + "…" : s;
+	}
+
+	/** The transferability question for the PICO card's 情境 (Burchett et al., 2011). */
+	function settingPrompt(setting) {
+		return `你的情境是「${setting}」：這些研究的場域和你的有什麼不同（護病比、病人特性、健保給付）？結果能套用到你的場域嗎？（Burchett et al., 2011）`;
 	}
 
 	/**
 	 * The questions an island's paragraph in the literature review should answer, from its numbers and topicStats:
 	 * whether the results agree, how strong the evidence is, what is missing. Questions, never the paragraph itself.
+	 * more (主張鷹架, while the switch is on): { claim: true, contrast: qualityContrast(), setting: settingOf(card) }.
 	 */
-	function writingPrompts(n, s) {
+	function writingPrompts(n, s, more = {}) {
 		let out = [];
 		if (!n.papers) return out;
+		if (more.claim) out.push(CLAIM_PROMPT);
 		let label = s ? s.verdict.label : "";
 		if (!s || label === "尚無判斷") out.push("先讀完或產生 AI 筆記：還看不出這座島的研究結論，段落要從「研究問了什麼」寫起。");
 		else if (label === "結論分歧" || (s.directions && s.directions["不一致"])) out.push("結果為什麼不一致？比較族群、介入劑量和測量工具（GRADE 的 inconsistency）。");
@@ -532,10 +610,39 @@
 		let best = Number.parseInt(n.best, 10);
 		if (!best || best >= 3) out.push(`最強的證據${best ? `只到 CEBM ${best}` : "還沒有等級"}：寫的時候要說明證據強度有限，避免下過強的結論。`);
 		else out.push(`有 CEBM ${best} 的研究：先用它定調，再用其他研究補充或對照。`);
+		let c = more.contrast;
+		if (c) {
+			let rest = c.others.tally.map(o => `「${o.direction}」${o.n} 篇`).join("、");
+			out.push(`已核對評讀的研究和其他研究方向不同（方向是 AI 初判）：已核對且已判定方向的 ${c.verified.n} 篇中 ${c.verified.k} 篇為「${c.verified.direction}」；其他已判定方向的 ${c.others.n} 篇：${rest}。品質較好的研究怎麼說？`);
+		}
 		let gaps = s ? s.steps.filter(x => x.gap).map(x => x.short) : [];
-		if (gaps.length) out.push(`缺口要寫出來：${gaps.slice(0, 2).join("；")}。這可能就是你研究的理由。`);
+		// Not only "no one has studied it" (gap-spotting): what the field takes for granted (problematization; Sandberg & Alvesson, 2011)
+		if (gaps.length) out.push(`缺口：${gaps.slice(0, 2).join("；")}。為什麼重要？誰會在乎？既有研究背後有什麼你不同意的假設？（Sandberg & Alvesson, 2011）`);
+		if (more.setting) out.push(settingPrompt(more.setting));
 		if (n.papers < 3) out.push(`只有 ${n.papers} 篇：先確認是不是漏找，再決定這座島要寫成一段還是併進別段。`);
 		return out;
+	}
+
+	/**
+	 * The outline's top lines for the whole planet: the GRADE table's certainty per outcome (else what CEBM is not), and
+	 * the setting question once (the PICO card is per planet too; the map's island panels each repeat it).
+	 */
+	function certaintyLines(data) {
+		if (!data.scaffold) return [];
+		let g = (data.certainty || []).filter(o => o && o.outcome);
+		let out = [g.length ? `證據確定性（GRADE 表，以整個星球為單位）：${g.map(o => `${o.outcome} ${o.rating}`).join("；")}` : (data.gradeOn === false ? CEBM_NOTE_OFF : CEBM_NOTE)];
+		if (data.setting) out.push(`❓ ${settingPrompt(data.setting)}`);
+		return out;
+	}
+
+	/** An island's studies by direction: 「🧭 方向（AI 初判）」, a line per direction, a short line per study under it. */
+	function groupLines(groups) {
+		if (!groups || !groups.length) return [];
+		let paper = (k) => {
+			let tags = [k.level ? `CEBM ${k.level}` : "", k.verified ? "已核對" : ""].filter(Boolean);
+			return `\t\t- ${wikilink(k.link, k.title)}${tags.length ? `（${tags.join(" · ")}）` : ""}`;
+		};
+		return ["- 🧭 方向（AI 初判）：", ...groups.flatMap(g => [`\t- ${g.direction}（${g.n} 篇）`, ...g.items.map(paper), ...(g.more ? [`\t\t- 另 ${g.more} 篇`] : [])])];
 	}
 
 	/** 「📝 文獻探討大綱（依島）」: one heading per island with its facts, the questions and the papers to cite first. */
@@ -545,11 +652,16 @@
 		let parts = isl.map((is) => {
 			let facts = [`${is.papers} 篇`, is.design, is.verdict].filter(Boolean).join(" · ");
 			let cite = (is.key || []).map(k => `${wikilink(k.link, k.title)}（${[k.year, k.design, k.level ? `CEBM ${k.level}` : ""].filter(Boolean).join(" · ")}）`);
-			return [`#### ${is.name}（${facts}）`, ...is.prompts.map(q => `- ❓ ${q}`), ...(cite.length ? [`- 📌 先讀、先引用：${cite.join("；")}`] : [])].join("\n");
+			// The claim goes below the managed block: a link to the page's 「✍️ 我的筆記」, never a field in here
+			let ask = q => (q === CLAIM_PROMPT ? `- ✍️ ${q.replace(`「${USER_HEADING}」`, `「[[#${USER_HEADING}|${USER_HEADING}]]」`)}` : `- ❓ ${q}`);
+			// The setting question is asked once at the top, not per island
+			let prompts = data.setting ? is.prompts.filter(q => q !== settingPrompt(data.setting)) : is.prompts;
+			return [`#### ${is.name}（${facts}）`, ...prompts.map(ask), ...(cite.length ? [`- 📌 先讀、先引用：${cite.join("；")}`] : []), ...groupLines(is.groups)].join("\n");
 		});
 		let intro = "每座島寫成文獻探討的一段（或一節），由研究最多的島開始。下面是每段要回答的問題和先讀的文獻，文字由你寫；ZotMax 不替你寫段落。";
-		if (layout !== "board") return [`### 📝 文獻探討大綱（依島）`, intro, ...parts].join("\n\n");
-		return dashboard.foldSection(["## 📝 文獻探討大綱（依島）", intro, ...parts].join("\n\n"));
+		let top = certaintyLines(data);
+		if (layout !== "board") return [`### 📝 文獻探討大綱（依島）`, intro, ...top, ...parts].join("\n\n");
+		return dashboard.foldSection(["## 📝 文獻探討大綱（依島）", intro, ...top, ...parts].join("\n\n"));
 	}
 
 	/** The last TREND_POINTS values of an island's 開發度 (the history, then today's when it differs). */
@@ -564,10 +676,14 @@
 	 *   stats(records) → topics.js topicStats (steps marked gap: true are the island's gaps),
 	 *   designLabel(d), squares(tally), link(path) → an obsidian:// URL or "", planetLink, card: the PICO card | null,
 	 *   bot: topic-bot.js botSummaries() entry | null, botLink, aliases, levelUps, series (planet.history),
-	 *   quests: updateQuests().entry, questLog: completed quests (history.quests), noteLink(vault link) → URL, now }
+	 *   quests: updateQuests().entry, questLog: completed quests (history.quests), noteLink(vault link) → URL, now,
+	 *   scaffold: 主張鷹架 in the outline (claim, direction groups, quality contrast, certainty, setting; default on),
+	 *   grade: [{ outcome, rating }] from the planet's GRADE table | null, gradeOn: the GRADE feature (default on) }
 	 */
 	function planetData(planet, opts = {}) {
 		let now = opts.now || new Date();
+		let scaffold = opts.scaffold !== false;
+		let setting = scaffold ? settingOf(opts.card) : "";
 		let link = opts.link || (() => "");
 		let used = new Set(["hub", "harbor"]);
 		let islands = planet.islands.map((is, k) => {
@@ -585,8 +701,9 @@
 				hint: levelHint(n).text,
 				trend: trendOf((opts.series || {})[is.path], n.dev),
 				verdict: s ? s.verdict.label : "",
-				prompts: writingPrompts(n, s),
+				prompts: writingPrompts(n, s, scaffold ? { claim: true, contrast: qualityContrast(is.records), setting } : {}),
 				key: keyPapers(is.records, opts.designLabel).map(k => Object.assign(k, { url: opts.noteLink ? opts.noteLink(k.link) : "" })),
+				groups: scaffold ? directionGroups(is.records) : [],
 				link: link(is.path),
 			});
 		});
@@ -618,6 +735,11 @@
 			log: islandLog(planet, islands, { imports: bot ? bot.imports : [], levelUps: opts.levelUps, quests: opts.questLog }, now),
 			quests: opts.quests ? questData(opts.quests, opts.noteLink || (() => "")) : null,
 			tour: [],
+			// 📝 the outline's 主張鷹架 and the GRADE table's certainty (per planet, never mapped to islands)
+			scaffold,
+			certainty: scaffold && Array.isArray(opts.grade) ? opts.grade.filter(o => o && String(o.outcome || "").trim()).map(o => ({ outcome: String(o.outcome).trim(), rating: String(o.rating || "") })) : [],
+			gradeOn: opts.gradeOn !== false,
+			setting,
 		};
 		data.tour = tourOf(data, planet);
 		return data;
@@ -907,17 +1029,68 @@
 		}
 	}
 
+	/** The collection at this path in the user library; null when there is none. */
+	function collectionForPath(path) {
+		return Zotero.Collections.getByLibrary(Zotero.Libraries.userLibraryID, true).find(x => scope.ZB.adapter.collectionPath(x) === path) || null;
+	}
+
 	/** The PICO card of the collection at this path in the user library, while the PICO feature is on; null otherwise. */
 	function cardForPath(path) {
 		try {
 			let ZB = scope.ZB;
 			if (!ZB || !ZB.pico || (ZB.features && !ZB.features.isEnabled("pico"))) return null;
-			let c = Zotero.Collections.getByLibrary(Zotero.Libraries.userLibraryID, true).find(x => ZB.adapter.collectionPath(x) === path);
+			let c = collectionForPath(path);
 			return c ? ZB.pico.cardFor(c) : null;
 		}
 		catch (e) {
 			return null;
 		}
+	}
+
+	/**
+	 * An outcome's certainty as the outline shows it (G: grade.js). Only what the user judged: with no step down or up
+	 * chosen or explained it is the start level, said so; with no study ticked either, not rated yet.
+	 */
+	function outcomeRating(o, G) {
+		let n = G.normalizeOutcome(o);
+		let judged = Object.values(n.domains).concat(n.design === "obs" ? Object.values(n.upgrades) : []).some(v => v.level || v.reason);
+		let c = G.certainty(n);
+		if (judged) return G.ratingText(c);
+		return n.studies.length ? `${G.ratingText(c)}（起始等級，尚未評升降級）` : "尚未評等（還沒勾選研究）";
+	}
+
+	/**
+	 * The certainty per outcome in the GRADE table (grade.js, pref grade.tables) of the collection at this path, while
+	 * the GRADE feature is on: [{ outcome, rating: "⊕⊕◯◯ 低" }] (outcomeRating); null without a table or an outcome.
+	 */
+	function gradeForPath(path) {
+		try {
+			let ZB = scope.ZB;
+			if (!ZB || !ZB.grade || !ZB.pico || (ZB.features && !ZB.features.isEnabled("grade"))) return null;
+			let c = collectionForPath(path);
+			let t = c ? ZB.grade.tableFor(c) : null;
+			if (!t || !ZB.grade.hasContent(t)) return null;
+			return t.outcomes.filter(o => o.name).map(o => ({ outcome: o.name, rating: outcomeRating(o, ZB.grade) }));
+		}
+		catch (e) {
+			return null;
+		}
+	}
+
+	/** Whether the GRADE feature (and so its command) is on; on when ZB.features is not there to ask. */
+	function gradeOn() {
+		try {
+			let ZB = scope.ZB;
+			return !(ZB && ZB.features) || !!ZB.features.isEnabled("grade");
+		}
+		catch (e) {
+			return true;
+		}
+	}
+
+	/** 📝 文獻探討大綱's 主張鷹架 (claim, direction groups, quality contrast, certainty, setting): on unless the pref is false. */
+	function scaffoldOn() {
+		return pref("planet.outlineScaffold") !== false;
 	}
 
 	/**
@@ -1009,9 +1182,9 @@
 		CANVAS_SUFFIX,
 		findPlanets, planetOf, islandOf, devOf, stageOf, stageLabel, levelHint, numbers, houses, islandTerms, bridgesOf, seasOf, islandLog, nextHistory,
 		weekStart, questDone, pickQuests, updateQuests, recordQuests, questsIn, questText, questLines,
-		keyPapers, writingPrompts, outlineSection,
+		keyPapers, writingPrompts, outlineSection, directionGroups, qualityContrast, settingOf, certaintyLines, settingPrompt, outcomeRating, CLAIM_PROMPT, CEBM_NOTE, CEBM_NOTE_OFF,
 		islandProgress, progressLine, trendOf,
 		planetData, tourOf, fillTemplate, mapNote, mapLink, planetCanvas, canvasIsOurs, planetSection, homePlanets, backLink,
-		enabled, init, readHistory, saveHistory, readQuests, saveQuests, cardForPath, writeMap, writeCanvas, openForCollection,
+		enabled, init, readHistory, saveHistory, readQuests, saveQuests, cardForPath, gradeForPath, gradeOn, scaffoldOn, writeMap, writeCanvas, openForCollection,
 	};
 });

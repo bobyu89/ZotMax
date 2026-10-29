@@ -55,12 +55,14 @@
 	// page opens and the query is copied.
 	// ci: the live check's result on CI_DATE — "ok" results page (or, for "copy", the start page
 	// opens), "login" the subscription login page (expected), "blocked" the site turns away cloud
-	// servers (inconclusive; works in a normal browser)
+	// servers (inconclusive; works in a normal browser); none yet for a source added after CI_DATE
 	// find: how "find this paper" searches here ("pubmed", "europepmc", "cinahl", "title"; false = not offered)
 	// lang: "en", "zh" or "any" — Chinese queries list the "zh" sources first
 	const BUILTIN = [
 		{ id: "pubmed", name: "PubMed", desc: "MEDLINE 生物醫學文獻（預設 Best Match 排序）", url: "https://pubmed.ncbi.nlm.nih.gov/?term={q}", lang: "en", find: "pubmed", check: "verified", ci: "ok" },
 		{ id: "pubmed-cq", name: "PubMed Clinical Queries", desc: "依臨床問題類別（治療、診斷、病因、預後）過濾的 PubMed", url: "https://pubmed.ncbi.nlm.nih.gov/clinical/?term={q}", lang: "en", check: "verified", ci: "ok" },
+		// PubMed limited to systematic reviews (the systematic[sb] subset): the 系統性回顧 layer of the PICO 問題卡's 6S order
+		{ id: "pubmed-sr", name: "PubMed 系統性回顧", desc: "PubMed 只看系統性回顧（systematic[sb] 過濾）", url: "https://pubmed.ncbi.nlm.nih.gov/?term={q}", query: "({q}) AND systematic[sb]", lang: "en", check: "verified" },
 		{ id: "mesh", name: "MeSH Database", desc: "查醫學主題詞（MeSH）的定義、同義詞與樹狀結構", url: "https://www.ncbi.nlm.nih.gov/mesh/?term={q}", lang: "en", check: "verified", ci: "ok" },
 		{ id: "cochrane", name: "Cochrane Library", desc: "Cochrane 系統性回顧與臨床試驗（CENTRAL）", url: "https://www.cochranelibrary.com/search?p_p_id=scolarissearchresultsportlet_WAR_scolarissearchresults&p_p_lifecycle=0&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchType=basic&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchBy=6&_scolarissearchresultsportlet_WAR_scolarissearchresults_searchText={q}", lang: "en", find: "title", check: "verified", ci: "ok" },
 		{ id: "cinahl", name: "CINAHL", desc: "護理與健康相關文獻（EBSCOhost；預設 CINAHL Plus with Full Text，資料庫代碼 rzh）", url: "https://search.ebscohost.com/login.aspx?direct=true&db=rzh&bquery={q}&type=1&searchMode=And&site=ehost-live", needsAccess: true, lang: "en", find: "cinahl", check: "guide", ci: "login" },
@@ -79,6 +81,9 @@
 		{ id: "guideline-pdf", name: "Google 指引 PDF", desc: "用 Google 找臨床指引 PDF（filetype:pdf）", url: "https://www.google.com/search?q={q}", query: "{q} (guideline OR 指引 OR 指南) filetype:pdf", lang: "any", check: "common", ci: "blocked" },
 		{ id: "tw-gov", name: "衛福部／國健署", desc: "用 Google 站內搜尋 mohw.gov.tw、hpa.gov.tw 的指引與公告", url: "https://www.google.com/search?q={q}", query: "{q} site:mohw.gov.tw OR site:hpa.gov.tw", lang: "zh", check: "common", ci: "blocked" },
 		{ id: "nice", name: "NICE", desc: "英國 NICE 臨床指引", url: "https://www.nice.org.uk/search?q={q}", lang: "en", check: "verified", ci: "ok" },
+		// rnao.ca turns away automated requests, so its guidelines are searched through Google (site:rnao.ca/bpg)
+		{ id: "rnao", name: "RNAO 最佳實務指引", desc: "加拿大安大略省註冊護理師協會（RNAO）的護理最佳實務指引（Google 站內搜尋 rnao.ca/bpg）", url: "https://www.google.com/search?q={q}", query: "{q} site:rnao.ca/bpg", lang: "en", check: "common" },
+		{ id: "gin", name: "G-I-N 國際指引圖書館", desc: "Guidelines International Network 的 International Guidelines Library（免費搜尋）", url: "https://guidelines.ebmportal.com/?q={q}", lang: "en", check: "verified" },
 		{ id: "cdc", name: "CDC", desc: "美國疾病管制與預防中心", url: "https://search.cdc.gov/search/?query={q}", lang: "en", check: "verified", ci: "ok" },
 	];
 
