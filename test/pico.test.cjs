@@ -315,3 +315,152 @@ test("tagTerm and keywordSuggestions: subject terms from Zotero tags (MeSH quali
 	assert.ok(section.indexOf("## 🔎 檢索詞建議") < section.indexOf("## 沒有結構化資料的文獻"));
 	assert.doesNotMatch(P.noteSection(rows(), CARD, { scopeName: "跌倒回顧", generatedAt: "2026-10-13T01:00:00.000Z" }), /檢索詞建議/);
 });
+
+test("card mode: 臨床問題 by default (also for cards saved before modes), 論文／系統性回顧 when the card says so, kept once chosen", () => {
+	assert.deepEqual(P.MODES.map(m => m.id), ["clinical", "review"]);
+	assert.equal(P.emptyCard().mode, "clinical");
+	assert.equal(P.normalizeCard(null).mode, "clinical");
+	let old = Object.assign({}, CARD);
+	delete old.mode;
+	assert.equal(P.normalizeCard(old).mode, "clinical", "an old card without a mode");
+	assert.equal(P.normalizeCard(Object.assign({}, old, { notes: "碩士論文：系統性文獻回顧與統合分析" })).mode, "review");
+	assert.equal(P.normalizeCard(Object.assign({}, old, { question: "A scoping review of fall prevention" })).mode, "review");
+	for (let question of ["運動介入對老人跌倒的後設分析", "出院準備服務的範疇回顧", "範圍界定回顧：照顧者需求"]) {
+		assert.equal(P.normalizeCard(Object.assign({}, old, { question })).mode, "review", question);
+	}
+	// A clinical card's notes often mention finding a review; that alone does not make it a review card
+	for (let notes of ["臨床：先查有沒有 Cochrane 的 systematic review", "先找 systematic review 再看 RCT", "碩士論文"]) {
+		assert.equal(P.normalizeCard(Object.assign({}, old, { notes })).mode, "clinical", notes);
+	}
+	assert.equal(P.normalizeCard(Object.assign({}, old, { question: "這是非系統性回顧的臨床問題" })).mode, "clinical", "a negation is not a review");
+	assert.equal(P.normalizeCard(Object.assign({}, old, { question: "not a systematic review" })).mode, "clinical");
+	assert.equal(P.normalizeCard(Object.assign({}, old, { notes: "系統性回顧", mode: "clinical" })).mode, "clinical", "the user's choice wins");
+	assert.equal(P.normalizeCard(Object.assign({}, old, { mode: "review" })).mode, "review");
+	assert.equal(P.normalizeCard(Object.assign({}, old, { mode: "bogus" })).mode, "clinical");
+	// Round trip through JSON (the pref) keeps it; the mode alone is not content
+	assert.equal(P.normalizeCard(JSON.parse(JSON.stringify(P.normalizeCard({ mode: "review", p: "老人" })))).mode, "review");
+	assert.equal(P.cardHasContent({ mode: "review" }), false);
+	assert.equal(P.modeOf({ mode: "review" }).layerNote, "每一層都要查，並記下查了什麼");
+	assert.equal(P.modeOf({}).layerNote, "這層找到可用的就可以停");
+	assert.doesNotMatch(P.modeOf({ mode: "review" }).lead + P.modeOf({ mode: "review" }).layerNote, /停/, "a review never stops at a layer");
+});
+
+test("typeHelper: five yes/no questions, one per real question type, in the treatment → meaning order; text only", () => {
+	let h = P.typeHelper();
+	assert.equal(h.length, 5);
+	assert.deepEqual(h.map(x => x.type), ["treatment", "diagnosis", "etiology", "prognosis", "meaning"]);
+	let ids = new Set(P.TYPES.map(t => t.id));
+	for (let x of h) {
+		assert.ok(ids.has(x.type), x.type);
+		assert.equal(x.label, P.TYPES.find(t => t.id === x.type).label);
+		assert.match(x.ask, /？$/, "a yes/no question");
+		assert.ok(x.why);
+	}
+});
+
+test("parseGuidelineLinks: 「名稱|URL」 per line, http(s) only; malformed, duplicate and comment lines skipped", () => {
+	let r = P.parseGuidelineLinks([
+		"臺灣護理學會 | https://www.twna.org.tw/",
+		"臺灣實證護理學會｜https://www.tebna.org.tw/search?q={q}",
+		"# 我的註解",
+		"",
+		"壞的|ftp://x.org/",
+		"腳本|javascript:alert(1)",
+		"|https://noname.org/",
+		"沒有分隔線 https://x.org/",
+		"有空白|https://x.org/a b",
+		"重複|https://www.twna.org.tw/",
+	].join("\r\n"));
+	assert.deepEqual(r.links, [
+		{ name: "臺灣護理學會", url: "https://www.twna.org.tw/" },
+		{ name: "臺灣實證護理學會", url: "https://www.tebna.org.tw/search?q={q}" },
+	]);
+	assert.equal(r.skipped, 6);
+	assert.deepEqual(P.parseGuidelineLinks(undefined), { links: [], skipped: 0 });
+	assert.deepEqual(P.parseGuidelineLinks(null).links, []);
+	let many = Array.from({ length: 12 }, (_, k) => `站${k}|https://s${k}.org/`).join("\n");
+	assert.equal(P.parseGuidelineLinks(many).links.length, 10, "at most ten");
+});
+
+test("searchLayers: 指引 → 摘要型資源 → 系統性回顧 → 單篇研究; P and I only for the top two; custom guideline pages; empty layers left out", () => {
+	const sl = require("../content/search-links.js");
+	let cfg = sl.normalizeConfig({});
+	let build = (s, query) => sl.buildTarget(s, query, cfg);
+	let q = P.cardQuery(CARD);
+	assert.deepEqual(P.broadQuery(q), {
+		en: '"older inpatients" AND "nurse-led exercise"',
+		all: "65 歲以上住院病人 older inpatients AND 護理師主導運動 nurse-led exercise",
+	});
+	let links = P.parseGuidelineLinks("臺灣護理學會|https://www.twna.org.tw/\n實證護理|https://ebn.example.tw/s?kw={q}").links;
+	let layers = P.searchLayers(q, cfg.sources, { build, guidelineLinks: links });
+	assert.deepEqual(layers.map(l => l.id), ["guideline", "summary", "review", "study"]);
+	assert.deepEqual(layers.map(l => l.label), ["指引", "摘要型資源", "系統性回顧", "單篇研究"]);
+	let ids = l => layers.find(x => x.id === l).targets.map(t => t.id);
+	assert.deepEqual(ids("guideline"), ["nice", "rnao", "gin", "tw-gov", "guideline-pdf", "pico-guideline-1", "pico-guideline-2"]);
+	assert.deepEqual(ids("summary"), ["trip", "jbi", "uptodate"], "only summaries search-links already lists");
+	assert.deepEqual(ids("review"), ["cochrane", "pubmed-sr"]);
+	assert.deepEqual(ids("study"), ["pubmed", "cinahl", "scholar", "airiti", "ndltd"]);
+	let t = (l, id) => layers.find(x => x.id === l).targets.find(x => x.id === id);
+	assert.equal(t("guideline", "gin").url, "https://guidelines.ebmportal.com/?q=%22older%20inpatients%22%20AND%20%22nurse-led%20exercise%22", "guidelines: P and I only");
+	assert.equal(layers[0].broad, true);
+	assert.equal(layers[0].query, '"older inpatients" AND "nurse-led exercise"');
+	assert.equal(layers[0].queryAll, P.broadQuery(q).all, "臺灣政府 and the user's pages get the words as written");
+	assert.equal(layers[1].queryAll, "", "the summary sites take the English words only");
+	assert.ok(layers.every(l => l.note === ""));
+	assert.equal(t("review", "pubmed-sr").query, `(${q.en}) AND systematic[sb]`, "reviews: the full string");
+	assert.equal(t("study", "pubmed").url, sl.buildTarget(sl.findSource(cfg, "pubmed"), q.en, cfg).url);
+	assert.equal(t("study", "airiti").query, q.all, "Chinese sources get the words as written");
+	// The user's pages: without {q} the page opens and the words are copied; with {q} they go into the URL
+	let twna = t("guideline", "pico-guideline-1");
+	assert.deepEqual([twna.name, twna.url, twna.copy, twna.query], ["臺灣護理學會", "https://www.twna.org.tw/", true, P.broadQuery(q).all]);
+	assert.equal(t("guideline", "pico-guideline-2").url, `https://ebn.example.tw/s?kw=${sl.encodeQuery(P.broadQuery(q).all)}`);
+	// English only: no Chinese sources; turned-off sources leave their layer out
+	let en = P.cardQuery({ p: "older adults", i: "exercise", o: "falls" });
+	let off = sl.normalizeConfig({ disabled: "trip jbi uptodate" });
+	let enLayers = P.searchLayers(en, off.sources, { build: (s, x) => sl.buildTarget(s, x, off) });
+	assert.deepEqual(enLayers.map(l => l.id), ["guideline", "review", "study"], "no summary layer without its sources");
+	assert.deepEqual(enLayers[0].targets.map(x => x.id), ["nice", "rnao", "gin", "guideline-pdf"]);
+	assert.deepEqual(enLayers[2].targets.map(x => x.id), ["pubmed", "cinahl", "scholar"]);
+	assert.ok(enLayers.every(l => l.queryAll === "" && l.note === ""), "English only: one set of words, nothing missing");
+	// P and I in Chinese only: the English guideline and summary sites have nothing to search; the layers stay, with a note
+	let zh = P.cardQuery({ p: "老人", i: "運動", o: "falls" });
+	let zhLayers = P.searchLayers(zh, cfg.sources, { build, guidelineLinks: links });
+	assert.deepEqual(zhLayers.map(l => l.id), ["guideline", "summary", "review", "study"], "the top-down order stays visible");
+	assert.deepEqual(zhLayers[0].targets.map(x => x.id), ["tw-gov", "guideline-pdf", "pico-guideline-1", "pico-guideline-2"]);
+	assert.equal(zhLayers[0].note, "P、I 沒有英文詞，這層的英文資料庫未列出。");
+	assert.deepEqual(zhLayers[1].targets, []);
+	assert.equal(zhLayers[1].note, "P、I 沒有英文詞，這層的英文資料庫未列出。");
+	assert.equal(zhLayers[2].note, "", "the full string has falls");
+	// Only O written: the top layers fall back to the full string; nothing at all → no layers
+	let onlyO = P.cardQuery({ o: "falls" });
+	assert.equal(P.searchLayers(onlyO, cfg.sources, { build })[0].query, "falls");
+	assert.deepEqual(P.searchLayers(null, cfg.sources), []);
+	assert.deepEqual(P.LAYERS.map(l => l.id), ["guideline", "summary", "review", "study"]);
+});
+
+test("checkCard: qualitative questions get the qualitative terms and CINAHL; diagnosis questions hear that accuracy words usually stay out of the string", () => {
+	let meaning = P.checkCard({ type: "meaning", p: "家屬 family caregivers", i: "末期照護決策 end-of-life decisions", c: "加護病房 ICU", question: "x" });
+	let qual = meaning.find(f => /質性問題/.test(f.text));
+	assert.ok(qual, JSON.stringify(meaning));
+	assert.equal(qual.level, "info");
+	assert.match(qual.text, /qualitative、interview\*、phenomenolog\*、grounded theory、focus group\*/);
+	assert.match(qual.text, /CINAHL/);
+	assert.match(qual.text, /Booth, 2016；Methley et al\., 2014/);
+	let withTerms = P.checkCard({ type: "meaning", p: "family caregivers", i: "end-of-life decisions qualitative interview", c: "ICU", question: "x" });
+	assert.ok(!withTerms.some(f => /質性問題/.test(f.text)), "already has qualitative words");
+	let inNotes = P.checkCard({ type: "meaning", p: "stroke caregivers 照顧者", i: "caregiving experience", c: "home care", notes: "qualitative", question: "x" });
+	assert.ok(inNotes.some(f => /質性問題/.test(f.text)), "the notes never reach the search string");
+	assert.ok(!P.checkCard({ type: "meaning" }).some(f => /質性問題/.test(f.text)), "nothing written yet");
+	assert.ok(!P.checkCard(CARD).some(f => /質性問題/.test(f.text)), "only for 意義／經驗");
+	// Diagnosis: the test and the target condition are searched; accuracy words usually stay out
+	let dxCard = { type: "diagnosis", p: "急診老人 older ED patients", i: "Morse Fall Scale", c: "實際跌倒 observed falls", o: "跌倒高風險 fall risk", setting: "急診", question: "x" };
+	assert.deepEqual(P.checkCard(dxCard), [], "a complete diagnosis card can be all clear");
+	let dx = P.checkCard(Object.assign({}, dxCard, { o: "跌倒高風險 fall risk, sensitivity, specificity" }));
+	let o = dx.find(f => /診斷準確度/.test(f.text));
+	assert.equal(o.level, "info");
+	assert.equal(o.field, "o");
+	assert.equal(o.text, "診斷準確度的問題：sensitivity、specificity 這類準確度的詞通常不放進檢索式，很多研究的標題和摘要不會寫，放進去容易漏掉研究；用檢測／工具（I）和要診斷的狀況（O）去找就好。");
+	assert.equal(P.checkCard(Object.assign({}, dxCard, { c: "金標準的敏感度" })).find(f => /診斷準確度/.test(f.text)).field, "c");
+	assert.ok(!P.checkCard({ type: "treatment", p: "x", o: "sensitivity" }).some(f => /診斷準確度/.test(f.text)), "only for diagnosis questions");
+	assert.ok(!P.checkCard(CARD).some(f => /診斷準確度/.test(f.text)));
+});

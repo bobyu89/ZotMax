@@ -109,6 +109,7 @@
 				<checkbox label="一起產生「首頁」和每個 Zotero 分類的「主題頁」（證據說什麼、趨勢、研究缺口）" preference="extensions.zotero-bridge.dashboard.topicPages"/>
 				<checkbox label="每個主題頁旁邊產生「證據地圖」Canvas（依結論方向分組的文獻卡片）" preference="extensions.zotero-bridge.dashboard.canvas"/>
 				<checkbox label="主題頁加上「星球與島嶼」：有子分類的分類是星球、子分類是島（開發度、缺口），旁邊產生可在瀏覽器開啟的群島地圖" preference="extensions.zotero-bridge.dashboard.planet"/>
+				<checkbox label="星球的「文獻探討大綱」加上主張鷹架：每座島問你的主張、依結論方向（AI 初判）列研究、已核對研究的方向對照、證據確定性與你的情境（只提問，不代寫）" preference="extensions.zotero-bridge.planet.outlineScaffold"/>
 			</vbox>
 		</groupbox>
 
@@ -420,6 +421,10 @@
 					<html:input id="zb-pico-folder" type="text" preference="extensions.zotero-bridge.pico.folder" style="flex: 1"/>
 					<button data-l10n-id="zotero-bridge-pico-folder-pick" label="選擇資料夾…" oncommand="ZoteroBridgePrefs.pickPicoFolder()"/>
 				</hbox>
+			</html:div>
+			<html:div class="zb-field">
+				<html:label for="zb-pico-guideline-links" data-search-strings-raw="guideline, 6S, 指引, 臨床指引, 學會">自訂指引網址（問題卡「指引」層，一行一個「名稱|URL」；網址裡的 {q} 會換成搜尋詞）：</html:label>
+				<html:textarea id="zb-pico-guideline-links" rows="3" preference="extensions.zotero-bridge.pico.guidelineLinks" placeholder="臺灣護理學會|https://www.twna.org.tw/&#10;我的醫院實證中心|https://example.org/search?q={q}"/>
 			</html:div>
 		</groupbox>
 	</vbox>

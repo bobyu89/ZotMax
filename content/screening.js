@@ -269,6 +269,52 @@
 		return m ? m[0] : "";
 	}
 
+	/** The PubMed ID: the record's pmid, else a 「PMID: 123」 line in its Extra (how Zotero stores it); "" without one. */
+	function pmidOf(record) {
+		let m = /^\s*(?:PMID:\s*)?(\d{1,9})\s*$/i.exec(String(record.pmid || "")) || /^\s*PMID:\s*(\d{1,9})\s*$/im.exec(String(record.extra || ""));
+		return m ? m[1] : "";
+	}
+
+	/** Letters and digits only, half-width, lower case: 「J. Nurs.」 → jnurs, 「７０」 → 70. */
+	function normalizeKey(text) {
+		return String(text || "")
+			.replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+			.normalize("NFKD")
+			.replace(/[̀-ͯ]/g, "")
+			.toLowerCase()
+			.replace(/[^\p{L}\p{N}]+/gu, "");
+	}
+
+	/** The first page: what comes before a dash (「45-56」 → 45, 「e1023」 → e1023); "" without a digit. */
+	function firstPage(pages) {
+		let first = String(pages || "").replace(/[！-～]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+			.split(/[-‐‑‒–—―−~,，]/)[0];
+		let key = normalizeKey(first);
+		return /\d/.test(key) ? key : "";
+	}
+
+	/**
+	 * Where the record was printed: journal|year|volume|first page, one key per name of the journal (the
+	 * full name and the abbreviation); [] unless all four are there.
+	 */
+	function citationKeys(record) {
+		let year = yearOf(record);
+		let volume = normalizeKey(record.volume);
+		let page = firstPage(record.pages);
+		if (!year || !volume || !page) return [];
+		let names = [...new Set([record.publication, record.journalAbbreviation].map(normalizeKey).filter(Boolean))];
+		return names.map(name => `${name}|${year}|${volume}|${page}`);
+	}
+
+	// A group with a Chinese and an English title: the two language versions of one article (a 《護理雜誌》
+	// article from Airiti and from PubMed), or two articles; only the user can tell
+	const BILINGUAL_NOTE = "可能是中英文版本，請確認";
+	// Han without Kana or Hangul: a Japanese (Kanji and Kana) or Korean title is neither Chinese nor English
+	const CJK_OTHER = /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+	const isHanTitle = r => /\p{Script=Han}/u.test(String(r.title || "")) && !CJK_OTHER.test(String(r.title || ""));
+	const isLatinTitle = r => !/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(String(r.title || ""))
+		&& /\p{Script=Latin}/u.test(String(r.title || ""));
+
 	// The record to keep in a group: not already marked duplicate, already screened, has a DOI,
 	// an abstract and attachments, then the oldest
 	function keepOrder(cfg) {
@@ -288,10 +334,15 @@
 	}
 
 	/**
-	 * Likely duplicates: the same DOI, or the same normalized title and year. Titles only match
-	 * when the records don't carry two different DOIs (an erratum, a preprint with its own DOI).
-	 * @param {object[]} records { id, title, year, date, doi, tags, hasAbstract, attachments, dateAdded }
-	 * @returns {Array<{ keep, duplicates, basis: string[] }>} groups of 2+ records
+	 * Likely duplicates: the same DOI, the same PMID, the same normalized title and year, or the same
+	 * journal, year, volume and first page (all four there and equal). Titles and journal-year-volume-page
+	 * only match when the records don't carry two different DOIs (an erratum, a preprint with its own DOI, a
+	 * letter and its reply on one page); journal-year-volume-page also not when the issues differ (journals
+	 * that start each issue at page 1). Groups are candidates for the
+	 * user to confirm; nothing is merged. A group with a Chinese and an English title gets a note.
+	 * @param {object[]} records { id, title, year, date, doi, pmid | extra, publication, journalAbbreviation,
+	 *   volume, issue, pages, tags, hasAbstract, attachments, dateAdded }
+	 * @returns {Array<{ keep, duplicates, basis: string[], note? }>} groups of 2+ records
 	 */
 	function findDuplicates(records, cfg) {
 		cfg = normalizeConfig(cfg);
@@ -312,24 +363,37 @@
 			}
 			links.push({ id: list[0].id, basis });
 		};
+		// Records with two different DOIs are different articles: only those without a DOI stay together
+		let sameDOI = (list) => {
+			let dois = new Set(list.map(r => normalizeDOI(r.doi)).filter(Boolean));
+			return dois.size > 1 ? list.filter(r => !normalizeDOI(r.doi)) : list;
+		};
+		// keyOf: one key, or a list of keys (a record can sit in several buckets)
 		let bucket = (keyOf) => {
 			let map = new Map();
 			for (let r of records) {
-				let key = keyOf(r);
-				if (!key) continue;
-				if (!map.has(key)) map.set(key, []);
-				map.get(key).push(r);
+				let keys = keyOf(r);
+				for (let key of Array.isArray(keys) ? keys : [keys]) {
+					if (!key) continue;
+					if (!map.has(key)) map.set(key, []);
+					if (!map.get(key).includes(r)) map.get(key).push(r);
+				}
 			}
 			return [...map.values()].filter(list => list.length > 1);
 		};
 		for (let list of bucket(r => normalizeDOI(r.doi))) join(list, "DOI 相同");
+		for (let list of bucket(pmidOf)) join(list, "PMID 相同");
 		for (let list of bucket((r) => {
 			let t = normalizeTitle(r.title);
 			return t.length >= MIN_TITLE_CHARS ? `${t}|${yearOf(r)}` : "";
 		})) {
-			let dois = new Set(list.map(r => normalizeDOI(r.doi)).filter(Boolean));
-			let members = dois.size > 1 ? list.filter(r => !normalizeDOI(r.doi)) : list;
+			let members = sameDOI(list);
 			if (members.length > 1) join(members, "標題與年份相同");
+		}
+		for (let list of bucket(citationKeys)) {
+			let members = sameDOI(list);
+			if (new Set(members.map(r => normalizeKey(r.issue)).filter(Boolean)).size > 1) continue;
+			if (members.length > 1) join(members, "期刊、年、卷、起始頁相同");
 		}
 		let groups = new Map();
 		for (let r of records) {
@@ -343,7 +407,9 @@
 			if (list.length < 2) continue;
 			list.sort(order);
 			let basis = [...new Set(links.filter(l => find(l.id) === root).map(l => l.basis))];
-			out.push({ keep: list[0], duplicates: list.slice(1), basis });
+			let group = { keep: list[0], duplicates: list.slice(1), basis };
+			if (list.some(isHanTitle) && list.some(isLatinTitle)) group.note = BILINGUAL_NOTE;
+			out.push(group);
 		}
 		out.sort((a, b) => String(a.keep.title || "").localeCompare(String(b.keep.title || "")));
 		return out;
@@ -892,7 +958,8 @@
 		let ZB = scope.ZB;
 		let lib = ZB.adapter.libraryInfo(item.libraryID);
 		// Item types without a DOI field keep it in Extra ("DOI: 10.…")
-		let doi = field(item, "DOI") || ((/^\s*DOI:\s*(\S+)/im.exec(field(item, "extra")) || [])[1] || "");
+		let extra = field(item, "extra");
+		let doi = field(item, "DOI") || ((/^\s*DOI:\s*(\S+)/im.exec(extra) || [])[1] || "");
 		return {
 			id: item.id,
 			key: item.key,
@@ -901,8 +968,13 @@
 			year: field(item, "year"),
 			date: field(item, "date"),
 			doi,
+			pmid: pmidOf({ extra }),
 			catalog: field(item, "libraryCatalog"),
 			publication: field(item, "publicationTitle"),
+			journalAbbreviation: field(item, "journalAbbreviation"),
+			volume: field(item, "volume"),
+			issue: field(item, "issue"),
+			pages: field(item, "pages"),
 			creators: item.getCreatorsJSON(),
 			tags: item.getTags().map(t => t.tag),
 			dateAdded: item.dateAdded || "",
@@ -994,7 +1066,7 @@
 
 	function describeGroup(group) {
 		let name = r => `「${String(r.title || r.key).slice(0, 60)}」${yearOf(r) ? `（${yearOf(r)}）` : ""}`;
-		return `${name(group.keep)} ← ${group.duplicates.length} 筆（${group.basis.join("、")}）`;
+		return `${name(group.keep)} ← ${group.duplicates.length} 筆（${group.basis.join("、")}）${group.note ? `：${group.note}` : ""}`;
 	}
 
 	/** Find likely duplicates in a review collection and, after confirmation, tag all but one per group. */
@@ -1007,7 +1079,7 @@
 		let groups = findDuplicates(records, cfg);
 		let headline = "ZotMax：找重複";
 		if (!groups.length) {
-			ZB.main.notify(headline, `「${collection.name}」的 ${records.length} 筆文獻中沒有找到可能重複的文獻（比對 DOI，以及標題＋年份）。`);
+			ZB.main.notify(headline, `「${collection.name}」的 ${records.length} 筆文獻中沒有找到可能重複的文獻（比對 DOI、PMID、標題＋年份，以及期刊＋年＋卷＋起始頁）。`);
 			return { groups: 0, tagged: 0 };
 		}
 		let todo = groups.flatMap(g => g.duplicates.filter(r => !readState(r.tags, cfg).duplicate));
@@ -1291,7 +1363,7 @@
 		NOTION_ANCHOR, NOTION_ANCHOR_PREFIXES, isNotionAnchor, REVIEW_FOLDER, DEFAULT_OTHER_SOURCES,
 		parseReasons, parseSourceList, isOtherMethod, normalizeConfig, stageTag, duplicateTag, reasonTag, decisionTags, readState, isScreeningTag, hasDecision,
 		planChange, describeState, describeChange,
-		normalizeDOI, normalizeTitle, yearOf, findDuplicates,
+		normalizeDOI, normalizeTitle, yearOf, pmidOf, firstPage, citationKeys, findDuplicates,
 		computePrisma, checkCounts, buildMermaid, countsTable, issuesMarkdown, evidenceRow, sortRows, evidenceTable,
 		csvCell, buildCSV, buildReviewSection, boardReviewSection, frontmatterFor, buildReviewNote, notionBlocks,
 		config, itemRecord, setDecision, renderPaneRow, paneSummary, dedupCollection, generateReport, notionParent, syncNotionPage,

@@ -101,6 +101,91 @@
 	margin-top: var(--zb-space-2);
 }
 
+/* 不確定是哪一種？: a folded list of yes/no questions under the type, each question in Ink, the answer in Pencil */
+.zb-pc-helper {
+	margin-top: var(--zb-space-2);
+	max-width: var(--zb-measure);
+}
+.zb-pc-helper > html|summary {
+	cursor: pointer;
+	color: var(--zb-text-muted);
+}
+.zb-pc-helper > html|summary:focus-visible {
+	outline: 2px solid var(--zb-accent);
+	outline-offset: 1px;
+}
+.zb-pc-helper-list {
+	margin: var(--zb-space-2) 0 0;
+	padding-left: 1.2em;
+}
+.zb-pc-helper-list > html|li {
+	margin: var(--zb-space-1) 0;
+}
+
+/* the card's mode: two radios on one line, wrapping when narrow; the line under them says how to use the layers */
+.zb-pc-mode {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--zb-space-1) var(--zb-space-3);
+	margin: var(--zb-space-2) 0 0;
+	padding: 0;
+	border: none;
+	max-width: var(--zb-measure);
+}
+.zb-pc-mode > html|legend {
+	float: left;
+	width: 100%;
+	padding: 0;
+	margin-bottom: var(--zb-space-1);
+}
+.zb-pc-mode-option {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--zb-space-1);
+}
+.zb-pc-mode-option > html|input:focus-visible {
+	outline: 2px solid var(--zb-accent);
+	outline-offset: 1px;
+}
+.zb-pc-mode-lead {
+	margin: var(--zb-space-1) 0 0;
+	max-width: var(--zb-measure);
+}
+.zb-pc-mode[hidden],
+.zb-pc-mode-lead[hidden] {
+	display: none;
+}
+
+/* 先上層: the 6S layers as a numbered list, top layer first; each: name (600) · the mode's note in Pencil, hint, buttons */
+.zb-pc-layers {
+	margin: var(--zb-space-3) 0 0;
+	padding-left: 1.4em;
+	max-width: var(--zb-measure);
+}
+.zb-pc-layers[hidden] {
+	display: none;
+}
+.zb-pc-layer {
+	margin: 0 0 var(--zb-space-3);
+}
+.zb-pc-layer-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0 var(--zb-space-2);
+}
+.zb-pc-layer-note {
+	color: var(--zb-text-muted);
+}
+.zb-pc-layer > html|p {
+	margin: var(--zb-space-1) 0 0;
+	overflow-wrap: anywhere;
+}
+.zb-pc-layer > .zb-pc-links {
+	margin-top: var(--zb-space-1);
+}
+
 /* 刪除這張卡 sits with the other buttons but reads as the quiet choice */
 .zb-pc-delete {
 	margin-right: auto;

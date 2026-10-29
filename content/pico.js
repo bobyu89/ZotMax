@@ -8,7 +8,12 @@
  *            coaching hint per element and a live 聚焦檢查 (checkCard: pure rules, no AI), can compose a sentence
  *            from the elements on request (composeQuestion; the user edits it), and, while 醫學資料庫搜尋連結 is on,
  *            shows the search string the elements make (search-links.js picoQuery) with links into the
- *            databases. The question is written by the user; nothing here calls an AI or goes online.
+ *            databases, grouped top-down by the 6S order (searchLayers: 指引 → 摘要型資源 → 系統性回顧 → 單篇研究;
+ *            DiCenso et al., 2009; Alonso-Coello et al., 2010), plus the user's own guideline pages (the pref
+ *            pico.guidelineLinks, one 「名稱|URL」 per line). The card's mode says how to use the layers: 臨床問題
+ *            (stop at the first layer with a usable answer) or 論文／系統性回顧 (search every layer and record it).
+ *            「不確定是哪一種？」 explains the question types with yes/no questions; the user still picks the type.
+ *            The question is written by the user; nothing here calls an AI or goes online.
  *   PICO 表   the selected items (or a collection: its full-text-included studies once screening has started)
  *            as one table: citation, design, N, P, I, C, O, 主要結果, evidence level, appraisal, and, with a
  *            card, 對照本題 (matchCard: a word match per element, never a judgement). The values come from each
@@ -48,9 +53,7 @@
 	const USER_HEADING = "✍️ 我的筆記";
 	const NOT_REPORTED_RE = /^(?:n\/?a|null|none|nil|未報告|未提及|不適用|無|沒有)$/i;
 	const MAX_OUTCOMES = 3;
-	// Search links for the card's search string (search-links.js source IDs): English words, and the fields as written
-	const EN_SOURCES = ["pubmed", "cinahl", "cochrane", "scholar"];
-	const ALL_SOURCES = ["scholar", "airiti", "ndltd"];
+	const MAX_GUIDELINE_LINKS = 10;
 
 	/**
 	 * Question types. labels: what P, I, C and O mean for that type (質性 questions follow PICo: the phenomenon of
@@ -99,6 +102,50 @@
 			} },
 	];
 	const TYPE_BY_ID = new Map(TYPES.map(t => [t.id, t]));
+
+	/**
+	 * 「不確定是哪一種？」: one yes/no question per question type, with why. An explanation only: nothing here sets the
+	 * type or fills a field.
+	 */
+	const TYPE_HELPER = [
+		{ type: "treatment", ask: "想知道某個做法（治療、護理措施、衛教、預防）有沒有效？", why: "比較做與不做、或兩種做法的結果。" },
+		{ type: "diagnosis", ask: "想知道某個檢查、量表或評估工具，能不能正確找出某個狀況？", why: "看的是準確度：敏感度、特異度。" },
+		{ type: "etiology", ask: "想知道某個暴露或危險因子，會不會造成傷害或疾病？", why: "通常沒辦法隨機分派，多半是世代或病例對照研究。" },
+		{ type: "prognosis", ask: "想知道有某種狀況或特徵的人，之後會怎樣？", why: "例如存活、復發、功能恢復，看的是時間和病程。" },
+		{ type: "meaning", ask: "想了解人的經驗、感受或想法，而不是數字？", why: "質性研究回答這類問題（訪談、觀察）。" },
+	];
+
+	/**
+	 * What the card is for. 臨床問題: search top-down and stop at the first layer with a usable answer; 論文／系統性回顧:
+	 * search every layer and record what was searched.
+	 */
+	const MODES = [
+		{ id: "clinical", label: "臨床問題", layerNote: "這層找到可用的就可以停",
+			lead: "臨床問題：從上層往下找。上層的指引和摘要已經有人評讀、整合過證據；上層沒有可用的答案，再往下一層。" },
+		{ id: "review", label: "論文／系統性回顧", layerNote: "每一層都要查，並記下查了什麼",
+			lead: "論文／系統性回顧：每一層都要查。每個資料庫記下檢索式、日期和筆數，PRISMA 流程圖和方法章節會用到。" },
+	];
+	const MODE_BY_ID = new Map(MODES.map(m => [m.id, m]));
+	// A card saved before the modes existed is a 論文／系統性回顧 card when its question names a review, or its notes
+	// name a thesis and a review; a clinical card's notes often mention finding a review, and 「非系統性回顧」 is not one
+	const REVIEW_RE = /(?<!非|不是)(?:系統性(?:文獻)?回顧|統合分析|後設分析|範域回顧|範疇(?:性)?回顧|範圍(?:界定)?回顧|整合性文獻回顧)|(?<!\bnot an? |non-)(?:systematic review|scoping review|meta-analy|integrative review)/i;
+	const THESIS_RE = /碩士論文|博士論文|學位論文|畢業論文|thesis|dissertation/i;
+
+	/**
+	 * The 6S order, top-down (DiCenso et al., 2009; Alonso-Coello et al., 2010), with the search-links.js sources of
+	 * each layer. Only free or already-listed sources; a layer whose sources are all turned off is left out.
+	 * query: "broad" (P AND I only: fewer concepts for the guideline and summary sites, whose search is coarser) or "full".
+	 */
+	const LAYERS = [
+		{ id: "guideline", label: "指引", hint: "臨床指引：已經整合、評讀過證據，並給出建議。", sources: ["nice", "rnao", "gin", "tw-gov", "guideline-pdf"], query: "broad", custom: true },
+		{ id: "summary", label: "摘要型資源", hint: "評讀過的證據摘要；TRIP 也會一起列出指引和系統性回顧。JBI、UpToDate 需機構權限。", sources: ["trip", "jbi", "uptodate"], query: "broad" },
+		{ id: "review", label: "系統性回顧", hint: "把同一個問題的研究整合起來的回顧。", sources: ["cochrane", "pubmed-sr"], query: "full" },
+		{ id: "study", label: "單篇研究", hint: "原始研究：RCT、世代研究、質性研究…。", sources: ["pubmed", "cinahl", "scholar", "airiti", "ndltd"], query: "full" },
+	];
+	// The qualitative search terms checkCard suggests for 意義／經驗 questions (Booth, 2016)
+	const QUALITATIVE_RE = /qualitativ|interview|phenomenolog|grounded theory|focus group|ethnograph|質性|訪談|現象學|紮根|焦點團體/i;
+	// Accuracy words a diagnosis card may carry into the search string (checkCard says they usually stay out)
+	const ACCURACY_RE = /sensitiv|specificit|accuracy|predictive value|likelihood ratio|\bROC\b|\bAUC\b|敏感度|靈敏度|特異度|特異性|準確度|準確性|預測值|概似比/i;
 	const TEXT_FIELDS = ["p", "i", "c", "o", "t", "setting", "question", "notes"];
 	// English words that match too easily between any two fields
 	const STOP_WORDS = new Set(["with", "without", "from", "that", "this", "than", "them", "they", "their", "have", "after", "before", "during", "usual",
@@ -123,17 +170,32 @@
 	}
 
 	function emptyCard() {
-		return { type: "treatment", p: "", i: "", c: "", o: "", t: "", setting: "", question: "", notes: "", updatedAt: "" };
+		return { type: "treatment", mode: "clinical", p: "", i: "", c: "", o: "", t: "", setting: "", question: "", notes: "", updatedAt: "" };
 	}
 
-	/** A card from stored JSON or the window: every field a trimmed string, the type one of TYPES. */
+	/**
+	 * A card from stored JSON or the window: every field a trimmed string, the type one of TYPES, the mode one of
+	 * MODES (a card without one: 論文／系統性回顧 when its question names a review or its notes a thesis and a review,
+	 * else 臨床問題).
+	 */
 	function normalizeCard(raw) {
 		let card = emptyCard();
 		if (!raw || typeof raw !== "object") return card;
 		card.type = TYPE_BY_ID.has(raw.type) ? raw.type : "treatment";
 		for (let f of TEXT_FIELDS) card[f] = text(raw[f]);
+		let isReview = REVIEW_RE.test(card.question) || (THESIS_RE.test(card.notes) && REVIEW_RE.test(card.notes));
+		card.mode = MODE_BY_ID.has(raw.mode) ? raw.mode : (isReview ? "review" : "clinical");
 		card.updatedAt = oneLine(raw.updatedAt);
 		return card;
+	}
+
+	function modeOf(card) {
+		return MODE_BY_ID.get(card && card.mode) || MODES[0];
+	}
+
+	/** 「不確定是哪一種？」: the yes/no questions with each type's label. */
+	function typeHelper() {
+		return TYPE_HELPER.map(h => ({ type: h.type, label: TYPE_BY_ID.get(h.type).label, ask: h.ask, why: h.why }));
 	}
 
 	function typeOf(card) {
@@ -234,6 +296,128 @@
 			add("info", "search", "P、I、O 都沒有英文詞：PubMed、CINAHL 這類英文資料庫會找不到。在欄位裡補上英文關鍵字（例如「跌倒 falls」），或用快速搜尋查 MeSH。");
 		}
 		if (!c.setting && c.type !== "meaning") add("info", "setting", "情境留空：寫下你的單位和病人（例如「區域醫院內科病房，多為 70 歲以上」），之後判斷研究能不能應用時會用到。");
+		// 意義／經驗: qualitative terms (PICOS/SPIDER) narrow the search; PICO alone is more sensitive (Methley et al., 2014).
+		// Only the fields that reach the string count; the notes never do.
+		if (c.type === "meaning" && (p || i) && !QUALITATIVE_RE.test([p, i, co, o].join(" "))) {
+			add("info", "search", "質性問題：檢索式可以加上質性研究的詞，例如 qualitative、interview*、phenomenolog*、grounded theory、focus group*，並記得查 CINAHL，護理的質性研究收得比較多（Booth, 2016；Methley et al., 2014）。");
+		}
+		// Diagnostic accuracy: the index test and the target condition go into the string, accuracy words usually do
+		// not (Cochrane DTA Handbook); only said when a field that reaches the string has them
+		let accuracy = c.type === "diagnosis" ? ["o", "c", "i", "p"].find(k => ACCURACY_RE.test(oneLine(c[k]))) : null;
+		if (accuracy) {
+			add("info", accuracy, `診斷準確度的問題：sensitivity、specificity 這類準確度的詞通常不放進檢索式，很多研究的標題和摘要不會寫，放進去容易漏掉研究；用${labels.i}和${labels.o}去找就好。`);
+		}
+		return out;
+	}
+
+	// ---------- the 6S search order (pure) ----------
+
+	/**
+	 * The pref pico.guidelineLinks → { links: [{ name, url }], skipped }: one 「名稱|URL」 per line (｜ also works), only
+	 * http(s) URLs; empty lines and lines starting with # are ignored, malformed ones counted in skipped. A URL with
+	 * {q} gets the search words; without, the page opens and the words are copied.
+	 */
+	function parseGuidelineLinks(value) {
+		let links = [];
+		let skipped = 0;
+		let seen = new Set();
+		for (let raw of String(value === null || value === undefined ? "" : value).split(/\r?\n/)) {
+			let line = raw.trim();
+			if (!line || line.startsWith("#")) continue;
+			let m = /^([^|｜]+)[|｜](.+)$/.exec(line);
+			let name = m ? oneLine(m[1]) : "";
+			let url = m ? m[2].trim() : "";
+			if (!name || !/^https?:\/\/[^\s|｜]+$/i.test(url) || seen.has(url) || links.length >= MAX_GUIDELINE_LINKS) {
+				skipped++;
+				continue;
+			}
+			seen.add(url);
+			links.push({ name: name.slice(0, 60), url });
+		}
+		return { links, skipped };
+	}
+
+	// Quoted like search-links.js picoQuery: English phrases with a space or hyphen; the fields as written only with a space
+	function enTerm(t) {
+		return /[\s-]/.test(t) ? `"${t}"` : t;
+	}
+
+	function asWritten(t) {
+		return /\s/.test(t) && !/[一-鿿]/.test(t) ? `"${t}"` : t;
+	}
+
+	function orBlock(list) {
+		return list.length > 1 ? `(${list.join(" OR ")})` : list[0];
+	}
+
+	/**
+	 * The guideline and summary layers' words: P AND I only, from picoQuery's blocks ({ en, all }); the full strings
+	 * when the card has no P or I.
+	 */
+	function broadQuery(q) {
+		if (!q) return null;
+		let blocks = (q.blocks || []).filter(b => b.key === "P" || b.key === "I");
+		if (!blocks.length) return { en: q.en || "", all: q.all || "" };
+		let en = blocks.filter(b => b.en && b.en.length).map(b => orBlock(b.en.map(enTerm))).join(" AND ");
+		let all = blocks.map(b => orBlock(b.terms.map(asWritten))).join(" AND ");
+		return { en, all };
+	}
+
+	/** Which of the two strings a source gets: Chinese sources the words as written (only when they differ), the rest English. */
+	function queryFor(source, strings) {
+		if (source.lang === "zh") return strings.all && strings.all !== strings.en ? strings.all : "";
+		return strings.en || (source.lang === "any" ? strings.all : "");
+	}
+
+	/**
+	 * The card's database targets in the 6S order: [{ id, label, hint, broad, query, queryAll, note, targets }], top
+	 * layer first. query: the English words (else the words as written); queryAll: the words as written when they
+	 * differ and some target here uses them; note: why the layer's English sources are missing (no English words).
+	 * Layers without a target or a note are left out. q: cardQuery / searchQuery; sources: the enabled search-links.js sources;
+	 * opts.build(source, query) → target (search-links.js buildTarget with the proxy settings); opts.guidelineLinks:
+	 * parseGuidelineLinks(…).links, added to the 指引 layer.
+	 */
+	function searchLayers(q, sources, opts = {}) {
+		if (!q || (!q.en && !q.all)) return [];
+		let byID = new Map((sources || []).map(s => [s.id, s]));
+		let build = opts.build || ((source, query) => searchLinks.buildTarget(source, query, {}));
+		let fill = (url, query) => (searchLinks && searchLinks.fillTemplate ? searchLinks.fillTemplate(url, query) : url.split("{q}").join(encodeURIComponent(query)));
+		let full = { en: q.en || "", all: q.all || "" };
+		let broad = broadQuery(q) || full;
+		let out = [];
+		let seen = new Set();
+		for (let layer of LAYERS) {
+			let strings = layer.query === "broad" ? broad : full;
+			let targets = [];
+			let usesAll = false;
+			let noEnglish = false;
+			for (let id of layer.sources) {
+				let source = byID.get(id);
+				let query = source ? queryFor(source, strings) : "";
+				if (source && !query && source.lang !== "zh" && !seen.has(id)) noEnglish = true;
+				if (!source || !query || seen.has(id)) continue;
+				try {
+					targets.push(build(source, query));
+					seen.add(id);
+					if (source.lang === "zh") usesAll = true;
+				}
+				catch (e) {}
+			}
+			if (layer.custom) {
+				(opts.guidelineLinks || []).forEach((link, k) => {
+					let query = strings.all && strings.all !== strings.en ? strings.all : (strings.en || strings.all);
+					let copy = !link.url.includes("{q}");
+					targets.push({ id: `pico-guideline-${k + 1}`, name: link.name, desc: "自訂指引網址", url: copy ? link.url : fill(link.url, query),
+						copy, query, needsAccess: false, proxied: false, custom: true });
+					usesAll = true;
+				});
+			}
+			let note = noEnglish ? `${layer.query === "broad" ? "P、I " : ""}沒有英文詞，這層的英文資料庫未列出。` : "";
+			if (!targets.length && !note) continue;
+			let words = strings.en || strings.all;
+			let queryAll = usesAll && strings.en && strings.all && strings.all !== strings.en ? strings.all : "";
+			out.push({ id: layer.id, label: layer.label, hint: layer.hint, broad: layer.query === "broad", query: words, queryAll, note, targets });
+		}
 		return out;
 	}
 
@@ -716,8 +900,8 @@
 	/**
 	 * Draw the card window into `root`. info: { scopeName, card, isNew, search: boolean (search links on),
 	 * tagLists: the collection's papers' Zotero tags, one array per paper (for the keyword suggestions) }
-	 * handlers: { onSave(card), onDelete(), onCancel(), search(card) → { en, all, skipped, targets: [{ name, url, copy, query }] } | null,
-	 * open(target), copy(text) }
+	 * handlers: { onSave(card), onDelete(), onCancel(), search(card) → { en, all, skipped, layers: searchLayers(…),
+	 * targets: [{ name, url, copy, query }] (without layers: one flat row) } | null, open(target), copy(text) }
 	 */
 	function renderCard(doc, root, info, handlers) {
 		root.replaceChildren();
@@ -742,6 +926,17 @@
 		typeSelect.value = card.type;
 		typeRow.append(el(doc, "label", { for: "zb-pc-type", class: "zb-cl-why" }, "這是哪一種臨床問題？標籤和提示會跟著變："), typeSelect);
 		typeSec.append(typeRow);
+		// 不確定是哪一種？ yes/no questions that explain the types; the user still picks
+		let helper = el(doc, "details", { class: "zb-pc-helper" });
+		helper.append(el(doc, "summary", {}, "不確定是哪一種？看這幾個問題"));
+		let helperList = el(doc, "ul", { class: "zb-pc-helper-list" });
+		for (let h of typeHelper()) {
+			let li = el(doc, "li", { "data-zb-type": h.type });
+			li.append(el(doc, "span", { class: "zb-pc-helper-ask" }, h.ask), el(doc, "span", { class: "zb-cl-why" }, ` 是 → ${h.label}。${h.why}`));
+			helperList.append(li);
+		}
+		helper.append(helperList, el(doc, "p", { class: "zb-cl-why" }, "符合不只一個時，挑你最想回答的那一個。類型由你在上面選，這裡不會幫你改。"));
+		typeSec.append(helper);
 
 		// 要素
 		let elemSec = el(doc, "section", { class: "zb-cl-item", "aria-labelledby": "zb-pc-elements-h" });
@@ -810,7 +1005,23 @@
 
 		// 搜尋
 		let searchSec = el(doc, "section", { class: "zb-cl-item", "aria-labelledby": "zb-pc-search-h" });
-		searchSec.append(el(doc, "h2", { class: "zb-cl-item-title", id: "zb-pc-search-h" }, "帶到資料庫搜尋"));
+		searchSec.append(el(doc, "h2", { class: "zb-cl-item-title", id: "zb-pc-search-h" }, "帶到資料庫搜尋：先上層"));
+		// The card's mode: how to use the layers
+		let modeSet = el(doc, "fieldset", { class: "zb-pc-mode" });
+		modeSet.append(el(doc, "legend", { class: "zb-pc-label" }, "這張卡用來做什麼？"));
+		let modeRadios = {};
+		for (let m of MODES) {
+			let wrap = el(doc, "span", { class: "zb-pc-mode-option" });
+			let radio = el(doc, "input", { type: "radio", name: "zb-pc-mode", id: `zb-pc-mode-${m.id}`, value: m.id });
+			radio.checked = card.mode === m.id;
+			radio.addEventListener("change", update);
+			wrap.append(radio, el(doc, "label", { for: `zb-pc-mode-${m.id}` }, m.label));
+			modeSet.append(wrap);
+			modeRadios[m.id] = radio;
+		}
+		let modeLead = el(doc, "p", { class: "zb-cl-why zb-pc-mode-lead", "aria-live": "polite" });
+		let layerList = el(doc, "ol", { class: "zb-pc-layers", "aria-label": "搜尋順序：由上層往下" });
+		let layerSource = el(doc, "p", { class: "zb-cl-why" }, "先上層的順序依 6S 證據金字塔（DiCenso et al., 2009；Alonso-Coello et al., 2010）。設定裡的「自訂指引網址」會加在指引這層。");
 		let queryEn = el(doc, "p", { class: "zb-pc-query", "data-zb-query": "en" });
 		let queryAll = el(doc, "p", { class: "zb-pc-query", "data-zb-query": "all" });
 		let skipped = el(doc, "p", { class: "zb-cl-why" });
@@ -820,7 +1031,7 @@
 		let kwHead = el(doc, "p", { class: "zb-pc-label", id: "zb-pc-kw-h" });
 		let kwList = el(doc, "div", { class: "zb-pc-links", "data-zb-keywords": "", "aria-labelledby": "zb-pc-kw-h" });
 		let kwHint = el(doc, "p", { class: "zb-cl-why" }, "取自這個分類文獻的 Zotero 標籤（MeSH、作者關鍵字）。按一下複製，再決定要不要加進欄位；記得到 MeSH Database 確認。");
-		searchSec.append(queryEn, queryAll, skipped, links, searchHint, kwHead, kwList, kwHint);
+		searchSec.append(modeSet, modeLead, queryEn, queryAll, skipped, links, layerList, layerSource, searchHint, kwHead, kwList, kwHint);
 
 		list.append(typeSec, elemSec, qSec, checkSec, searchSec);
 
@@ -850,9 +1061,18 @@
 		});
 
 		function read() {
-			let c = { type: typeSelect.value };
+			let mode = MODES.find(m => modeRadios[m.id] && modeRadios[m.id].checked);
+			let c = { type: typeSelect.value, mode: mode ? mode.id : card.mode };
 			for (let f of TEXT_FIELDS) c[f] = fields[f] ? fields[f].value : "";
 			return normalizeCard(c);
+		}
+
+		// The words a P-and-I layer searches: the English string, and the words as written when its Chinese or custom
+		// pages get those instead
+		function layerWords(layer) {
+			if (!layer.broad || !layer.query) return "";
+			if (!layer.queryAll) return `這層只用 P、I 的詞（不放 C、O）：${layer.query}`;
+			return `這層只用 P、I 的詞（不放 C、O）。英文資料庫：${layer.query}；中文網站和自訂指引網址：${layer.queryAll}`;
 		}
 
 		function relabel() {
@@ -884,6 +1104,14 @@
 			if (!info.search) searchHint.textContent = "「醫學資料庫搜尋連結」關著；在 設定 → 功能 打開後，這裡會列出檢索式和資料庫連結。";
 			else if (!q) searchHint.textContent = "寫了要素之後，這裡會列出 P AND I AND O 的檢索式和資料庫連結。檢索式只是起點，請到 MeSH Database 確認主題詞。";
 			else searchHint.textContent = "檢索式只是起點：請到 MeSH Database 確認主題詞，再依資料庫調整。";
+			let mode = modeOf(c);
+			modeLead.textContent = mode.lead;
+			layerList.replaceChildren();
+			let targetButton = (t) => {
+				let b = el(doc, "button", { type: "button", class: "zb-pc-link", title: [t.desc, t.copy ? "開啟首頁並複製檢索式" : t.url].filter(Boolean).join("\n") }, t.copy ? `${t.name}（複製）` : t.name);
+				b.addEventListener("click", () => handlers.open && handlers.open(t));
+				return b;
+			};
 			if (q) {
 				for (let [label, textValue] of [["複製英文檢索式", q.en], ["複製原文檢索式", q.all !== q.en ? q.all : ""]]) {
 					if (!textValue) continue;
@@ -891,12 +1119,22 @@
 					b.addEventListener("click", () => handlers.copy && handlers.copy(textValue));
 					links.append(b);
 				}
-				for (let t of q.targets || []) {
-					let b = el(doc, "button", { type: "button", class: "zb-pc-link", title: t.copy ? "開啟首頁並複製檢索式" : t.url }, t.copy ? `${t.name}（複製）` : t.name);
-					b.addEventListener("click", () => handlers.open && handlers.open(t));
-					links.append(b);
+				// Top-down: one item per layer, its databases, and what the mode says about stopping
+				for (let layer of q.layers || []) {
+					let li = el(doc, "li", { class: "zb-pc-layer", "data-zb-layer": layer.id });
+					let headRow = el(doc, "div", { class: "zb-pc-layer-head" });
+					headRow.append(el(doc, "span", { class: "zb-pc-label" }, layer.label), el(doc, "span", { class: "zb-pc-layer-note" }, mode.layerNote));
+					li.append(headRow, el(doc, "p", { class: "zb-cl-why" }, [layer.hint, layerWords(layer), layer.note].filter(Boolean).join(" ")));
+					let row = el(doc, "div", { class: "zb-pc-links" });
+					for (let t of layer.targets) row.append(targetButton(t));
+					if (layer.targets.length) li.append(row);
+					layerList.append(li);
 				}
+				if (!q.layers) for (let t of q.targets || []) links.append(targetButton(t));
 			}
+			// The mode is about the layers: its lead hides with them, its radios while the search links are off
+			layerList.hidden = layerSource.hidden = modeLead.hidden = !(q && q.layers && q.layers.length);
+			modeSet.hidden = !info.search;
 			kwList.replaceChildren();
 			let missing = info.tagLists && info.tagLists.length
 				? keywordSuggestions(info.tagLists, c, { query: q, max: 30 }).filter(k => !k.inSearch).slice(0, 8) : [];
@@ -929,7 +1167,7 @@
 			fields.p.focus();
 		}
 		catch (e) {}
-		return { update, finish, read, fields, buttons: { save, cancel, del, compose }, typeSelect };
+		return { update, finish, read, fields, buttons: { save, cancel, del, compose }, typeSelect, modeRadios };
 	}
 
 	// ---------- the table window (DOM) ----------
@@ -1170,7 +1408,20 @@
 		return S.picoQuery(cardAsStudy(card), { includeC });
 	}
 
-	/** The card window's search info: the strings and the database targets (search-links.js), null while that feature is off. */
+	/** The user's own guideline pages (pref pico.guidelineLinks, 「名稱|URL」 per line); [] when unset or unreadable. */
+	function guidelineLinks() {
+		try {
+			return parseGuidelineLinks(pref("pico.guidelineLinks") || "").links;
+		}
+		catch (e) {
+			return [];
+		}
+	}
+
+	/**
+	 * The card window's search info: the strings and the database targets (search-links.js) in the 6S layers, null
+	 * while that feature is off.
+	 */
 	function searchInfo(card) {
 		let S = ZB().searchLinks;
 		if (!S || !featureOn("searchLinks")) return null;
@@ -1181,23 +1432,10 @@
 			cfg = S.readConfig();
 		}
 		catch (e) {
-			return Object.assign({ targets: [] }, q);
+			return Object.assign({ targets: [], layers: [] }, q);
 		}
-		let targets = [];
-		let add = (ids, query) => {
-			for (let id of ids) {
-				let source = cfg.sources.find(s => s.id === id);
-				if (!source || !query) continue;
-				try {
-					let t = S.buildTarget(source, query, cfg);
-					if (!targets.some(x => x.id === t.id)) targets.push(t);
-				}
-				catch (e) {}
-			}
-		};
-		add(EN_SOURCES, q.en);
-		if (q.all !== q.en) add(ALL_SOURCES, q.all);
-		return Object.assign({ targets }, q);
+		let layers = searchLayers(q, cfg.sources, { build: (source, query) => S.buildTarget(source, query, cfg), guidelineLinks: guidelineLinks() });
+		return Object.assign({ targets: layers.flatMap(l => l.targets), layers }, q);
 	}
 
 	/** Wait for a dialog document (not the initial about:blank) to be ready. */
@@ -1639,14 +1877,15 @@
 
 	return {
 		FEATURE, CARD_TITLE, TABLE_TITLE, CARD_URL, TABLE_URL, CARD_ROOT, TABLE_ROOT, TYPES, TEXT_FIELDS, SELECTED_NAME, REVIEW_FOLDER,
-		MATCH_LEGEND, SOURCE_NOTE, CSV_COLUMNS, runtime,
+		MATCH_LEGEND, SOURCE_NOTE, CSV_COLUMNS, MODES, LAYERS, TYPE_HELPER, runtime,
 		// pure
-		emptyCard, normalizeCard, fieldLabels, fieldHints, cardHasContent, terms, cardAsStudy, cardQuery, composeQuestion, checkCard,
+		emptyCard, normalizeCard, modeOf, typeHelper, fieldLabels, fieldHints, cardHasContent, terms, cardAsStudy, cardQuery, composeQuestion, checkCard,
+		parseGuidelineLinks, broadQuery, searchLayers,
 		tagTerm, keywordSuggestions, keywordSection,
 		matchField, matchCard, cardMarkdown, tableRow, sortRows, tableMarkdown, tableCSV, tableFragment, tableTSV, tableHTML,
 		noteSection, noteFrontmatter, buildNote, fileNames, doneText, renderCard, renderTable,
 		// Zotero
-		scopeOf, cardFor, saveCard, deleteCard, prismaSection, searchQuery, searchInfo, openCard, destination, scopeItems, entryFor,
+		scopeOf, cardFor, saveCard, deleteCard, prismaSection, searchQuery, searchInfo, guidelineLinks, openCard, destination, scopeItems, entryFor,
 		writeTable, exportTable, cardDialog, tableDialog, noticeInfo, waitForDialog,
 	};
 });

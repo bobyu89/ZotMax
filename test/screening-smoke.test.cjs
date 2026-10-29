@@ -395,6 +395,30 @@ test("duplicates: grouped by DOI and title + year, tagged after confirmation, ne
 	assert.deepEqual([x.tags, y.tags], [[], []]);
 });
 
+test("duplicates: the same PMID (from Extra) and the same journal, year, volume and first page; a Chinese and an English copy get a note", async () => {
+	let env = await setup();
+	let pubmed = paper(env, 1, { title: "[Effects of a nurse-led fall prevention program].", extra: "PMID: 37000000", abstractNote: "Abstract",
+		publicationTitle: "Hu li za zhi The journal of nursing", journalAbbreviation: "Hu Li Za Zhi", volume: "70", pages: "45-56", year: "2023" });
+	let airiti = paper(env, 2, { title: "護理人員跌倒預防衛教之成效", extra: "PMID: 37000000", publicationTitle: "護理雜誌", year: "2023" });
+	let a = paper(env, 3, { title: "Delirium screening by nurses", publicationTitle: "Journal of Critical Care Nursing", volume: "12", pages: "101-110" });
+	let b = paper(env, 4, { title: "ICU delirium screening by nursing staff", publicationTitle: "Journal of Critical-Care Nursing", volume: "12", pages: "101–110" });
+	// No volume: never matched on the journal, year and page alone
+	let c = paper(env, 5, { title: "Oral care and pneumonia", publicationTitle: "Nursing Times", pages: "5-9" });
+	let d = paper(env, 6, { title: "Pneumonia and oral care", publicationTitle: "Nursing Times", pages: "5-9" });
+	let collection = env.addCollection(1, "跌倒 SR", [pubmed, airiti, a, b, c, d]);
+	let result = await env.context.ZB.screening.dedupCollection(collection);
+	assert.deepEqual({ ...result }, { groups: 2, tagged: 2 });
+	assert.match(env.confirms[0], /「\[Effects of a nurse-led fall prevention program\]\.」（2023） ← 1 筆（PMID 相同）：可能是中英文版本，請確認/);
+	assert.match(env.confirms[0], /「Delirium screening by nurses」（2024） ← 1 筆（期刊、年、卷、起始頁相同）\n/);
+	assert.match(env.confirms[0], /不會合併或刪除任何條目/);
+	assert.deepEqual([c, d].map(i => i.tags.includes("篩選/重複")), [false, false]);
+	assert.equal(env.items.size, 6, "nothing merged or deleted");
+	// Nothing found: the message lists every way records are compared
+	let env2 = await setup();
+	await env2.context.ZB.screening.dedupCollection(env2.addCollection(1, "R", [paper(env2, 1), paper(env2, 2)]));
+	assert.match(env2.descriptions.at(-1), /比對 DOI、PMID、標題＋年份，以及期刊＋年＋卷＋起始頁/);
+});
+
 test("PRISMA note, CSV and Notion page for a collection; a rerun keeps the user's content", async () => {
 	let env = await setup();
 	let ZB = env.context.ZB;

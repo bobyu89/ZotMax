@@ -811,6 +811,8 @@
 					card: P.cardForPath(pl.path), bot, botLink: bot ? core.obsidianURI(vaultName, bot.link) : "", aliases: ctx.aliases,
 					levelUps: ((history && history.events) || []).filter(e => e.planet === pl.path), series: (history && history.series) || {},
 					quests: q.entry, questLog: (history.quests || []).filter(x => x.planet === pl.path), noteLink: l => core.obsidianURI(vaultName, l), now,
+					// 📝 the outline's 主張鷹架 and the planet's GRADE certainty (grade.js)
+					scaffold: P.scaffoldOn(), grade: P.gradeForPath(pl.path), gradeOn: P.gradeOn(),
 				});
 				history = P.nextHistory(history, pl, pl.islands.map((island, k) => ({ island, n: data.islands[k] })), now);
 				worlds.set(pl.path, { planet: pl, data, quests: q.entry });

@@ -29,7 +29,7 @@ function makeEnv(prefs = {}) {
 
 	// Fields per item type (just what the tests use)
 	const TYPE_FIELDS = {
-		journalArticle: ["title", "date", "volume", "issue", "pages", "DOI", "url", "extra", "language", "publicationTitle", "libraryCatalog"],
+		journalArticle: ["title", "date", "volume", "issue", "pages", "DOI", "url", "extra", "language", "publicationTitle", "journalAbbreviation", "ISSN", "libraryCatalog"],
 		thesis: ["title", "date", "url", "extra", "language", "thesisType", "university", "libraryCatalog"],
 	};
 
@@ -382,4 +382,35 @@ test("a fix that no longer applies when 套用 is pressed (the item was edited m
 	assert.equal(m.fields.date, "民國111年");
 	assert.equal(m.fields.language, "zh-TW");
 	assert.match(env.descriptions.at(-1), /2 項在視窗開著時已經改過或不再適用，略過了。/);
+});
+
+test("a 《護理雜誌》 record from PubMed: no 「en」, the English title kept in Extra when ticked, the language left alone; undo puts Extra back", async () => {
+	let env = await setup();
+	let pubmed = new env.MockItem("journalArticle", {
+		key: "HULI", title: "[Effects of a Nurse-Led Fall Prevention Program].", date: "2023", publicationTitle: "Hu li za zhi The journal of nursing",
+		journalAbbreviation: "Hu Li Za Zhi", ISSN: "0047-262X", volume: "70", issue: "2", pages: "45-56", extra: "PMID: 37000000", language: "chi",
+	}, [{ lastName: "Chen", firstName: "Mei-Ling", creatorType: "author" }]);
+	let running = env.ZB.zhMeta.run([pubmed]);
+	let root = await openedDialog(env);
+	let rows = [...root.querySelectorAll(".zb-zm-finding")].map(li => [li.dataset.zbFinding, li.dataset.confidence, li.querySelector("input").checked]);
+	assert.deepEqual(rows, [["title-translated", "check", false]], "one finding, not ticked, and no 「en」");
+	let li = root.querySelector('[data-zb-finding="title-translated"]');
+	assert.equal(li.querySelector(".zb-zm-tag").textContent, "請確認");
+	assert.match(li.querySelector(".zb-zm-now").textContent, /PubMed title: Effects of a Nurse-Led Fall Prevention Program/);
+	assert.equal(li.querySelector(".zb-zm-was").textContent, "PMID: 37000000", "what changes is Extra (「其他」), not the title");
+	assert.match(li.querySelector(".zb-zm-hint").textContent, /中文篇名和中文作者姓名自己貼進 Zotero/);
+	box(root, "title-translated").click();
+	root.querySelector(".zb-cl-apply").click();
+	let result = await running;
+	assert.equal(result.fixes, 1);
+	assert.equal(pubmed.fields.extra, "PMID: 37000000\nPubMed title: Effects of a Nurse-Led Fall Prevention Program");
+	assert.equal(pubmed.fields.language, "chi");
+	assert.equal(pubmed.fields.title, "[Effects of a Nurse-Led Fall Prevention Program].", "the title is the user's to replace");
+	assert.deepEqual(plain(pubmed.creators), [{ lastName: "Chen", firstName: "Mei-Ling", creatorType: "author" }]);
+	// A second run has nothing to write (the line is there), only the question
+	let again = env.ZB.zhMeta.analyze(env.ZB.zhMeta.itemData(pubmed));
+	assert.deepEqual([again.length, again[0].changes], [1, null]);
+	await env.ZB.zhMeta.undoLast({ silent: true });
+	assert.equal(pubmed.fields.extra, "PMID: 37000000");
+	assert.deepEqual(env.errors, []);
 });

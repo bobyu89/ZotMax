@@ -23,6 +23,9 @@ pref("extensions.zotero-bridge.dashboard.planet", true);
 pref("extensions.zotero-bridge.planet.history", "{}");
 pref("extensions.zotero-bridge.planet.quests", "{}");
 pref("extensions.zotero-bridge.planet.lastBuild", "");
+// 文獻探討大綱的主張鷹架 (content/planet.js): the claim prompt, studies by effect direction, the verified-vs-other
+// contrast, the certainty line and the setting prompt; the outline itself follows dashboard.planet
+pref("extensions.zotero-bridge.planet.outlineScaffold", true);
 // Concept hub notes (content/concepts.js): rebuild <folder>/<concepts.folder>/*.md after each manual sync;
 // measures (and outcomes) from the structured data as concepts; alias groups, one per line: 跌倒 = Accidental Falls = falls;
 // a custom prompt for 「為概念卡片產生 AI 綜整」 (empty = built-in)
@@ -204,6 +207,8 @@ pref("extensions.zotero-bridge.geminiExport.highlights", false);
 // JSON keyed by "library/collections/KEY"; where the PICO 表 goes when there is no Obsidian vault (empty = Downloads)
 pref("extensions.zotero-bridge.pico.cards", "{}");
 pref("extensions.zotero-bridge.pico.folder", "");
+// The card window's 指引 layer: the user's own guideline pages, one 「名稱|URL」 per line (http(s) only, {q} = the search words)
+pref("extensions.zotero-bridge.pico.guidelineLinks", "");
 // GRADE 證據確定性 (content/grade.js): the ratings, one per research project, keyed like the PICO cards; the files go
 // where the PICO 表 goes (the vault's Reviews folder, else pico.folder, else Downloads)
 pref("extensions.zotero-bridge.grade.tables", "{}");
