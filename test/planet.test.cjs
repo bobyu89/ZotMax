@@ -315,3 +315,25 @@ test("🎯 quests on the planet page (✅／⬜, no checkboxes), the home card, 
 	assert.match(home, /^> > 🎯 本週任務 1／2$/m);
 	assert.equal(P.questLines(null), null);
 });
+
+test("📝 文獻探討大綱: per island the facts, the questions its paragraph should answer and the papers to cite first — never the paragraph", () => {
+	let { pl, data } = dataFor(archipelago(), { noteLink: l => "obsidian://x?f=" + l });
+	let ex = data.islands[0];
+	assert.deepEqual(ex.key.map(k => [k.title, k.level, k.design]), [["A", "1", "RCT"], ["B", "2", "RCT"], ["C", "2", "RCT"]]);
+	assert.equal(ex.key[0].url, "obsidian://x?f=Zotero/A");
+	assert.match(ex.prompts.join("\n"), /有 CEBM 1 的研究：先用它定調/);
+	assert.match(data.islands[2].prompts.join("\n"), /先讀完或產生 AI 筆記/, "用藥: nothing judged yet");
+	assert.match(data.islands[2].prompts.join("\n"), /只有 1 篇：先確認是不是漏找/);
+	assert.match(data.islands[1].prompts.join("\n"), /最強的證據只到 CEBM 2|有 CEBM 2 的研究/);
+	// Split results ask why
+	let split = P.writingPrompts({ papers: 4, best: "3" }, { verdict: { label: "結論分歧" }, directions: {}, steps: [{ gap: true, short: "沒有 RCT" }] });
+	assert.deepEqual(split, ["結果為什麼不一致？比較族群、介入劑量和測量工具（GRADE 的 inconsistency）。", "最強的證據只到 CEBM 3：寫的時候要說明證據強度有限，避免下過強的結論。", "缺口要寫出來：沒有 RCT。這可能就是你研究的理由。"]);
+	assert.deepEqual(P.writingPrompts({ papers: 0 }, null), []);
+	let board = P.planetSection(pl, data, { layout: "board" });
+	assert.match(board, /\n\n> \[!zm-ref\]- 文獻探討大綱（依島）\n> 每座島寫成文獻探討的一段/);
+	assert.match(board, /\n> #### 運動（3 篇 · RCT 3 · [^）]+）\n> - ❓ /);
+	assert.match(board, /> - 📌 先讀、先引用：\[\[Zotero\/A\|A\]\]（2024 · RCT · CEBM 1）；\[\[Zotero\/B\|B\]\]/);
+	let classic = P.planetSection(pl, data, { layout: "classic" });
+	assert.match(classic, /\n\n### 📝 文獻探討大綱（依島）\n\n每座島寫成文獻探討的一段/);
+	assert.match(classic, /\n\n#### 用藥（1 篇[^\n]*\n- ❓ 先讀完或產生 AI 筆記/);
+});
