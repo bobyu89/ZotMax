@@ -246,6 +246,29 @@
 		return s !== "" && Number.isFinite(n) ? n : null;
 	}
 
+	// screening.js (loaded earlier in Zotero; required in Node) reads search_stop_reason for the PRISMA note's card
+	function screening() {
+		if (scope.ZB && scope.ZB.screening) return scope.ZB.screening;
+		try {
+			return typeof require === "function" ? require("./screening.js") : null;
+		}
+		catch (e) {
+			return null;
+		}
+	}
+
+	/**
+	 * The user's search_stop_reason as one line, read by screening.js's frontmatterText from the raw text so the
+	 * report and the PRISMA note's card show the same words (the parsed object keeps only a value's first line).
+	 */
+	function stopReasonText(fm, f) {
+		let S = screening();
+		let s = typeof fm === "string" && S && S.frontmatterText ? S.frontmatterText(fm, "search_stop_reason")
+			: Array.isArray(f.search_stop_reason) ? f.search_stop_reason.join("；")
+				: String(f.search_stop_reason === undefined || f.search_stop_reason === null ? "" : f.search_stop_reason);
+		return s.replace(/\s+/g, " ").trim();
+	}
+
 	/** A Reviews/*.md note (screening.js) from its frontmatter. */
 	function reviewRecord(fm, relPath) {
 		let f = typeof fm === "string" ? dashboard.parseFrontmatter(fm) : (fm || {});
@@ -263,6 +286,9 @@
 			awaitingScreening: num(f.prisma_awaiting_screening),
 			awaitingFulltext: num(f.prisma_awaiting_fulltext),
 			generatedAt: text(f.last_generated) || text(f.generated_at),
+			// 🩺 檢索健康檢查 (screening.js): the user's stop reason and the plugin's flag count (null when not checked)
+			stopReason: stopReasonText(fm, f),
+			healthFlags: num(f.search_health_flags),
 		};
 	}
 
@@ -494,6 +520,11 @@
 		let awaiting = AWAITING_FIELDS.filter(([k]) => r[k]).map(([k, label]) => `${label} ${fmtNumber(r[k])}`);
 		let bits = [flow || "尚無 PRISMA 計數"];
 		bits.push(awaiting.length ? `尚待篩選：${awaiting.join("、")}` : "沒有待篩選的文獻");
+		// One line from the PRISMA note's search health check; the full list stays in the note
+		let flags = r.healthFlags === undefined ? null : r.healthFlags;
+		if (flags > 0) bits.push(`檢索健康檢查 ${fmtNumber(flags)} 項提醒`);
+		if (r.stopReason) bits.push(`停止搜尋的理由：${r.stopReason}`);
+		else if (flags !== null) bits.push("還沒寫停止搜尋的理由");
 		let note = hasSnapshot && !row.previous ? "（上次報告後新增的回顧）" : "";
 		return `- ${link(r.link, r.title)}：${bits.join("；")}${note}`;
 	}
@@ -1130,6 +1161,8 @@ end
 			if (!/\.md$/i.test(f.name)) continue;
 			try {
 				let r = reviewRecord((await readFrontmatter(f.path)) || "", f.relPath);
+				// 檢索健康檢查 switched off: its last count is stale (the user's stop reason still shows)
+				if (pref("screening.healthCheck") === false) r.healthFlags = null;
 				if (PRISMA_FIELDS.some(([k]) => r[k] !== null)) out.push(r);
 			}
 			catch (e) {

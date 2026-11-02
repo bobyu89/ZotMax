@@ -33,7 +33,7 @@
 	const PREF = "extensions.zotero-bridge.";
 	// Bumped when a later version needs another one-time migration (see MIGRATIONS)
 	const MIGRATION_PREF = "features.version";
-	const MIGRATION_VERSION = 8;
+	const MIGRATION_VERSION = 9;
 
 	const GROUPS = [
 		{ id: "organize", label: "整理與同步", l10n: "zotero-bridge-feature-group-organize" },
@@ -115,6 +115,9 @@
 		{ id: "topicBot", group: "search", pref: "feature.topicBot", presets: { guided: false, advanced: true }, usesNetwork: true, since: 8,
 			label: "主題搜尋機器人",
 			desc: "替一個主題（Zotero 分類）存好檢索式和核心文獻，定期查 PubMed 和引用核心文獻的新研究，依你的 PICO 排序並寫出理由，列成清單；你勾選的才匯入。不用 AI。" },
+		{ id: "searchLog", group: "search", pref: "feature.searchLog", presets: { guided: true, advanced: true }, since: 9,
+			label: "檢索日誌與 PRISMA-S",
+			desc: "每個研究專案記下在哪個資料庫、哪天、用什麼檢索式查到幾筆（0 筆也記）；PRISMA 筆記並列日誌和來源標籤的筆數，可匯出 PRISMA-S 草稿。數字由你填，ZotMax 只預填它確定知道的事。不連網，也不呼叫 AI。" },
 		// 篩選與評讀
 		{ id: "screening", group: "appraise", pref: "feature.screening", presets: { guided: true, advanced: true },
 			label: "篩選與 PRISMA",
@@ -350,6 +353,8 @@
 		{ version: 7, run: s => ({ added: FEATURES.filter(f => f.since === 7).map(f => f.id), newSwitches: migrateNewSwitches(s, 7) }) },
 		// v0.32.0: 主題搜尋機器人 (every switch marked since: 8), the same way as step 2
 		{ version: 8, run: s => ({ added: FEATURES.filter(f => f.since === 8).map(f => f.id), newSwitches: migrateNewSwitches(s, 8) }) },
+		// v0.40.0: 檢索日誌與 PRISMA-S (every switch marked since: 9), the same way as step 2
+		{ version: 9, run: s => ({ added: FEATURES.filter(f => f.since === 9).map(f => f.id), newSwitches: migrateNewSwitches(s, 9) }) },
 	];
 
 	/**

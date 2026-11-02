@@ -9,8 +9,10 @@
  * watch's collection, tagged 新文獻, 追蹤/<watch name> and 來源/PubMed. Every request follows the
  * NCBI usage rules: tool and email parameters, an optional API key, at most 3 requests per second
  * (10 with the key). New papers are also listed in a daily Obsidian note <folder>/新文獻/<date>.md.
+ * 測試檢索式 in the settings pane also shows the 檢索式體檢 (query-check.js, pref queryCheck.enabled) for a query
+ * the user wrote or edited; a watch saved from 醫學文獻快速搜尋 keeps the MeSH query ZotMax gave it in `generated`.
  *
- *   extensions.zotero-bridge.pubmedWatch.watches   [{ id, name, query, collection, days, since, enabled }]
+ *   extensions.zotero-bridge.pubmedWatch.watches   [{ id, name, query, collection, days, since, enabled, generated? }]
  *   extensions.zotero-bridge.pubmedWatch.state     { watchID: { lastCheck, seen, queue, retry } }
  *
  * The helpers at the top are pure (Node tests); the rest needs Zotero.
@@ -184,13 +186,19 @@
 		return eutilsURL("esummary", { db: "pubmed", id: pmids.join(","), retmode: "json" }, ncbi);
 	}
 
-	/** ESearch JSON → { count, ids, translation, warnings }; an error reported by NCBI is thrown. */
+	/**
+	 * ESearch JSON → { count, ids, translation, translationSet, lists, warnings }; an error reported by NCBI is thrown.
+	 * translationSet: [{ from: the user's word as typed, to: what PubMed searched for it }]; lists: the errorlist and
+	 * warninglist entries by kind (phrasesNotFound, phrasesIgnored, fieldsNotFound, quotedPhrasesNotFound, outputMessages).
+	 */
 	function parseESearch(json) {
 		if (json && json.error) throw new Error(`PubMed：${json.error}`);
 		let r = json && json.esearchresult;
 		if (!r) throw new Error("PubMed 回傳的資料無法辨識");
 		if (r.ERROR) throw new Error(`PubMed 檢索式有誤：${r.ERROR}`);
 		let warnings = [];
+		let found = { phrasesNotFound: [], phrasesIgnored: [], fieldsNotFound: [], quotedPhrasesNotFound: [], outputMessages: [] };
+		let strings = v => (Array.isArray(v) ? v : []).filter(x => typeof x === "string" || typeof x === "number").map(String);
 		let lists = [r.errorlist, r.warninglist].filter(Boolean);
 		for (let list of lists) {
 			for (let p of list.phrasesnotfound || []) warnings.push(`找不到詞彙：${p}`);
@@ -198,11 +206,19 @@
 			for (let p of list.fieldsnotfound || []) warnings.push(`找不到欄位：${p}`);
 			for (let p of list.quotedphrasesnotfound || []) warnings.push(`找不到片語：${p}`);
 			for (let p of list.outputmessages || []) warnings.push(String(p));
+			found.phrasesNotFound.push(...strings(list.phrasesnotfound));
+			found.phrasesIgnored.push(...strings(list.phrasesignored));
+			found.fieldsNotFound.push(...strings(list.fieldsnotfound));
+			found.quotedPhrasesNotFound.push(...strings(list.quotedphrasesnotfound));
+			found.outputMessages.push(...strings(list.outputmessages));
 		}
 		return {
 			count: Number(r.count) || 0,
 			ids: (r.idlist || []).map(String).filter(id => /^\d+$/.test(id)),
 			translation: r.querytranslation || "",
+			translationSet: (Array.isArray(r.translationset) ? r.translationset : [])
+				.filter(t => t && typeof t.from === "string" && typeof t.to === "string").map(t => ({ from: t.from, to: t.to })),
+			lists: found,
 			warnings,
 		};
 	}
@@ -406,6 +422,35 @@
 		return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
 	}
 
+	// ---------- 檢索式體檢 under 測試檢索式 (pure; query-check.js does the checking) ----------
+
+	const QC_TITLE = "檢索式體檢";
+	const QC_SCOPE = "（只看你寫或改過的檢索式；不會改你的檢索式）";
+	const QC_GENERATED = "這是 ZotMax 產生的檢索式，不做體檢；你改過之後再測，就會檢查。";
+	const QC_NONE = "沒有發現結構上的提醒。";
+	const QC_EXPLAIN = "PubMed 怎麼讀你的檢索式：";
+	const QC_RETEST = "我改好了，再測一次";
+
+	/**
+	 * What 測試檢索式 shows below its result, here and in topic-bot.js's setup dialog: qc = query-check.js, detail =
+	 * testDetail(). → { user, title, scope, lines, retest }. A query equal to what ZotMax generated gets the one-line
+	 * notice and no button; otherwise up to 3 structure notes (or the 「沒有發現」 line), PubMed's reading in Chinese, one
+	 * neutral count sentence, and the label of the only button (it re-runs the test). Nothing here rewrites the query.
+	 */
+	function queryCheckView(qc, detail, { generated = "", type = "" } = {}) {
+		let r = qc.checkTest(detail, { generated, type });
+		let view = { user: r.user, title: QC_TITLE, scope: QC_SCOPE, lines: [], retest: "" };
+		if (!r.user) {
+			view.lines.push(QC_GENERATED);
+			return view;
+		}
+		view.lines.push(...(r.notes.length ? r.notes.map(n => `・${n.text}`) : [QC_NONE]));
+		if (r.explain.length) view.lines.push(QC_EXPLAIN, ...r.explain.map(l => `・${l}`));
+		if (r.count) view.lines.push(r.count);
+		view.retest = QC_RETEST;
+		return view;
+	}
+
 	// ---------- settings and state ----------
 
 	let runtime = {
@@ -543,6 +588,37 @@
 		return parent;
 	}
 
+	/** The collection at `path` when it exists (nothing is created); null otherwise. */
+	function findCollection(libraryID, path) {
+		let parent = null;
+		for (let name of collectionParts(path)) {
+			let siblings = parent ? Zotero.Collections.getByParent(parent.id) : Zotero.Collections.getByLibrary(libraryID);
+			parent = (siblings || []).find(c => c.name === name && !c.deleted) || null;
+			if (!parent) return null;
+		}
+		return parent;
+	}
+
+	/**
+	 * A watch run's exploratory draft in the 檢索日誌 of the watch's collection (the library's when the collection
+	 * doesn't exist yet): the query, what was sent, the hits in the Entrez-date window. Never throws.
+	 */
+	async function logDraft(watch, term, win, hits, now) {
+		try {
+			let log = scope.ZB.searchLog;
+			if (!log) return;
+			let collection = findCollection(Zotero.Libraries.userLibraryID, watch.collection);
+			let span = `${win.mindate}–${win.maxdate}`.replace(/\//g, "-");
+			await log.autoDraft(collection, {
+				origin: "pubmed-watch", database: SOURCE, sourceTag: SOURCE, platform: "PubMed（NCBI）", query: watch.query, sentQuery: term, hits,
+				limits: `Entrez 日期 ${span}（新文獻追蹤只查這段期間）`, date: localDate(now),
+			});
+		}
+		catch (e) {
+			Zotero.logError(e);
+		}
+	}
+
 	/** Run Zotero's search translators (as the magic wand does) for some PMIDs; returns the new items. */
 	async function translatePMIDs(pmids, libraryID, collectionID, ctx) {
 		await ctx.throttle.wait();
@@ -620,8 +696,11 @@
 		let startedAt = runtime.now();
 		try {
 			let win = searchWindow(watch, state.lastCheck, startedAt);
-			let search = parseESearch(await getJSON(esearchURL(watchTerm(watch), win, ctx.ncbi), ctx));
+			let term = watchTerm(watch);
+			let search = parseESearch(await getJSON(esearchURL(term, win, ctx.ncbi), ctx));
 			result.found = search.count;
+			// 檢索日誌: an exploratory draft per query and day (search-log.js; off with its switch or option)
+			await logDraft(watch, term, win, search.count, startedAt);
 			result.warnings = search.warnings;
 			if (search.count > search.ids.length) {
 				result.warnings.push(`符合 ${search.count} 篇，只取最新的 ${search.ids.length} 篇；請縮小檢索式`);
@@ -877,8 +956,12 @@
 
 	// ---------- settings pane ----------
 
-	/** "測試檢索式": total hits, hits in the first-check window, PubMed's reading of the query. */
-	async function testQuery(rawWatch) {
+	/**
+	 * "測試檢索式" with everything it learned: { lines (what the pane shows), query (the user's), sent (with the
+	 * date filter), count, recentCount, days, since, translation, translationSet, lists, warnings, at }. 記入檢索日誌
+	 * and the 檢索式體檢 read it.
+	 */
+	async function testDetail(rawWatch) {
 		let { watch, errors } = normalizeWatch(rawWatch, 0);
 		if (!watch.query) throw new Error("請先輸入 PubMed 檢索式");
 		let ncbi = await ncbiSettings();
@@ -886,12 +969,21 @@
 		let term = watchTerm(watch);
 		let all = parseESearch(await getJSON(esearchURL(term, { retmax: 0 }, ncbi), ctx));
 		let recent = parseESearch(await getJSON(esearchURL(term, { retmax: 0, reldate: watch.days }, ncbi), ctx));
-		return [
+		let lines = [
 			...errors.filter(e => !/沒有名稱/.test(e)).map(e => `⚠️ ${e}`),
 			`✅ 符合 ${all.count} 篇；最近 ${watch.days} 天加入 PubMed 的有 ${recent.count} 篇（第一次檢查會匯入這些，每次最多 ${config().max} 篇）`,
 			all.translation ? `PubMed 解讀為：${all.translation}` : "",
 			...all.warnings.map(w => `⚠️ ${w}`),
 		].filter(Boolean);
+		return {
+			lines, query: watch.query, sent: term, count: all.count, recentCount: recent.count, days: watch.days, since: watch.since,
+			translation: all.translation, translationSet: all.translationSet, lists: all.lists, warnings: all.warnings, at: runtime.now().toISOString(),
+		};
+	}
+
+	/** "測試檢索式": total hits, hits in the first-check window, PubMed's reading of the query. */
+	function testQuery(rawWatch) {
+		return testDetail(rawWatch).then(d => d.lines);
 	}
 
 	function newWatchID() {
@@ -980,12 +1072,70 @@
 			let status = el("pre", { class: "zb-status" });
 			let actions = el("div", { class: "zb-watch-row" });
 			let test = el("button", { type: "button" }, "測試檢索式");
-			test.addEventListener("click", () => {
-				status.textContent = "查詢 PubMed 中…";
-				testQuery(readRawWatches()[index] || w)
-					.then((lines) => { status.textContent = lines.join("\n"); })
-					.catch((e) => { status.textContent = `❌ ${e.message || e}`; });
+			// The last successful test of this box (記入檢索日誌 and the 檢索式體檢 read it)
+			let lastDetail = null;
+			// 記入檢索日誌: after a test succeeded, while the 檢索日誌 switch is on
+			let logBtn = el("button", { type: "button", "data-zb": "log-test" }, "記入檢索日誌");
+			logBtn.hidden = true;
+			logBtn.addEventListener("click", () => {
+				let collection = watchCollection(readRawWatches()[index] || w);
+				scope.ZB.searchLog.addFromTest(doc.defaultView || Zotero.getMainWindow(), lastDetail, { origin: "pubmed-test", collection })
+					.catch(e => Zotero.logError(e));
 			});
+			// 檢索式體檢 right after the result, rebuilt from lastDetail on every test (pref queryCheck.enabled);
+			// read out when it changes
+			let check = el("div", { class: "zb-query-check", "aria-live": "polite" });
+			check.hidden = true;
+			let showCheck = (raw, refocus = false) => {
+				check.replaceChildren();
+				let qc = queryCheck();
+				check.hidden = !(qc && lastDetail);
+				if (check.hidden) return;
+				let collection = watchCollection(raw);
+				let card = collection && scope.ZB.pico ? scope.ZB.pico.cardFor(collection) : null;
+				let view = queryCheckView(qc, lastDetail, { generated: typeof raw.generated === "string" ? raw.generated : "", type: (card && card.type) || "" });
+				let head = el("div", {});
+				head.append(el("strong", {}, view.title), el("span", { class: "zb-hint" }, view.scope));
+				check.append(head, ...view.lines.map(line => el("div", {}, line)));
+				if (view.retest) {
+					let again = el("button", { type: "button", "data-zb": "retest" }, view.retest);
+					// The same test as 測試檢索式, with what the query field holds now
+					again.addEventListener("click", runTest);
+					let r = el("div", { class: "zb-watch-row" });
+					r.append(again);
+					check.append(r);
+					// Re-tested from this button: focus goes to the new one
+					if (refocus) again.focus();
+				}
+			};
+			let runTest = (event) => {
+				let raw = readRawWatches()[index] || w;
+				let fromRetest = !!(event && event.currentTarget && event.currentTarget.getAttribute("data-zb") === "retest");
+				status.textContent = "查詢 PubMed 中…";
+				lastDetail = null;
+				logBtn.hidden = true;
+				// The block stays, its button disabled, until the answer comes back (then focus moves to the new button)
+				for (let b of check.querySelectorAll("button")) b.disabled = true;
+				return testDetail(raw)
+					.then((d) => {
+						lastDetail = d;
+						status.textContent = d.lines.join("\n");
+						logBtn.hidden = !(scope.ZB.searchLog && featureOn("searchLog"));
+						try {
+							showCheck(raw, fromRetest);
+						}
+						catch (e) {
+							Zotero.logError(e);
+							check.hidden = true;
+						}
+					})
+					.catch((e) => {
+						status.textContent = `❌ ${e.message || e}`;
+						showCheck(raw);
+						if (fromRetest) test.focus();
+					});
+			};
+			test.addEventListener("click", runTest);
 			let del = el("button", { type: "button" }, "刪除");
 			del.addEventListener("click", () => {
 				let all = readRawWatches();
@@ -993,8 +1143,8 @@
 				writeRawWatches(all);
 				renderPrefs(doc);
 			});
-			actions.append(test, del);
-			box.append(actions, status);
+			actions.append(test, logBtn, del);
+			box.append(actions, status, check);
 			container.append(box);
 		});
 		if (errors.length) container.append(el("pre", { class: "zb-status" }, errors.map(e => `⚠️ ${e}`).join("\n")));
@@ -1006,14 +1156,30 @@
 		return !f || f.isEnabled(id);
 	}
 
+	// 檢索式體檢 (query-check.js) while its option is on; null when off or not loaded
+	function queryCheck() {
+		return (pref("queryCheck.enabled") !== false && scope.ZB && scope.ZB.queryCheck) || null;
+	}
+
+	/** A watch's collection when it exists in Zotero (null before its first import); never creates it. */
+	function watchCollection(raw) {
+		try {
+			return findCollection(Zotero.Libraries.userLibraryID, normalizeWatch(raw, 0).watch.collection);
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return null;
+		}
+	}
+
 	return {
 		NEW_TAG, WATCH_TAG_PREFIX, DEFAULT_COLLECTION_ROOT, DIGEST_FOLDER, DEFAULT_DAYS, DEFAULT_MAX, QUEUE_LIMIT, EUTILS,
 		STARTUP_DELAY_MS, TICK_MS,
 		defaultCollection, normalizeSince, normalizeWatch, parseWatches, watchTerm, ncbiDate, searchWindow,
 		eutilsURL, esearchURL, esummaryURL, parseESearch, parseESummary, createThrottle, planCandidates, pmidFromExtra, normalizeDOI,
-		describeResult, digestLine, digestBoard, buildDigestNote, localDate,
+		describeResult, digestLine, digestBoard, buildDigestNote, localDate, queryCheckView,
 		runtime, config, readWatches, readState, ncbiSettings, getJSON, findExisting, ensureCollection, checkWatch, runAll, dueWatches,
-		init, shutdown, testQuery, addWatch, renderPrefs,
+		init, shutdown, testQuery, testDetail, findCollection, addWatch, renderPrefs,
 		get timerActive() { return !!timer; },
 	};
 });

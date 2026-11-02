@@ -351,6 +351,7 @@
 			</hbox>
 			<checkbox label="在 Obsidian 建立每日新文獻清單（預設子資料夾的 新文獻/YYYY-MM-DD.md）" preference="extensions.zotero-bridge.pubmedWatch.digest"/>
 			<checkbox data-zb-feature="aiNotes" label="手動檢查後為新文獻產生 AI 筆記並同步（會產生 API 費用；自動檢查不會呼叫 AI）" preference="extensions.zotero-bridge.pubmedWatch.runAI"/>
+			<checkbox label="測試檢索式時做「檢索式體檢」：只看你寫或改過的檢索式，列結構提醒和 PubMed 怎麼解讀，不會改你的檢索式" preference="extensions.zotero-bridge.queryCheck.enabled"/>
 			<description class="zb-hint">已在文獻庫的文獻（Extra 有相同 PMID 或 DOI 相同）不會重複匯入；匯入後移到垃圾桶的也不會再匯入。每次只查上次檢查之後加入 PubMed 的文獻（Entrez Date）。</description>
 		</groupbox>
 
@@ -382,6 +383,13 @@
 			<label data-search-strings-raw="topic search bot, alert, new papers, PubMed, OpenAlex, cited by, 主題搜尋機器人, 機器人, 新文獻, 自動搜尋"><html:h2>主題搜尋機器人</html:h2></label>
 			<description>在主題分類上按右鍵 → ZotMax ▸ 主題搜尋機器人：建立或修改，存好檢索式（預設取自 PICO 問題卡）和核心文獻。機器人每天查 PubMed、每週查引用核心文獻的新研究，依你的 PICO 排序並寫出理由，列在 Obsidian「新文獻」資料夾的「&lt;分類&gt; 搜尋機器人」清單；你勾選後按「匯入主題搜尋機器人勾選的文獻」才會進 Zotero。不用 AI；PubMed 用上面「NCBI（PubMed）連線」的 Email 與 API key，OpenAlex 用引文追蹤的 Email。</description>
 			<checkbox preference="extensions.zotero-bridge.topicBot.autoRun" label="Zotero 開著時自動搜尋（啟動 3 分鐘後，之後每小時檢查一次是否到期）"/>
+			<checkbox label="測試檢索式時做「檢索式體檢」：只看你寫或改過的檢索式，列結構提醒和 PubMed 怎麼解讀，不會改你的檢索式" preference="extensions.zotero-bridge.queryCheck.enabled"/>
+		</groupbox>
+		<groupbox data-zb-section="searchLog" data-zb-feature="searchLog">
+			<label data-search-strings-raw="search log, PRISMA-S, search history, 檢索日誌, 檢索紀錄, 對帳"><html:h2>檢索日誌</html:h2></label>
+			<description>每個分類一份，存在 Zotero 資料夾的 zotero-bridge/search-log；有 Obsidian vault 時也寫成 評讀與綜整（或 Reviews）/檢索日誌/ 下的筆記。開啟：在分類上按右鍵 → ZotMax → 檢索日誌（目前分類）…</description>
+			<checkbox preference="extensions.zotero-bridge.searchLog.offerAfterOpen" label="開啟中文資料庫、CINAHL 或灰色文獻網站後，顯示「📝 記一筆」按鈕（不會跳出視窗）"/>
+			<checkbox preference="extensions.zotero-bridge.searchLog.autoDrafts" label="主題搜尋機器人和 PubMed 追蹤每次自動執行時，留一筆「探索」草稿（不會進 PRISMA，要不要升為正式由你決定）"/>
 		</groupbox>
 	</vbox>
 
@@ -395,6 +403,7 @@
 			<hbox>
 				<button label="載入內建排除原因來修改" oncommand="ZoteroBridgePrefs.loadDefaultReasons()"/>
 			</hbox>
+			<checkbox label="PRISMA 筆記加上「檢索健康檢查」卡：只列客觀訊號和要帶去問館員或指導教授的事，不打分數" preference="extensions.zotero-bridge.screening.healthCheck"/>
 			<html:details class="zb-more">
 				<html:summary>更多篩選設定：標籤前綴、PRISMA 的 Notion 頁面與其他來源</html:summary>
 				<hbox align="center">

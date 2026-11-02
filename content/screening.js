@@ -16,6 +16,9 @@
  * duplicates, counts the PRISMA 2020 flow, checks that the decisions add up, and writes an
  * Obsidian note (counts, Mermaid flow diagram, evidence table of the included studies from the
  * structured data of their AI notes), a CSV of the evidence table and optionally a Notion page.
+ * The note's 🩺 檢索健康檢查 card lists objective signals about the search (one database, Google Scholar in the
+ * database column, no CINAHL for a qualitative question, RCTs without a review, no citation searching) and fixed
+ * questions for a librarian; the user's own search_stop_reason in its frontmatter is never overwritten.
  *
  * The helpers at the top are pure (Node tests); the rest needs Zotero.
  */
@@ -62,6 +65,20 @@
 	const MARK_START_RE = /^%% zotero-bridge:start.*%%[ \t]*$/m;
 	const MARK_END_RE = /^%% zotero-bridge:end %%[ \t]*$/m;
 	const MAX_LISTED = 10;
+
+	// 檢索日誌 (search-log.js) loads after this file in Zotero; Node requires it on first use
+	function searchLog() {
+		if (scope.ZB && scope.ZB.searchLog) return scope.ZB.searchLog;
+		return typeof module === "object" && module.exports ? require("./search-log.js") : null;
+	}
+
+	/** 「檢索紀錄對帳」 (plain), or the line that there's no log yet; "" while the log is off. */
+	function searchLogSection(meta) {
+		let s = meta.searchLog;
+		if (!s) return "";
+		let sl = searchLog();
+		return s.rec ? sl.reconcileSection(s.rec, { link: s.link, layout: "plain", links: meta.links }) : `## 檢索紀錄對帳\n\n${sl.noLogLine()}`;
+	}
 
 	// ---------- tags (pure) ----------
 
@@ -426,6 +443,8 @@
 		["manyReasons", "warn", "有多個排除原因（只計入設定清單中排在最前面的一個）"],
 		["reasonWithoutExclude", "warn", "有排除原因，但全文決定不是「排除」（原因不計入）"],
 		["countMismatch", "warn", "計數不一致"],
+		// Added by generateReportNow from search-log.js reconcile(); computePrisma() never raises it
+		["logMismatch", "warn", "檢索日誌和來源標籤的筆數對不上（只提醒，PRISMA 辨識數仍用 Zotero 標籤計數）"],
 		["taPending", "info", "尚未完成標題摘要篩選（沒有決定或「待定」）"],
 		["ftPending", "info", "已通過標題摘要篩選，但還沒有全文決定"],
 		["noStudyData", "info", "納入研究還沒有 AI 筆記的結構化資料，證據表的欄位是空的（先對這些文獻執行同步產生 AI 筆記）"],
@@ -450,7 +469,10 @@
 	 * the right-hand column; everything else in `counts` (databases and registers).
 	 * @param {object[]} records { id, title, tags, catalog, … }
 	 * @returns {{ counts, sources: [name, n][], reasons: [reason, n][], other: null | { counts, sources, reasons },
-	 *   totalIncluded, issues, included }}
+	 *   totalIncluded, issues, included, untagged, tagSources: [name, n][], tagSets: [names[], n][] }}
+	 * untagged: records without a 來源/ tag (both columns); tagSources: the 來源/ values of the database column only
+	 * (no Library Catalog fallback); tagSets: the database column's tagged records grouped by their 來源/ values (what
+	 * 其他方法的來源 could move). Read by the search health check.
 	 */
 	function computePrisma(records, cfg) {
 		cfg = normalizeConfig(cfg);
@@ -463,6 +485,9 @@
 		let columns = { db: column(rows.length - otherCount), other: column(otherCount) };
 		let found = new Map(ISSUES.map(([code]) => [code, []]));
 		let included = [];
+		let tagSources = new Map();
+		let tagSets = new Map();
+		let untagged = 0;
 		let issue = (code, r) => found.get(code).push(r);
 		for (let { r, s, other: isOther } of rows) {
 			let col = isOther ? columns.other : columns.db;
@@ -470,6 +495,13 @@
 			let { sources, reasons } = col;
 			let from = s.sources.length ? s.sources : [String(r.catalog || "").trim() || NO_SOURCE];
 			for (let src of from) sources.set(src, (sources.get(src) || 0) + 1);
+			if (!s.sources.length) untagged++;
+			else if (!isOther) {
+				for (let src of s.sources) tagSources.set(src, (tagSources.get(src) || 0) + 1);
+				let names = s.sources.slice().sort();
+				let key = JSON.stringify(names);
+				tagSets.set(key, [names, (tagSets.has(key) ? tagSets.get(key)[1] : 0) + 1]);
+			}
 			if (s.taAll.length > 1) issue("taConflict", r);
 			if (s.ftAll.length > 1) issue("ftConflict", r);
 			if (s.duplicate) {
@@ -531,6 +563,8 @@
 			counts: db.c, sources: sourceList(db), reasons: reasonList(db), other,
 			totalIncluded: db.c.included + (other ? other.counts.included : 0),
 			issues, included,
+			untagged, tagSources: [...tagSources].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
+			tagSets: [...tagSets.values()],
 		};
 	}
 
@@ -544,6 +578,233 @@
 			["reports excluded = sum of reasons", c.ftExcluded, reasonList.reduce((n, [, v]) => n + v, 0)],
 		];
 		return rules.filter(([, a, b]) => a !== b).map(([name, a, b]) => `${name}（${a} ≠ ${b}）`);
+	}
+
+	// ---------- 檢索健康檢查 (pure) ----------
+
+	// The user's own frontmatter key on the PRISMA note: kept on regeneration (a placeholder only when missing)
+	const STOP_KEY = "search_stop_reason";
+	// The plugin's key: how many health flags the last PRISMA run listed (read by the progress report)
+	const HEALTH_KEY = "search_health_flags";
+	const SCHOLAR = "Google Scholar";
+	const CHASE_SOURCE = "引文追蹤";
+	// Untagged share from which the databases can't be told
+	const UNKNOWN_SHARE = 0.2;
+	const MIN_RCTS = 3;
+	const RCT_RE = /\b(randomi[sz]ed|RCT)\b|隨機(分派|對照)/i;
+	const NOT_RCT_RE = /quasi|non-?randomi[sz]ed|類實驗|非隨機/i;
+	const SR_RE = /systematic review|meta-?analy|umbrella|guideline|系統性(文獻)?回顧|統合分析|後設分析|指引|指南/i;
+	const HEALTH_TITLE = "🩺 檢索健康檢查";
+	const HEALTH_LEAD = "只列客觀訊號和問題，不評等；要不要補查由你決定。";
+	// 「要不要再查…」 after one database: three of these, without the one already searched
+	const MORE_DATABASES = ["CINAHL", "Cochrane", "華藝", "PubMed"];
+	// PRESS-style, fixed: never generated per search
+	const PRESS_HEADING = "帶去給館員或指導教授看的 3 件事";
+	const PRESS_ITEMS = [
+		"檢索式：每個概念的同義詞、主題詞（MeSH／CINAHL Headings）和自由詞都有嗎？AND、OR、括號和截字用對了嗎？",
+		"資料庫與其他方法：這個題目還該查哪些資料庫、試驗登錄、灰色文獻或中文資料庫？",
+		"限制與停止：年份、語言、文章類型的限制有理由嗎？什麼時候停止搜尋、為什麼？",
+	];
+	// Names what was checked: with no flag there is no list above it
+	const NO_FLAGS_LINE = "沒有發現這幾類訊號：太多文獻沒有來源標籤、只有一個資料庫、Google Scholar 算在資料庫欄、納入研究只來自 Google Scholar、質性問題沒查 CINAHL、有 RCT 卻沒有系統性回顧或指引、沒有引文追蹤。這不代表檢索已經完整，請照下面 3 件事和館員或指導教授確認。";
+	const STOP_EMPTY_LINE = `停止搜尋的理由：還沒寫。請在這份筆記的屬性 ${STOP_KEY} 寫下來（重新產生 PRISMA 不會覆寫）。`;
+	// Notion pages: the reason lives in the Obsidian note's frontmatter, never on the page
+	const STOP_NOTION_EMPTY_LINE = `停止搜尋的理由：還沒寫。請在 Obsidian 的 PRISMA 筆記屬性 ${STOP_KEY} 寫下來。`;
+	const STOP_NO_VAULT_LINE = `停止搜尋的理由要寫在 Obsidian 的 PRISMA 筆記屬性 ${STOP_KEY}；還沒設定 Obsidian vault，所以這裡沒辦法顯示。`;
+
+	// The same source in the log and in the tags: search-log.js's aliases (華藝 = Airiti Library …) when it is there
+	function sameSourceName(a, b) {
+		let sl = searchLog();
+		if (sl && sl.sameSource) return sl.sameSource(a, b);
+		let key = v => String(v || "").normalize("NFKC").toLowerCase().trim();
+		return !!key(a) && key(a) === key(b);
+	}
+
+	// 「A、B 或 C」, with a space only between Chinese and Latin text
+	function zhOr(list) {
+		if (list.length < 2) return list.join("");
+		let a = list.slice(0, -1).join("、");
+		let b = list[list.length - 1];
+		return `${a}${/[A-Za-z0-9]$/.test(a) ? " " : ""}或${/^[A-Za-z0-9]/.test(b) ? " " : ""}${b}`;
+	}
+
+	/**
+	 * A frontmatter value as one line of text: plain or quoted scalars, block scalars (| or >) and lists
+	 * ("" when the key is missing or empty). The user writes search_stop_reason however Obsidian lets them.
+	 */
+	function frontmatterText(fm, key) {
+		let block = core.parseFrontmatterBlocks(fm || "").find(b => b.key === key);
+		if (!block) return "";
+		let lines = block.text.split(/\r?\n/);
+		let first = lines[0].slice(lines[0].indexOf(":") + 1).trim();
+		let rest = lines.slice(1).map(l => l.trim()).filter(Boolean);
+		if (/^[|>][+-]?\d*$/.test(first)) return rest.join(" ");
+		if (!first && rest.every(l => l.startsWith("-"))) {
+			return rest.map(l => l.replace(/^-\s*/, "").replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1")).filter(Boolean).join("；");
+		}
+		let raw = [first, ...rest].join(" ").trim();
+		if (/^".*"$/.test(raw)) {
+			try {
+				return String(JSON.parse(raw)).trim();
+			}
+			catch (e) {}
+		}
+		return raw.replace(/^'(.*)'$/, (m, v) => v.replace(/''/g, "'")).trim();
+	}
+
+	/** The user's stop reason in a review note ("" when none). */
+	function stopReasonOf(noteText) {
+		return frontmatterText(noteText ? core.splitFrontmatter(noteText).frontmatter : "", STOP_KEY);
+	}
+
+	/**
+	 * 🩺 檢索健康檢查: the reviewer's six rules on the search, as objective signals and questions (no score, never
+	 * "complete"). Nothing is moved or changed: Google Scholar in the database column is only pointed out.
+	 * input: { prisma (computePrisma), cfg, rows (evidence rows of the included studies), noData (included studies
+	 * without an AI note), cardType (the PICO card's type, "meaning" = 質性), chase: { note, off (the 引文追蹤 feature
+	 * is switched off) }, log ({ databases,
+	 * hasLog } from search-log.js, or null), stopReason }
+	 * → { flags: [{ code, text }], lines, press, stopReason, count }
+	 */
+	function searchHealth(input = {}) {
+		let prisma = input.prisma || {};
+		let cfg = normalizeConfig(input.cfg);
+		let prefix = cfg.sourcePrefix;
+		let other = prisma.other || null;
+		let log = input.log || null;
+		let logDBs = log && Array.isArray(log.databases) ? log.databases : [];
+		let dbSources = (prisma.sources || []).filter(([s]) => s !== NO_SOURCE);
+		let otherSources = other ? other.sources || [] : [];
+		let tagSources = prisma.tagSources || [];
+		let rows = Array.isArray(input.rows) ? input.rows : [];
+		let noData = Number(input.noData) || 0;
+		let isScholar = name => sameSourceName(name, SCHOLAR);
+		let flags = [];
+		let lines = [];
+		let flag = (code, text) => flags.push({ code, text });
+
+		// 1 / 2: which databases, unless too many records have no 來源/ tag to tell
+		let total = (prisma.counts ? prisma.counts.identified : 0) + (other ? other.counts.identified : 0);
+		let untagged = Number(prisma.untagged) || 0;
+		if (untagged && total && untagged / total >= UNKNOWN_SHARE) {
+			flag("unknownSources", `無法判斷用了哪些資料庫：${untagged} 筆（${Math.round((untagged / total) * 100)}%）沒有「${prefix}」標籤。請先替匯入的文獻加上來源標籤（例如「${prefix}PubMed」「${prefix}華藝」），再重新產生。`);
+		}
+		else {
+			let named = [];
+			let add = (name, alt) => {
+				if (!name || isScholar(name) || cfg.otherSources.includes(name)) return;
+				if (!named.some(n => sameSourceName(n, name) || (alt && sameSourceName(n, alt)))) named.push(name);
+			};
+			for (let [name] of tagSources) add(name);
+			for (let d of logDBs) if (d.method === "database") add(d.name || d.tag, d.tag);
+			if (named.length === 1) {
+				let more = MORE_DATABASES.filter(d => !sameSourceName(d, named[0])).slice(0, 3);
+				flag("singleDatabase", `目前只看到一個資料庫：${named[0]}。方法章要怎麼說明只查一個資料庫？要不要再查 ${zhOr(more)}？`);
+			}
+		}
+
+		// 3: Google Scholar in the database column (many schools list it under other methods); nothing is moved. The
+		// advice promises a move only for what 其他方法的來源 can move (records tagged with Scholar alone, by the tag's own
+		// spelling); records from the Library Catalog fallback and records also tagged with a database are only stated
+		let sum = list => list.filter(([s]) => isScholar(s)).reduce((n, [, v]) => n + v, 0);
+		let movable = 0;
+		let mixed = 0;
+		let toAdd = [];
+		for (let [names, n] of prisma.tagSets || []) {
+			if (!names.some(isScholar)) continue;
+			if (!names.every(isScholar)) {
+				mixed += n;
+				continue;
+			}
+			movable += n;
+			for (let name of names) if (!cfg.otherSources.includes(name) && !toAdd.includes(name)) toAdd.push(name);
+		}
+		let byCatalog = Math.max(0, sum(dbSources) - sum(tagSources));
+		if (movable || byCatalog) {
+			let quote = names => names.map(n => `「${n}」`).join("、");
+			let listed = cfg.otherSources.filter(isScholar);
+			let text = `Google Scholar 算在「資料庫」欄（${movable + byCatalog} 筆）。很多學校和期刊把它列為「其他方法」（補充檢索）；要不要改由你決定。`;
+			if (movable) {
+				text += `要移到右欄：在設定的「其他方法的來源」加上${quote(toAdd)}（和「${prefix}」後面的字一字不差），這 ${movable} 筆就會移過去。`;
+				let differ = listed.filter(n => !toAdd.includes(n));
+				if (differ.length) text += `設定裡已有${quote(differ)}，但標籤寫的是${quote(toAdd)}，兩邊的字不一樣，所以沒有移。`;
+			}
+			if (byCatalog) {
+				let name = listed[0] || toAdd[0] || SCHOLAR;
+				text += `${movable ? "另有" : "這"} ${byCatalog} 筆沒有「${prefix}」標籤，是依 Library Catalog 算成 Google Scholar；要移的話，先替它們加上「${prefix}${name}」標籤`
+					+ (cfg.otherSources.includes(name) || movable ? "。" : `，再在「其他方法的來源」加上「${name}」。`);
+			}
+			if (mixed) text += `另有 ${mixed} 筆同時標了其他資料庫，仍算在資料庫欄。`;
+			flag("scholarAsDatabase", text);
+		}
+
+		// 4: included studies found only through Google Scholar
+		let onlyScholar = (prisma.included || []).filter((r) => {
+			let sources = readState(r.tags, cfg).sources;
+			return sources.length > 0 && sources.every(isScholar);
+		});
+		if (onlyScholar.length) {
+			let titles = onlyScholar.slice(0, 3).map(r => `「${String(r.title || r.key || "Untitled").trim()}」`).join("、");
+			flag("includedOnlyScholar", `有 ${onlyScholar.length} 篇納入研究只從 Google Scholar 找到：${titles}${onlyScholar.length > 3 ? " 等" : ""}。Google Scholar 的結果不容易重現，這幾篇在其他資料庫找得到嗎？`);
+		}
+
+		// 5: a qualitative (meaning) question with no CINAHL in the sources or the log
+		let isCINAHL = name => sameSourceName(name, "CINAHL");
+		let hasCINAHL = [...dbSources, ...otherSources, ...tagSources].some(([s]) => isCINAHL(s))
+			|| logDBs.some(d => isCINAHL(d.name) || isCINAHL(d.tag));
+		if (input.cardType === "meaning" && !hasCINAHL) {
+			flag("qualitativeNoCinahl", "這是質性（意義／經驗）問題，但來源和檢索日誌都沒有 CINAHL。護理的質性研究很多收在 CINAHL，要不要查一次？");
+		}
+
+		// 6: RCTs but no systematic review or guideline (6S: look higher first); only studies whose design is known count
+		let designs = rows.map(r => String(r.design || "").trim()).filter(Boolean);
+		let rcts = designs.filter(d => RCT_RE.test(d) && !NOT_RCT_RE.test(d) && !SR_RE.test(d)).length;
+		let reviews = designs.filter(d => SR_RE.test(d)).length;
+		let uncounted = rows.length ? rows.length - designs.length : noData;
+		let uncountedNote = !uncounted ? ""
+			: uncounted === noData ? `（${uncounted} 篇納入研究沒有 AI 筆記，看不出研究設計，沒有算進去）`
+				: `（${uncounted} 篇納入研究看不出研究設計（沒有 AI 筆記，或筆記沒有研究設計），沒有算進去）`;
+		if (rcts >= MIN_RCTS && !reviews) {
+			flag("rctsNoSR", `納入研究有 ${rcts} 篇 RCT，但沒有系統性回顧或指引。依 6S 先往上層找：這個題目已經有人做過系統性回顧或指引嗎？${uncountedNote}`);
+		}
+		else if (uncountedNote) {
+			lines.push(`判斷 RCT 和系統性回顧時，只算看得出研究設計的納入研究${uncountedNote}。`);
+		}
+
+		// 7: no citation searching anywhere (tag, chase note, log)
+		let chased = [...dbSources, ...otherSources, ...tagSources].some(([s]) => s === CHASE_SOURCE)
+			|| !!(input.chase && input.chase.note)
+			|| logDBs.some(d => d.method === "citation");
+		if ((prisma.totalIncluded || 0) >= 1 && !chased) {
+			let off = !!(input.chase && input.chase.off);
+			flag("noCitationChasing", `還沒有引文追蹤的紀錄（沒有「${prefix}${CHASE_SOURCE}」標籤、沒有引文追蹤筆記，檢索日誌也沒有）。可以用「引文追蹤：目前分類全文納入的研究」查參考文獻和被引用文獻`
+				+ (off ? "（這個功能目前關著，要先到 設定 → 功能 打開「引文追蹤」），也可以自己翻納入研究的參考文獻。" : "。"));
+		}
+
+		if (!log || !log.hasLog) lines.push(`還沒有檢索日誌：資料庫清單只看「${prefix}」標籤，查了 0 筆的資料庫不會出現。`);
+		if (!flags.length) lines.push(NO_FLAGS_LINE);
+		let stopReason = String(input.stopReason || "").replace(/\s+/g, " ").trim();
+		return { flags, lines, press: PRESS_ITEMS.slice(), stopReason, count: flags.length };
+	}
+
+	/**
+	 * The health card: plain → a section (after 檢索紀錄對帳), board → a card for the 檢索 board.
+	 * opts.notion: a Notion page (the stop reason lives in the Obsidian note, which opts.vault says exists).
+	 */
+	function healthMarkdown(h, opts = {}) {
+		let stop = opts.notion && !opts.vault ? STOP_NO_VAULT_LINE
+			: h.stopReason ? `停止搜尋的理由（你寫的）：${h.stopReason}`
+				: opts.notion ? STOP_NOTION_EMPTY_LINE : STOP_EMPTY_LINE;
+		let body = [
+			HEALTH_LEAD,
+			h.flags.map(f => `- ${f.text}`).join("\n"),
+			...h.lines,
+			stop,
+			`### ${PRESS_HEADING}`,
+			h.press.map((p, i) => `${i + 1}. ${p}`).join("\n"),
+		].filter(Boolean).join("\n\n");
+		if (opts.layout === "board") return core.plainCard("zm-next|wide", `${HEALTH_TITLE}（${h.count}）`, body);
+		return `## ${HEALTH_TITLE}\n\n${body}`;
 	}
 
 	// ---------- outputs (pure) ----------
@@ -792,6 +1053,8 @@
 			"```mermaid\n" + buildMermaid(result) + "\n```",
 			"## 一致性檢查",
 			issuesMarkdown(result.issues),
+			searchLogSection(meta),
+			meta.health ? healthMarkdown(meta.health, { notion: meta.healthNotion, vault: meta.healthVault }) : "",
 			`## 證據表（納入研究 ${rows.length} 篇）`,
 			evidenceTable(rows, { links: meta.links }),
 		].filter(Boolean).join("\n\n");
@@ -836,6 +1099,16 @@
 		if (levels.length) cards.push(core.chartCard("證據等級（CEBM，1 最強）", core.barRows(levels.map(([l, n]) => [`L${l}`, n]), 5)));
 		if (result.issues.length) cards.push(core.plainCard("zm-next|wide", `一致性檢查（${result.issues.length}）`, issuesMarkdown(result.issues)));
 		parts.push(core.boardBlock("篩選進度", cards));
+		// 檢索: the search log's reconciliation (search-log.js); the search health check adds its card here too
+		let searchCards = [];
+		if (meta.searchLog) {
+			let sl = searchLog();
+			searchCards.push(meta.searchLog.rec
+				? sl.reconcileSection(meta.searchLog.rec, { link: meta.searchLog.link, layout: "board" })
+				: core.plainCard("zm-next|wide", "檢索紀錄", sl.noLogLine()));
+		}
+		if (meta.health) searchCards.push(healthMarkdown(meta.health, { layout: "board" }));
+		if (searchCards.length) parts.push(core.boardBlock("檢索", searchCards));
 		parts.push("## PRISMA 2020 流程圖", "```mermaid\n" + buildMermaid(result) + "\n```");
 		parts.push(core.foldBlock("PRISMA 2020 計數表", countsTable(result)));
 		parts.push(core.foldBlock(`證據表（納入研究 ${rows.length} 篇）`, evidenceTable(rows, { links: meta.links })));
@@ -877,6 +1150,8 @@
 			...otherFrontmatter(result.other),
 			evidence_csv: meta.csvPath || "",
 			notion: meta.notionUrl || "",
+			// 0 is written too (only "" is skipped), so the progress report can tell "no flags" from "not checked"
+			...(meta.health ? { [HEALTH_KEY]: meta.health.count } : {}),
 			last_generated: meta.generatedAt || "",
 		};
 	}
@@ -885,8 +1160,16 @@
 	 * The whole review note. With `existing`, only the plugin's frontmatter keys and the
 	 * %% zotero-bridge:start/end %% block change; empty values keep what the note has (e.g. the
 	 * Notion link when this run had no Notion). `tags`: a new note's tags (the PICO 表 passes its own).
+	 * opts.placeholders ({ key: '""' }): keys the user fills in, added only when the frontmatter has no such key;
+	 * a present key, empty or filled, is never touched.
 	 */
 	function buildReviewNote(existing, fm, title, section, tags = ["系統性回顧"], opts = {}) {
+		let placeholders = (f) => {
+			for (let [key, value] of Object.entries(opts.placeholders || {})) {
+				if (!core.parseFrontmatterBlocks(f).some(b => b.key === key)) f = [f.replace(/\s+$/, ""), `${key}: ${value}`].filter(Boolean).join("\n");
+			}
+			return f;
+		};
 		let block = `${core.MARK_START}\n\n${section}\n\n${core.MARK_END}`;
 		// 看板 (opts.layout): the snippet's classes with the user's own; switching back drops ours
 		if (opts.layout) {
@@ -895,7 +1178,8 @@
 			fm = Object.assign({}, fm, { cssclasses: classes || (core.frontmatterList(mine, "cssclasses").length ? [] : "") });
 		}
 		if (!existing) {
-			return core.buildFrontmatter(Object.assign({}, fm, { tags }), null)
+			let head = core.buildFrontmatter(Object.assign({}, fm, { tags }), null);
+			return `---\n${placeholders(head.slice(4, -5))}\n---\n`
 				+ `\n# ${title}\n\n${block}\n\n## ${USER_HEADING}\n\n`;
 		}
 		let { frontmatter, body } = core.splitFrontmatter(existing);
@@ -904,6 +1188,7 @@
 			if (value === "" || value === null || value === undefined) continue;
 			f = core.setFrontmatterValue(f, key, value);
 		}
+		f = placeholders(f);
 		let start = MARK_START_RE.exec(body);
 		let end = MARK_END_RE.exec(body);
 		if (start && end && end.index > start.index) {
@@ -1069,7 +1354,12 @@
 		return `${name(group.keep)} ← ${group.duplicates.length} 筆（${group.basis.join("、")}）${group.note ? `：${group.note}` : ""}`;
 	}
 
-	/** Find likely duplicates in a review collection and, after confirmation, tag all but one per group. */
+	const DEDUPE_RULE = "DOI、PMID、標題＋年份、期刊＋年＋卷＋起始頁（ZotMax 找重複）";
+
+	/**
+	 * Find likely duplicates in a review collection and, after confirmation, tag all but one per group. Every run
+	 * leaves a 去重紀錄 in the search log (PRISMA-S item 16), also with no groups or when the user cancels.
+	 */
 	async function dedupCollection(collection) {
 		let ZB = scope.ZB;
 		let cfg = config();
@@ -1078,23 +1368,38 @@
 		let byID = new Map(items.map(i => [i.id, i]));
 		let groups = findDuplicates(records, cfg);
 		let headline = "ZotMax：找重複";
+		let logRun = async (fields) => {
+			try {
+				if (ZB.searchLog) await ZB.searchLog.logDedupe(collection, Object.assign({ rule: DEDUPE_RULE, records: records.length, groups: groups.length, marked: 0, alreadyMarked: 0, cancelled: false }, fields));
+			}
+			catch (e) {
+				Zotero.logError(e);
+			}
+		};
 		if (!groups.length) {
+			await logRun({});
 			ZB.main.notify(headline, `「${collection.name}」的 ${records.length} 筆文獻中沒有找到可能重複的文獻（比對 DOI、PMID、標題＋年份，以及期刊＋年＋卷＋起始頁）。`);
 			return { groups: 0, tagged: 0 };
 		}
 		let todo = groups.flatMap(g => g.duplicates.filter(r => !readState(r.tags, cfg).duplicate));
+		let alreadyMarked = groups.reduce((n, g) => n + g.duplicates.length, 0) - todo.length;
 		let lines = groups.slice(0, 15).map(describeGroup);
 		if (groups.length > 15) lines.push(`…另有 ${groups.length - 15} 組`);
 		let merge = "要合併條目，請在 Zotero 左側的「重覆的項目」（Duplicate Items）中合併；合併後辨識數（Records identified）會跟著減少，建議 PRISMA 計數定案後再合併。";
 		if (!todo.length) {
+			await logRun({ alreadyMarked });
 			ZB.main.notify(headline, `找到 ${groups.length} 組可能重複，都已標記「${duplicateTag(cfg)}」。\n${merge}`);
 			return { groups: groups.length, tagged: 0 };
 		}
 		let ok = Services.prompt.confirm(Zotero.getMainWindow(), headline,
 			`「${collection.name}」中找到 ${groups.length} 組可能重複的文獻（每組保留第一筆）：\n\n${lines.join("\n")}\n\n`
 			+ `要把其餘 ${todo.length} 筆加上標籤「${duplicateTag(cfg)}」嗎？不會合併或刪除任何條目，標錯了可以直接刪掉標籤。\n\n${merge}`);
-		if (!ok) return { groups: groups.length, tagged: 0 };
+		if (!ok) {
+			await logRun({ alreadyMarked, cancelled: true });
+			return { groups: groups.length, tagged: 0 };
+		}
 		let tagged = await setDecision(todo.map(r => byID.get(r.id)), { duplicate: true }, { silent: true });
+		await logRun({ alreadyMarked, marked: tagged });
 		ZB.main.notify(headline, `已將 ${tagged} 筆標記為「${duplicateTag(cfg)}」（${groups.length} 組）。\n${merge}`);
 		return { groups: groups.length, tagged };
 	}
@@ -1220,6 +1525,34 @@
 		return scope.ZB.main.enqueue(() => generateReportNow(collection));
 	}
 
+	// The collection's PICO card type ("meaning" = 質性) for the health check; "" without a card or with PICO off
+	function healthCardType(collection) {
+		let ZB = scope.ZB;
+		if (!ZB.pico || !ZB.pico.cardFor || (ZB.features && !ZB.features.isEnabled("pico"))) return "";
+		try {
+			let card = ZB.pico.cardFor(collection);
+			return card && card.type ? String(card.type) : "";
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return "";
+		}
+	}
+
+	// A 「<collection> 引文追蹤」 note in the vault (citation-chase.js) counts as citation searching
+	async function chaseNoteExists(settings, collection) {
+		let chase = scope.ZB.citationChase;
+		if (!settings.vaultPath || !chase || !chase.notePath) return false;
+		try {
+			let target = await chase.notePath(settings, collection);
+			return !!(target && target.existing !== null);
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return false;
+		}
+	}
+
 	async function generateReportNow(collection) {
 		let ZB = scope.ZB;
 		let headline = "ZotMax：PRISMA 與證據表";
@@ -1299,13 +1632,48 @@
 					Zotero.logError(e);
 				}
 			}
+			// 檢索日誌 (search-log.js): its numbers next to the tag counts; identified stays the tag count
+			if (ZB.searchLog) {
+				try {
+					let log = await ZB.searchLog.summaryFor(collection);
+					meta.searchLog = log ? { entries: log.entries, link: log.link, hasLog: log.hasLog, rec: log.hasLog ? ZB.searchLog.reconcile(log.entries, result, cfg) : null } : null;
+					if (meta.searchLog && meta.searchLog.rec && meta.searchLog.rec.issue) {
+						// A warning: before the info-level issues, as in ISSUES
+						let at = result.issues.findIndex(i => i.level === "info");
+						result.issues.splice(at < 0 ? result.issues.length : at, 0, meta.searchLog.rec.issue);
+					}
+				}
+				catch (e) {
+					Zotero.logError(e);
+				}
+			}
 			let target = settings.vaultPath ? await reviewNotePath(settings, collection) : null;
 			if (target) meta.csvPath = [...target.dirParts, `${target.name} 證據表.csv`].join("/");
+			// 🩺 檢索健康檢查: signals and questions only; the stop reason is the user's (read, never written)
+			if (Zotero.Prefs.get(PREF + "screening.healthCheck", true) !== false) {
+				try {
+					meta.health = searchHealth({
+						prisma: result, cfg, rows, noData: noData.length,
+						cardType: healthCardType(collection),
+						chase: {
+							note: await chaseNoteExists(settings, collection),
+							off: !!(ZB.features && !ZB.features.isEnabled("citationChase")),
+						},
+						log: meta.searchLog && ZB.searchLog
+							? { databases: ZB.searchLog.databasesSearched(meta.searchLog.entries), hasLog: meta.searchLog.hasLog } : null,
+						stopReason: target ? stopReasonOf(target.existing) : "",
+					});
+					meta.healthVault = !!target;
+				}
+				catch (e) {
+					Zotero.logError(e);
+				}
+			}
 
 			if (useNotion) {
 				line.setText("寫入 Notion…");
 				try {
-					let md = buildReviewSection(result, rows, Object.assign({}, meta, { links: false, csvPath: "" }));
+					let md = buildReviewSection(result, rows, Object.assign({}, meta, { links: false, csvPath: "", healthNotion: true }));
 					meta.notionUrl = await syncNotion(settings, meta.collectionKey, `PRISMA 2020：${collection.name}`, md);
 					outputs.push("Notion");
 				}
@@ -1320,7 +1688,8 @@
 					await IOUtils.writeUTF8(PathUtils.join(target.dir, `${target.name} 證據表.csv`), buildCSV(rows));
 					let layout = core.layoutPref();
 					let section = buildReviewSection(result, rows, Object.assign({}, meta, { links: true, layout }));
-					let text = buildReviewNote(target.existing, frontmatterFor(result, meta), meta.title, section, undefined, { layout });
+					let placeholders = meta.health ? { [STOP_KEY]: "\"\"" } : null;
+					let text = buildReviewNote(target.existing, frontmatterFor(result, meta), meta.title, section, undefined, { layout, placeholders });
 					if (text !== target.existing) await IOUtils.writeUTF8(target.path, text);
 					outputs.push(`Obsidian（${[...target.dirParts, target.name + ".md"].join("/")}）`, "CSV");
 				}
@@ -1365,7 +1734,8 @@
 		planChange, describeState, describeChange,
 		normalizeDOI, normalizeTitle, yearOf, pmidOf, firstPage, citationKeys, findDuplicates,
 		computePrisma, checkCounts, buildMermaid, countsTable, issuesMarkdown, evidenceRow, sortRows, evidenceTable,
-		csvCell, buildCSV, buildReviewSection, boardReviewSection, frontmatterFor, buildReviewNote, notionBlocks,
+		csvCell, buildCSV, buildReviewSection, boardReviewSection, DEDUPE_RULE, frontmatterFor, buildReviewNote, notionBlocks,
+		STOP_KEY, HEALTH_KEY, PRESS_HEADING, PRESS_ITEMS, searchHealth, healthMarkdown, frontmatterText, stopReasonOf,
 		config, itemRecord, setDecision, renderPaneRow, paneSummary, dedupCollection, generateReport, notionParent, syncNotionPage,
 	};
 });

@@ -1,5 +1,7 @@
 // site/search.html (醫學文獻快速搜尋): URL builders, EZproxy wrapping, PICO strings, Chinese detection,
-// saved searches and the page wiring, loaded in jsdom.
+// saved searches, the 「檢查我改過的檢索式」 box and PICO field hints, and the page wiring, loaded in jsdom.
+// The query checker (content/query-check.js, window.ZBQueryCheck) is inlined in place of <script src="query-check.js">,
+// like appraisal-page.test.cjs does with the checklist catalog.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -8,12 +10,22 @@ const { JSDOM, VirtualConsole } = require("jsdom");
 
 const SITE = path.join(__dirname, "..", "site");
 const HTML = fs.readFileSync(path.join(SITE, "search.html"), "utf8");
+const CHECKER = path.join(__dirname, "..", "content", "query-check.js");
+const TAG = '<script src="query-check.js"></script>';
 
-function load({ storage = true, confirm = true } = {}) {
+function withChecker(file) {
+	assert.ok(HTML.includes(TAG), "page loads query-check.js from the same folder");
+	if (file === null) return HTML.replace(TAG, "");
+	const src = fs.readFileSync(file, "utf8");
+	assert.ok(!src.includes("</script"), "checker can be inlined");
+	return HTML.replace(TAG, () => "<script>" + src + "</script>");
+}
+
+function load({ storage = true, confirm = true, checker = CHECKER } = {}) {
 	const errors = [];
 	const vc = new VirtualConsole();
 	vc.on("jsdomError", e => errors.push(e.message));
-	const dom = new JSDOM(HTML, {
+	const dom = new JSDOM(withChecker(checker), {
 		url: "https://bobyu89.github.io/ZotMax/search.html",
 		runScripts: "dangerously",
 		virtualConsole: vc,
@@ -42,7 +54,7 @@ const SAMPLE = {
 test("page loads without script errors and exposes window.ZBSearch", () => {
 	const { Z, errors } = load();
 	deq(errors, []);
-	for (const fn of ["buildUrl", "wrapProxy", "needsProxy", "buildPico", "hasCJK", "splitTerms", "glossaryHints"]) assert.equal(typeof Z[fn], "function", fn);
+	for (const fn of ["buildUrl", "wrapProxy", "needsProxy", "buildPico", "hasCJK", "splitTerms", "glossaryHints", "checkQuery"]) assert.equal(typeof Z[fn], "function", fn);
 });
 
 test("source list is complete and consistent", () => {
@@ -311,4 +323,134 @@ test("shared sources use the plugin's URLs and live-check results", () => {
 	const rows = [...doc.querySelectorAll("#statusTable tbody tr")];
 	assert.match(rows.find(r => r.cells[0].textContent === "Europe PMC").cells[1].textContent, /確定CI 實測：被擋/);
 	assert.match(rows.find(r => r.cells[0].textContent === "CINAHL").cells[1].textContent, /推測CI 實測：需登入/);
+});
+
+const notes = doc => [...doc.querySelectorAll("#qc-notes li")].map(li => li.textContent);
+
+test("query check box: lints the user's query, never changes it, re-test label", () => {
+	const { win, doc, Z, errors, opened } = load();
+	deq(errors, []);
+	assert.equal(typeof win.ZBQueryCheck.lint, "function");
+	const box = doc.getElementById("qcBox");
+	assert.equal(box.tagName, "DETAILS");
+	assert.equal(box.querySelector("summary").textContent, "檢查我改過的檢索式");
+	assert.ok(box.closest("#picoCard"), "inside the PICO card");
+	assert.match(box.textContent, /這裡只看結構，不會改你的檢索式，也不連 PubMed。/);
+	assert.match(box.textContent, /在 ZotMax 外掛的「測試檢索式」看得到/);
+	assert.equal(doc.getElementById("qc-missing").hidden, true);
+	const run = doc.getElementById("qc-run");
+	assert.equal(run.textContent, "檢查");
+	assert.equal(run.disabled, false);
+	assert.equal(doc.getElementById("qc-notes").getAttribute("aria-live"), "polite");
+
+	// empty: nothing checked, the label stays
+	run.click();
+	deq(notes(doc), []);
+	assert.equal(run.textContent, "檢查");
+
+	const ta = doc.getElementById("qc-input");
+	const typed = "a AND b OR c";
+	ta.value = typed;
+	run.click();
+	const first = notes(doc);
+	assert.equal(first.length, 1);
+	assert.match(first[0], /^同一層同時有 AND 和 OR（a AND b OR c）/);
+	assert.equal(ta.value, typed, "the textarea is never changed");
+	assert.equal(run.textContent, "我改好了，再測一次");
+
+	// the user fixes it and tests again
+	const fixed = "((falls[tiab] OR \"accidental falls\"[mh:noexp]) AND (\"nurs* care\"[tiab] OR Aged[majr])) NOT children[mh]";
+	ta.value = fixed;
+	run.click();
+	deq(notes(doc), ["沒有發現結構上的提醒。"]);
+	assert.equal(ta.value, fixed);
+	assert.equal(run.textContent, "我改好了，再測一次");
+	deq(Z.checkQuery().map(n => n.code), []);
+
+	// at most 3 notes
+	ta.value = "NOT a AND b OR fal* AND c[xyz] ( AND \"x";
+	run.click();
+	assert.equal(notes(doc).length, 3);
+
+	// run in PubMed opens the textarea text as typed
+	ta.value = typed;
+	doc.getElementById("qc-pubmed").click();
+	assert.equal(opened.pop(), "https://pubmed.ncbi.nlm.nih.gov/?term=" + encodeURIComponent(typed));
+	assert.equal(ta.value, typed);
+});
+
+test("PICO field hints: MeSH only, no truncation; plain text, empty when nothing to say", () => {
+	const { win, doc } = load();
+	for (const k of ["p", "i", "c", "o"]) {
+		const el = doc.getElementById(k + "-hint");
+		assert.ok(el && el.classList.contains("qc-hint") && el.classList.contains("small"), k);
+		assert.equal(el.textContent, "", k);
+		assert.equal(el.hidden, true, k);
+	}
+	input(win, doc.getElementById("p-mesh"), "Nurses");
+	assert.equal(doc.getElementById("p-hint").textContent, "有 MeSH 但沒有自由詞：剛收錄、還沒標上 MeSH 的新文獻會找不到，可以加幾個同義詞。");
+	assert.equal(doc.getElementById("p-hint").hidden, false);
+	input(win, doc.getElementById("i-terms"), "exercise, physical activity");
+	assert.equal(doc.getElementById("i-hint").textContent, "可以考慮截字，例如 nurs* 同時找 nurse、nursing、nurses（字根至少 4 個字母）。");
+	input(win, doc.getElementById("i-terms"), "exercis*, physical activity");
+	assert.equal(doc.getElementById("i-hint").textContent, "");
+	assert.equal(doc.getElementById("i-hint").hidden, true);
+	// the page quotes phrases itself: no phrase hint
+	input(win, doc.getElementById("o-terms"), "tai chi");
+	assert.equal(doc.getElementById("o-hint").textContent, "");
+	// clearing empties them; the generated query is untouched by the hints
+	doc.getElementById("sampleBtn").click();
+	assert.match(doc.getElementById("out-pubmed").textContent, /^\("older adults"\[tiab\]/);
+	doc.getElementById("clearPicoBtn").click();
+	for (const k of ["p", "i", "c", "o"]) assert.equal(doc.getElementById(k + "-hint").textContent, "", k);
+});
+
+test("PICO field hints: no C hint when C is left out of the query; each hint describes its field", () => {
+	const { win, doc } = load();
+	for (const k of ["p", "i", "c", "o"]) assert.equal(doc.getElementById(k + "-terms").getAttribute("aria-describedby"), k + "-hint", k);
+	input(win, doc.getElementById("c-mesh"), "Standard of Care");
+	assert.equal(doc.getElementById("c-hint").hidden, false);
+	const box = doc.getElementById("c-include");
+	box.checked = false;
+	box.dispatchEvent(new win.Event("change", { bubbles: true }));
+	assert.equal(doc.getElementById("c-hint").textContent, "");
+	assert.equal(doc.getElementById("c-hint").hidden, true);
+	box.checked = true;
+	box.dispatchEvent(new win.Event("change", { bubbles: true }));
+	assert.equal(doc.getElementById("c-hint").hidden, false);
+});
+
+test("the page's own generated queries give no structure notes", () => {
+	const { win, Z } = load();
+	const all = { yearFrom: "2015", yearTo: "2024", lang: { en: true, zh: true }, types: { rct: true, sr: true, guideline: true }, humans: true };
+	for (const p of [{ ...SAMPLE, filters: all }, { ...SAMPLE, includeC: false, filters: all }, { p: { terms: "x" } }, { p: { mesh: "Nurses" }, filters: { yearFrom: "2015" } }]) {
+		const q = Z.buildPico(p).pubmed;
+		deq(win.ZBQueryCheck.lint(q, { max: 10 }), [], q);
+	}
+});
+
+test("page works without query-check.js: fallback text, disabled button, no hints, no errors", () => {
+	const { win, doc, Z, errors, opened } = load({ checker: null });
+	deq(errors, []);
+	assert.equal(win.ZBQueryCheck, undefined);
+	assert.equal(doc.getElementById("qc-missing").hidden, false);
+	assert.equal(doc.getElementById("qc-missing").textContent, "載入不到檢查工具（query-check.js），請重新整理頁面。");
+	assert.equal(doc.getElementById("qc-run").disabled, true);
+	deq(Z.checkQuery(), []);
+	input(win, doc.getElementById("p-mesh"), "Nurses");
+	assert.equal(doc.getElementById("p-hint").textContent, "");
+	// the rest of the page still works
+	doc.getElementById("sampleBtn").click();
+	assert.match(doc.getElementById("out-pubmed").textContent, /^\("older adults"\[tiab\]/);
+	input(win, doc.getElementById("q"), "falls");
+	doc.getElementById("openAllBtn").click();
+	assert.ok(opened.length > 0);
+});
+
+test("pages workflow copies the checker; the build copy is git-ignored", () => {
+	const yml = fs.readFileSync(path.join(__dirname, "..", ".github", "workflows", "pages.yml"), "utf8");
+	assert.match(yml, /- name: Copy shared query checker into site\/\n\s+run: cp content\/query-check\.js site\/query-check\.js/);
+	assert.match(yml, /paths:[\s\S]*- "content\/query-check\.js"/);
+	const ignore = fs.readFileSync(path.join(__dirname, "..", ".gitignore"), "utf8").split("\n");
+	assert.ok(ignore.includes("site/query-check.js"));
 });

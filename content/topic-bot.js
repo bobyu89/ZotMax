@@ -15,6 +15,8 @@
  * suggests the one the paper fits (its papers' tags and MeSH, title words and the AI notes' interventions and
  * outcomes, weighted by how much each belongs to that island) and the import puts it there; the user edits or
  * deletes the 🏝️ part to send it elsewhere.
+ * The setup dialog's 測試檢索式 also shows the 檢索式體檢 (query-check.js through pubmed-watch's queryCheckView, pref
+ * queryCheck.enabled) once the user has changed the PICO card's query or typed their own.
  *
  *   extensions.zotero-bridge.topicBot.bots     { <collection scope key>: bot }
  *   bot = { name, path, libraryID, collectionKey, query, exclude: [terms], core: [{ key, label, doi, pmid, openalex }],
@@ -524,13 +526,16 @@
 
 	/**
 	 * The Chinese databases the bot can't search (no API): a row of links with the PICO card's Chinese terms.
-	 * chinese = { query, targets: search-links.js buildTarget()s }; a target without a search URL opens its
-	 * start page, with the words to paste shown beside it.
+	 * chinese = { query, targets: search-links.js buildTarget()s, logLink }; a target without a search URL opens its
+	 * start page, with the words to paste shown beside it. logLink (set while the 檢索日誌 is on: the log note, "" when
+	 * it has no path yet) asks to record the search there and links it.
 	 */
 	function chineseRow(chinese) {
 		if (!chinese || !chinese.query || !(chinese.targets || []).length) return "";
 		let links = chinese.targets.map(t => (t.copy ? `[${t.name}](${t.url})（貼上 \`${t.query.replace(/`/g, "'")}\`）` : `[${t.name}](${t.url})`));
-		return `> [!zm-links] 中文文獻（機器人查不到，請自己查）\n> ${links.join(" · ")}`;
+		let logOn = chinese.logLink !== undefined && chinese.logLink !== null;
+		if (chinese.logLink) links.push(`[[${chinese.logLink}|📝 檢索日誌]]`);
+		return `> [!zm-links] 中文文獻（機器人查不到，${logOn ? "查完請記到檢索日誌" : "請自己查"}）\n> ${links.join(" · ")}`;
 	}
 
 	/** The words to search the Chinese databases with: each PICO element's first Chinese term. */
@@ -632,6 +637,7 @@
 			libraryID: b.libraryID,
 			collectionKey: String(b.collectionKey || ""),
 			query: String(b.query || "").trim(),
+			generated: String(b.generated || "").trim(),
 			exclude: (Array.isArray(b.exclude) ? b.exclude : parseExclude(b.exclude)).map(String).slice(0, 30),
 			core: (Array.isArray(b.core) ? b.core : []).filter(c => c && (c.doi || c.pmid)).slice(0, MAX_CORE)
 				.map(c => ({ key: String(c.key || ""), label: String(c.label || c.doi || c.pmid), doi: screening.normalizeDOI(c.doi), pmid: String(c.pmid || ""), openalex: String(c.openalex || "") })),
@@ -720,17 +726,30 @@
 		ZB().main.notify("ZotMax：主題搜尋機器人", text);
 	}
 
-	/** The PICO card's search string and English blocks for a collection, if it has a card. */
+	/** The PICO card's search string, English blocks and question type for a collection, if it has a card. */
 	function cardInfo(collection) {
 		try {
 			let pico = ZB().pico;
 			let card = pico && pico.cardFor(collection);
 			let q = card ? pico.cardQuery(card) : null;
-			return q ? { query: q.en || "", blocks: q.blocks || [], zh: chineseQuery(q.blocks) } : null;
+			return q ? { query: q.en || "", blocks: q.blocks || [], zh: chineseQuery(q.blocks), type: card.type || "" } : null;
 		}
 		catch (e) {
 			Zotero.logError(e);
 			return null;
+		}
+	}
+
+	/** The PICO card's question type for a collection ("" without a card), whether or not it has terms yet. */
+	function cardType(collection) {
+		try {
+			let pico = ZB().pico;
+			let card = pico && pico.cardFor(collection);
+			return (card && card.type) || "";
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return "";
 		}
 	}
 
@@ -791,17 +810,73 @@
 			let testRow = el("div", "display: flex; gap: 8px; align-items: baseline; margin-top: 4px;");
 			let test = el("button", "", "測試檢索式");
 			test.setAttribute("type", "button");
+			// The result line and 記入檢索日誌 in one box (the 檢索式體檢 goes below it)
+			let testBox = el("div", "flex: 1;");
+			testBox.setAttribute("data-zb", "bot-test");
 			let testOut = el("span", "opacity: 0.85;");
-			testRow.append(test, testOut);
-			test.addEventListener("click", async () => {
+			let logBtn = el("button", "margin-left: 8px;", "記入檢索日誌");
+			logBtn.setAttribute("type", "button");
+			logBtn.hidden = true;
+			let lastDetail = null;
+			logBtn.addEventListener("click", () => {
+				if (lastDetail && init.logTest) Promise.resolve(init.logTest(lastDetail)).catch(e => Zotero.logError(e));
+			});
+			// 檢索式體檢 below the result (pref queryCheck.enabled): only for a query the user wrote or changed; read
+			// out when it changes
+			let check = el("div", "margin-top: 4px;");
+			check.setAttribute("data-zb", "query-check");
+			check.setAttribute("aria-live", "polite");
+			check.hidden = true;
+			let showCheck = (refocus = false) => {
+				check.replaceChildren();
+				let qc = queryCheck();
+				check.hidden = !(qc && lastDetail);
+				if (check.hidden) return;
+				let view = pubmedWatch.queryCheckView(qc, lastDetail, { generated: init.generated || "", type: init.type || "" });
+				let head = el("div", "");
+				head.append(el("span", "font-weight: 600;", view.title), el("span", "opacity: 0.75; font-size: 0.92em;", view.scope));
+				check.append(head, ...view.lines.map(line => el("div", "", line)));
+				if (view.retest) {
+					let again = el("button", "margin-top: 4px;", view.retest);
+					again.setAttribute("type", "button");
+					again.setAttribute("data-zb", "retest");
+					// The same test as 測試檢索式, with what the query box holds now
+					again.addEventListener("click", runTest);
+					check.append(again);
+					// Re-tested from this button: focus goes to the new one
+					if (refocus) again.focus();
+				}
+			};
+			testBox.append(testOut, logBtn, check);
+			testRow.append(test, testBox);
+			let runTest = async (event) => {
+				let fromRetest = !!(event && event.currentTarget && event.currentTarget.getAttribute("data-zb") === "retest");
 				testOut.textContent = "查詢中…";
+				lastDetail = null;
+				logBtn.hidden = true;
+				// The block stays, its button disabled, until the answer comes back (then focus moves to the new button)
+				for (let b of check.querySelectorAll("button")) b.disabled = true;
 				try {
-					testOut.textContent = await init.test(query.value.trim());
+					let d = await init.test(query.value.trim());
+					lastDetail = d;
+					testOut.textContent = d.text;
+					logBtn.hidden = !init.logTest;
 				}
 				catch (e) {
 					testOut.textContent = `⚠️ ${e.message || e}`;
+					showCheck();
+					if (fromRetest) test.focus();
+					return;
 				}
-			});
+				try {
+					showCheck(fromRetest);
+				}
+				catch (e) {
+					Zotero.logError(e);
+					check.hidden = true;
+				}
+			};
+			test.addEventListener("click", runTest);
 			let xLabel = el("div", "font-weight: 600; margin-top: 12px;", "排除詞（選填）");
 			let xHint = el("div", "opacity: 0.75; font-size: 0.92em; margin: 2px 0 4px;", `標題或摘要有這些詞的文獻扣 ${EXCLUDE_PENALTY} 分、排到後面（不會刪掉），理由會寫出是哪個詞。以逗號或換行分開，例如：children, pediatric, animal；字尾加 * 表示開頭相同的字都算（child* 包含 children、childhood）`);
 			let exclude = el("input", "width: 100%; box-sizing: border-box; font: inherit;");
@@ -875,13 +950,37 @@
 		return { action: "run", query: query.value.trim(), exclude: init.exclude || [], core: init.choices.filter(c => c.picked).map(c => c.key), sources: init.sources };
 	}
 
-	async function testQuery(query) {
+	/**
+	 * 「測試檢索式」 with everything it learned: { text (the line the dialog shows), query, sent, count, recentCount, days,
+	 * translation, translationSet, lists, warnings, at }. 記入檢索日誌 and the 檢索式體檢 read it.
+	 */
+	async function testDetail(query) {
 		if (!query) throw new Error("請先輸入檢索式");
 		let ncbi = await pubmedWatch.ncbiSettings();
 		let ctx = { ncbi, throttle: pubmedWatch.createThrottle(ncbi.apiKey ? 10 : 3), requests: [] };
 		let all = pubmedWatch.parseESearch(await pubmedWatch.getJSON(pubmedWatch.esearchURL(query, { retmax: 0 }, ncbi), ctx));
 		let recent = pubmedWatch.parseESearch(await pubmedWatch.getJSON(pubmedWatch.esearchURL(query, { retmax: 0, reldate: DEFAULT_DAYS }, ncbi), ctx));
-		return `符合 ${all.count} 篇；最近 ${DEFAULT_DAYS} 天新收錄 ${recent.count} 篇` + (all.warnings.length ? `；⚠️ ${all.warnings.join("；")}` : "");
+		return {
+			text: `符合 ${all.count} 篇；最近 ${DEFAULT_DAYS} 天新收錄 ${recent.count} 篇` + (all.warnings.length ? `；⚠️ ${all.warnings.join("；")}` : ""),
+			query, sent: query, count: all.count, recentCount: recent.count, days: DEFAULT_DAYS,
+			translation: all.translation, translationSet: all.translationSet, lists: all.lists, warnings: all.warnings, at: runtime.now().toISOString(),
+		};
+	}
+
+	function testQuery(query) {
+		return testDetail(query).then(d => d.text);
+	}
+
+	// 檢索式體檢 (query-check.js) while its option is on; null when off or not loaded
+	function queryCheck() {
+		return (pref("queryCheck.enabled") !== false && ZB() && ZB().queryCheck) || null;
+	}
+
+	// 檢索日誌 (search-log.js) while its switch is on
+	function searchLog() {
+		let log = ZB() && ZB().searchLog;
+		let f = ZB() && ZB().features;
+		return log && (!f || f.isEnabled("searchLog")) ? log : null;
 	}
 
 	/** 「主題搜尋機器人：建立或修改」 for a collection. */
@@ -894,7 +993,10 @@
 		let bot = botFor(collection);
 		let card = cardInfo(collection);
 		let choices = coreChoices(collection, bot);
-		let answer = await askSetup(Zotero.getMainWindow(), {
+		// What ZotMax put in the box: the card's query now, and the one this bot was saved with untouched
+		let generated = [card ? card.query : "", bot ? bot.generated : ""].filter(Boolean);
+		let win = Zotero.getMainWindow();
+		let answer = await askSetup(win, {
 			name: collection.name,
 			exists: !!bot,
 			query: bot ? bot.query : (card ? card.query : ""),
@@ -902,7 +1004,12 @@
 			exclude: bot ? bot.exclude : [],
 			choices,
 			sources: bot ? bot.sources : { pubmed: true, citations: true },
-			test: testQuery,
+			test: testDetail,
+			// The 檢索式體檢 skips those; the card type (even a card without terms yet) picks its count sentence
+			generated,
+			type: cardType(collection),
+			// 記入檢索日誌 after a successful test, while the log is on
+			logTest: searchLog() ? d => searchLog().addFromTest(win, d, { origin: "bot-test", collection }) : null,
 		});
 		if (!answer) return null;
 		if (answer.action === "delete") {
@@ -915,6 +1022,8 @@
 		let old = new Map((bot ? bot.core : []).map(c => [c.key, c]));
 		let saved = saveBot(collection, Object.assign({}, bot || { createdAt: runtime.now().toISOString() }, {
 			query: answer.query,
+			// Kept only while the query is still ZotMax's own, so a later card edit does not make it look like the user's
+			generated: generated.find(g => g.trim() === String(answer.query || "").trim()) || "",
 			exclude: Array.isArray(answer.exclude) ? answer.exclude : parseExclude(answer.exclude),
 			sources: answer.sources,
 			core: answer.core.map(k => byKey.get(k)).filter(Boolean)
@@ -955,7 +1064,32 @@
 		}
 		let warnings = [...search.warnings];
 		if (search.count > search.ids.length) warnings.push(`PubMed 符合 ${search.count} 篇，只看最新的 ${search.ids.length} 篇；請縮小檢索式`);
-		return { records, warnings };
+		return { records, warnings, count: search.count, window: win };
+	}
+
+	/**
+	 * The run's exploratory drafts in the collection's 檢索日誌 (one per source that ran: PubMed with the Entrez-date
+	 * window it searched, the citing works from OpenAlex). Never throws. sentQuery is the term exactly as sent; the
+	 * window went as URL parameters, so it is only in limits (like pubmed-watch's draft).
+	 */
+	async function logDrafts(collection, bot, pubmed, cites, now) {
+		let log = searchLog();
+		if (!log) return;
+		let date = pubmedWatch.localDate(now);
+		if (pubmed) {
+			let { mindate, maxdate } = pubmed.window;
+			await log.autoDraft(collection, {
+				origin: "topic-bot", database: "PubMed", sourceTag: SOURCE_TAGS.pubmed, platform: "PubMed（NCBI）", query: bot.query,
+				sentQuery: bot.query, hits: pubmed.count, date,
+				limits: `Entrez 日期 ${mindate}–${maxdate}（機器人只查這段期間新收錄的）`.replace(/\//g, "-"),
+			});
+		}
+		if (cites) {
+			await log.autoDraft(collection, {
+				origin: "topic-bot", database: "OpenAlex", sourceTag: SOURCE_TAGS.citations, method: "citation", date,
+				query: `引用核心文獻的新研究（${bot.core.length} 篇核心文獻）`, hits: cites.citing.length,
+			});
+		}
 	}
 
 	/** OpenAlex: works citing each core paper, published since the last run. */
@@ -1063,10 +1197,12 @@
 			let errors = [];
 			let pubmed = { records: [], warnings: [] };
 			let cites = { citing: [], warnings: [] };
+			let ran = { pubmed: null, cites: null };
 			if (due.pubmed) {
 				try {
 					pubmed = await searchPubMed(bot, now, seen);
 					bot.lastPubmed = now.toISOString();
+					ran.pubmed = pubmed;
 				}
 				catch (e) {
 					Zotero.logError(e);
@@ -1075,7 +1211,17 @@
 			}
 			if (due.citations) {
 				cites = await searchCitations(bot, now);
-				if (cites.citing.length || !cites.warnings.length) bot.lastCitations = now.toISOString();
+				if (cites.citing.length || !cites.warnings.length) {
+					bot.lastCitations = now.toISOString();
+					ran.cites = cites;
+				}
+			}
+			// 檢索日誌: exploratory drafts only (the user promotes what they report)
+			try {
+				await logDrafts(collection, bot, ran.pubmed, ran.cites, now);
+			}
+			catch (e) {
+				Zotero.logError(e);
 			}
 			errors.push(...pubmed.warnings, ...cites.warnings);
 			let index = citationChase.libraryIndex(await citationChase.libraryRecords(collection.libraryID, new Set()));
@@ -1091,10 +1237,20 @@
 				for (let c of merged) c.island = suggestIsland(c, profiles);
 			}
 			let target = await notePath(settings, collection);
+			let chinese = chineseTargets(card && card.zh);
+			if (chinese && searchLog()) {
+				try {
+					let summary = await searchLog().summaryFor(collection);
+					chinese.logLink = summary ? summary.link : "";
+				}
+				catch (e) {
+					Zotero.logError(e);
+				}
+			}
 			let result = {
 				at: now.toISOString(), candidates: merged, errors,
 				counts: { pubmed: merged.filter(c => c.sources.has("pubmed")).length, citations: merged.filter(c => c.sources.has("citations") && !c.sources.has("pubmed")).length },
-				chinese: chineseTargets(card && card.zh),
+				chinese,
 				islands: islands.length >= 2,
 			};
 			let { text, stats } = buildBotNote(target.existing, result, bot, { layout: core.layoutPref() });
@@ -1327,6 +1483,6 @@
 		dueSources, sinceDate, normalizeBot, parseExclude, chineseRow, chineseQuery, botSummaries, EXCLUDE_PENALTY,
 		ISLAND_MARK, titleWords, islandProfiles, suggestIsland, islandOfLine,
 		// Zotero
-		runtime, readBots, botFor, saveBot, deleteBot, coreChoices, setup, testQuery, run, runAll, islandsFor, importChecked, init, shutdown,
+		runtime, readBots, botFor, saveBot, deleteBot, coreChoices, setup, testQuery, testDetail, run, runAll, islandsFor, importChecked, init, shutdown,
 	};
 });

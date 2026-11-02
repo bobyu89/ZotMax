@@ -477,6 +477,11 @@
 			features: ["topicBot"], needs: null, menus: ["collection"],
 			keywords: ["搜尋機器人", "機器人", "bot", "匯入", "import", "勾選", "候選", "新文獻"],
 			run: sel => ZB().topicBot.importChecked(targetCollections(sel)[0] || null) },
+		// Without a selected collection: the library's log
+		{ id: "search-log", group: "search", l10n: "zotero-bridge-cmd-search-log", label: "檢索日誌（目前分類）…",
+			features: ["searchLog"], needs: null, menus: ["collection"],
+			keywords: ["檢索日誌", "檢索紀錄", "search log", "search history", "prisma-s", "prisma", "記一筆", "命中", "hits", "華藝", "cinahl", "灰色文獻", "grey literature", "去重", "對帳"],
+			run: sel => ZB().searchLog.open(targetCollections(sel)[0] || null) },
 
 		// ---------- 篩選與評讀 ----------
 		{ id: "screen", group: "appraise", l10n: "zotero-bridge-toolbar-screen", label: "篩選所選文獻",
@@ -659,6 +664,7 @@
 		{ id: "pubmedWatch", label: "PubMed 新文獻追蹤", features: ["pubmedWatch"], keywords: ["pubmed", "追蹤", "watch", "新文獻", "檢索式"] },
 		{ id: "citationChase", label: "引文追蹤", features: ["citationChase"], keywords: ["引文追蹤", "citation", "openalex"] },
 		{ id: "topicBot", label: "主題搜尋機器人", features: ["topicBot"], keywords: ["搜尋機器人", "機器人", "bot", "alert", "自動搜尋", "新文獻"] },
+		{ id: "searchLog", label: "檢索日誌", features: ["searchLog"], keywords: ["檢索日誌", "search log", "prisma-s", "記一筆"] },
 		{ id: "screening", label: "篩選", features: ["screening"], keywords: ["篩選", "screening", "prisma", "排除原因", "exclusion reasons"] },
 		{ id: "pico", label: "PICO", features: ["pico"], keywords: ["pico", "picot", "問題卡", "pico 表", "證據表", "evidence table", "臨床問題", "clinical question", "word", "csv"] },
 		{ id: "ai", label: "AI 服務", features: ["aiNotes", "aiBatch", "synthesis", "reviewDraft", "progressReport", "conceptsAI"],

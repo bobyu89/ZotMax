@@ -550,12 +550,39 @@ test("settings pane: add, edit and delete watches; test a query against PubMed",
 	same(Object.assign({}, saved[0], { id: "" }), { id: "", name: "跌倒預防", query: FALLS, collection: "", days: "14", since: "", enabled: true });
 	same(env.watch.readWatches().watches[0].collection, "📥 新文獻/跌倒預防");
 
-	let [testButton, deleteButton] = box.querySelectorAll("button");
+	let [testButton, logButton, deleteButton] = box.querySelectorAll("button");
+	assert.equal(logButton.textContent, "記入檢索日誌");
+	assert.equal(logButton.hidden, true, "hidden until a test succeeded");
 	testButton.dispatchEvent(new window.Event("click"));
 	let status = box.querySelector("pre");
 	for (let i = 0; i < 100 && !/符合/.test(status.textContent); i++) await new Promise(r => setTimeout(r, 5));
 	assert.equal(status.textContent, `✅ 符合 30 篇；最近 14 天加入 PubMed 的有 30 篇（第一次檢查會匯入這些，每次最多 50 篇）\nPubMed 解讀為：translated(${FALLS})`);
 	same(env.log.map(c => [c.params.retmax, c.params.reldate]), [["0", undefined], ["0", "14"]]);
+	assert.equal(logButton.hidden, false, "shown after a test, while the 檢索日誌 is on");
+	// 記入檢索日誌: the form opens prefilled with what the test learned (the form is the test's stand-in)
+	let forms = [];
+	let dataDir = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-pubmed-log-"));
+	env.ZB.searchLog.runtime.dataDir = dataDir;
+	env.ZB.searchLog.runtime.form = (prefill, opts) => {
+		forms.push({ prefill, collection: opts.collection });
+		return { entry: prefill, collection: null };
+	};
+	logButton.dispatchEvent(new window.Event("click"));
+	for (let i = 0; i < 100 && !fs.existsSync(path.join(dataDir, "library.json")); i++) await new Promise(r => setTimeout(r, 5));
+	assert.equal(forms.length, 1);
+	let prefill = forms[0].prefill;
+	same([prefill.database, prefill.query, prefill.sentQuery, prefill.hits, prefill.status, prefill.origin, prefill.translation],
+		["PubMed", FALLS, FALLS, 30, "formal", "pubmed-test", `translated(${FALLS})`]);
+	assert.equal(forms[0].collection, null, "the watch's collection doesn't exist yet: the form asks");
+	for (let i = 0; i < 100 && !/已記到/.test(env.descriptions.join("\n")); i++) await new Promise(r => setTimeout(r, 5));
+	let saved1 = JSON.parse(fs.readFileSync(path.join(dataDir, "library.json"), "utf8"));
+	same(saved1.entries.map(e => [e.database, e.hits]), [["PubMed", 30]]);
+	// Switched off: the button stays hidden after a test
+	env.ZB.features.setEnabled("searchLog", false);
+	testButton.dispatchEvent(new window.Event("click"));
+	await new Promise(r => setTimeout(r, 30));
+	assert.equal(logButton.hidden, true, "hidden while the 檢索日誌 is off");
+	env.ZB.features.setEnabled("searchLog", true);
 
 	let checkbox = box.querySelector("input[type=checkbox]");
 	checkbox.checked = false;
@@ -563,6 +590,127 @@ test("settings pane: add, edit and delete watches; test a query against PubMed",
 	assert.equal(JSON.parse(env.prefStore[P + "pubmedWatch.watches"])[0].enabled, false);
 	deleteButton.dispatchEvent(new window.Event("click"));
 	same(JSON.parse(env.prefStore[P + "pubmedWatch.watches"]), []);
+	same(env.errors, []);
 	assert.match(doc.getElementById("zb-pubmed-watches").textContent, /尚未設定追蹤/);
+	vm.runInContext("shutdown()", env.context);
+});
+
+test("檢索日誌: each check leaves one exploratory draft per query and day (what was sent, the Entrez window), off with the switch", async () => {
+	let env = await setup({ searches: { [FALLS]: ["1002"], "(pressure injury[tiab]) AND (\"2020\"[dp] : \"3000\"[dp])": [] } });
+	let dataDir = await fsp.mkdtemp(path.join(os.tmpdir(), "zb-pubmed-log-"));
+	env.ZB.searchLog.runtime.dataDir = dataDir;
+	env.ZB.searchLog.runtime.now = () => new Date(NOW);
+	await env.watch.runAll({});
+	// The watches' collections don't exist before their first import: the library's log
+	let file = path.join(dataDir, "library.json");
+	let entries = () => JSON.parse(fs.readFileSync(file, "utf8")).entries.filter(e => !e.deleted);
+	same(entries().map(e => [e.origin, e.status, e.database, e.query, e.hits]), [
+		["pubmed-watch", "exploratory", "PubMed", FALLS, 1],
+		["pubmed-watch", "exploratory", "PubMed", "pressure injury[tiab]", 0],
+	]);
+	let pi = entries().find(e => e.query === "pressure injury[tiab]");
+	assert.equal(pi.sentQuery, "(pressure injury[tiab]) AND (\"2020\"[dp] : \"3000\"[dp])", "what ZotMax sent");
+	assert.match(pi.limits, /^Entrez 日期 2026-09-08–2026-10-08（新文獻追蹤只查這段期間）$/);
+	// The same day again: still one per query; the vault note mirrors it
+	await env.watch.runAll({ only: ["falls"] });
+	assert.equal(entries().length, 2);
+	let note = fs.readFileSync(path.join(env.vault, "Zotero", "Reviews", "檢索日誌", "我的文獻庫.md"), "utf8");
+	assert.match(note, /探索（2 筆，不進 PRISMA）/);
+	assert.match(note, /^log_formal: 0$/m);
+	// Off: no draft
+	env.ZB.features.setEnabled("searchLog", false);
+	env.ZB.searchLog.runtime.now = () => new Date(NOW.getTime() + 2 * 86400000);
+	env.watch.runtime.now = () => new Date(NOW.getTime() + 2 * 86400000);
+	await env.watch.runAll({ only: ["falls"] });
+	assert.equal(entries().length, 2);
+	same(env.errors.filter(e => !/2002|Translator/.test(String(e))), []);
+	vm.runInContext("shutdown()", env.context);
+});
+
+test("檢索式體檢 under 測試檢索式: the user's query gets notes, PubMed's reading and a count sentence; ZotMax's gets one notice; off by its option", async () => {
+	const MINE = "falls AND elderly OR exercise";
+	const FIXED = "(falls OR fall*) AND (elderly OR aged)";
+	const MESH_Q = '("Accidental Falls"[Mesh] OR "falls"[tiab]) AND ("Aged"[Mesh] OR "older adults"[tiab])';
+	let env = await setup({
+		prefs: { [P + "pubmedWatch.watches"]: JSON.stringify([
+			{ id: "mine", name: "跌倒", query: MINE, collection: "碩論/跌倒" },
+			{ id: "gen", name: "快速搜尋", query: MESH_Q, generated: MESH_Q },
+		]) },
+		searches: { [MINE]: ["1", "2"], [FIXED]: ["1"], [MESH_Q]: ["1", "2", "3"] },
+	});
+	// The watch's collection exists and its PICO card is a diagnosis question: the count sentence follows the type
+	let parent = new env.Zotero.Collection({ name: "碩論", libraryID: 1 });
+	await parent.saveTx();
+	let child = new env.Zotero.Collection({ name: "跌倒", libraryID: 1, parentID: parent.id });
+	await child.saveTx();
+	env.ZB.pico.saveCard(child, { type: "diagnosis", p: "older adults", i: "fall risk screening", o: "falls" });
+	let { window } = new JSDOM(`<div><input id="zb-ncbi-key" type="password"><div id="zb-pubmed-watches"></div></div>`);
+	let doc = window.document;
+	env.watch.renderPrefs(doc);
+	let [mine, gen] = doc.querySelectorAll(".zb-watch");
+	let click = el => el.dispatchEvent(new window.Event("click"));
+	let wait = async (cond) => {
+		for (let i = 0; i < 200 && !cond(); i++) await new Promise(r => setTimeout(r, 5));
+	};
+	let lines = box => [...box.querySelector(".zb-query-check").children].map(e => e.textContent);
+	let stored = () => env.prefStore[P + "pubmedWatch.watches"];
+
+	// The user's own query: up to 3 notes, the count sentence, the only button
+	let check = mine.querySelector(".zb-query-check");
+	assert.equal(check.hidden, true, "nothing before a test");
+	let before = stored();
+	click(mine.querySelector("button"));
+	await wait(() => !check.hidden);
+	let shown = lines(mine);
+	assert.equal(shown[0], "檢索式體檢（只看你寫或改過的檢索式；不會改你的檢索式）");
+	assert.match(shown[1], /^・同一層同時有 AND 和 OR（falls AND elderly OR exercise）：PubMed 由左到右處理/);
+	assert.ok(shown.includes("PubMed 找到 20 篇。診斷準確度的題目常比治療題少，幾十到幾百篇都常見。可以拿 2–3 篇你知道一定要找到的文獻，看它們有沒有在結果裡。"), shown.join("\n"));
+	let retest = [...check.querySelectorAll("button")];
+	same(retest.map(b => b.textContent), ["我改好了，再測一次"]);
+	// The raw lines stay above, unchanged
+	assert.match(mine.querySelector("pre").textContent, /^✅ 符合 20 篇；最近 30 天加入 PubMed 的有 20 篇/);
+	assert.equal(stored(), before, "testing writes nothing to the watch");
+	assert.equal(mine.querySelector("textarea").value, MINE);
+
+	// Fixed in the query field, then 「我改好了，再測一次」: the same test again, with the new text
+	let textarea = mine.querySelector("textarea");
+	textarea.value = FIXED;
+	textarea.dispatchEvent(new window.Event("input"));
+	let edited = stored();
+	let requests = env.log.length;
+	click(retest[0]);
+	assert.equal(check.hidden, false, "the block stays while the re-test runs");
+	assert.equal(retest[0].disabled, true, "its button waits");
+	await wait(() => lines(mine).includes("沒有發現結構上的提醒。"));
+	same(env.log.slice(requests).map(c => [c.params.term, c.params.reldate]), [[FIXED, undefined], [FIXED, "30"]], "testDetail ran again");
+	assert.equal(check.getAttribute("aria-live"), "polite");
+	assert.equal(doc.activeElement, check.querySelector("button"), "focus moves to the new 再測 button");
+	assert.ok(lines(mine).some(l => /^PubMed 找到 10 篇。/.test(l)));
+	assert.equal(stored(), edited, "the re-test writes nothing either");
+	assert.equal(textarea.value, FIXED);
+
+	// Saved from 醫學文獻快速搜尋 and untouched: one notice, no button
+	click(gen.querySelector("button"));
+	await wait(() => !gen.querySelector(".zb-query-check").hidden);
+	same(lines(gen), ["檢索式體檢（只看你寫或改過的檢索式；不會改你的檢索式）", "這是 ZotMax 產生的檢索式，不做體檢；你改過之後再測，就會檢查。"]);
+	assert.equal(gen.querySelectorAll(".zb-query-check button").length, 0);
+	// Edited in the settings pane: checked like the user's own, and the stored `generated` stays as it was
+	let genText = gen.querySelector("textarea");
+	genText.value = FIXED;
+	genText.dispatchEvent(new window.Event("input"));
+	click(gen.querySelector("button"));
+	await wait(() => lines(gen).includes("沒有發現結構上的提醒。"));
+	same([...gen.querySelectorAll(".zb-query-check button")].map(b => b.textContent), ["我改好了，再測一次"]);
+	same(JSON.parse(stored()).filter(w => w.id === "gen").map(w => [w.query, w.generated]), [[FIXED, MESH_Q]]);
+
+	// Off: the test still answers, no block
+	env.prefStore[P + "queryCheck.enabled"] = false;
+	click(mine.querySelector("button"));
+	await wait(() => /符合 10 篇/.test(mine.querySelector("pre").textContent));
+	await new Promise(r => setTimeout(r, 20));
+	assert.equal(check.hidden, true);
+	assert.equal(check.children.length, 0);
+	for (let text of [mine.textContent, gen.textContent]) assert.doesNotMatch(text, /查完了|已完整|足夠|合格|不及格|分數|紅燈|綠燈/);
+	same(env.errors, []);
 	vm.runInContext("shutdown()", env.context);
 });

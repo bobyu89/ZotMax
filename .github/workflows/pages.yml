@@ -2,12 +2,14 @@ name: pages
 
 # Publishes site/ (install wizard index.html + literature search search.html + appraisal checklists appraisal.html) to GitHub Pages: https://bobyu89.github.io/ZotMax/
 # appraisal.html loads the shared checklist catalog, copied from content/appraisal-tools.js at deploy time (site/appraisal-tools.js is git-ignored).
+# search.html loads the shared query checker (檢索式體檢), copied from content/query-check.js the same way (site/query-check.js is git-ignored).
 on:
   push:
     branches: [main]
     paths:
       - "site/**"
       - "content/appraisal-tools.js"
+      - "content/query-check.js"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -30,6 +32,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Copy shared appraisal checklist catalog into site/
         run: cp content/appraisal-tools.js site/appraisal-tools.js
+      - name: Copy shared query checker into site/
+        run: cp content/query-check.js site/query-check.js
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

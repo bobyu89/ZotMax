@@ -901,7 +901,8 @@
 	 * Draw the card window into `root`. info: { scopeName, card, isNew, search: boolean (search links on),
 	 * tagLists: the collection's papers' Zotero tags, one array per paper (for the keyword suggestions) }
 	 * handlers: { onSave(card), onDelete(), onCancel(), search(card) → { en, all, skipped, layers: searchLayers(…),
-	 * targets: [{ name, url, copy, query }] (without layers: one flat row) } | null, open(target), copy(text) }
+	 * targets: [{ name, url, copy, query }] (without layers: one flat row) } | null, open(target), copy(text),
+	 * canLog(target) → whether 「📝 記一筆」 follows the opened target, logTarget(target) (檢索日誌) }
 	 */
 	function renderCard(doc, root, info, handlers) {
 		root.replaceChildren();
@@ -1109,7 +1110,14 @@
 			layerList.replaceChildren();
 			let targetButton = (t) => {
 				let b = el(doc, "button", { type: "button", class: "zb-pc-link", title: [t.desc, t.copy ? "開啟首頁並複製檢索式" : t.url].filter(Boolean).join("\n") }, t.copy ? `${t.name}（複製）` : t.name);
-				b.addEventListener("click", () => handlers.open && handlers.open(t));
+				b.addEventListener("click", () => {
+					if (handlers.open) handlers.open(t);
+					// 檢索日誌: 「📝 記一筆」 right after a database ZotMax can't count, once per target (nothing pops up)
+					if (!handlers.canLog || !handlers.canLog(t) || (b.nextSibling && b.nextSibling.dataset && b.nextSibling.dataset.zbLog)) return;
+					let log = el(doc, "button", { type: "button", class: "zb-pc-log", "data-zb-log": t.id, title: "記到檢索日誌（資料庫、日期和檢索式已預填）" }, "📝 記一筆");
+					log.addEventListener("click", () => handlers.logTarget && handlers.logTarget(t));
+					b.after(log);
+				});
 				return b;
 			};
 			if (q) {
@@ -1519,6 +1527,18 @@
 					}
 				},
 				copy: s => copyText(s),
+				// 檢索日誌 (search-log.js): 「📝 記一筆」 after a Chinese, CINAHL or grey-literature link, into this card's collection
+				canLog: (t) => {
+					try {
+						return !!ZB().searchLinks && ZB().searchLinks.canLog(t);
+					}
+					catch (e) {
+						return false;
+					}
+				},
+				logTarget: (t) => {
+					Promise.resolve(ZB().searchLog.addFromTarget(win, t, { collection: info.collection || null, fixed: true })).catch(e => Zotero.logError(e));
+				},
 			});
 			if (opts.onOpen) opts.onOpen(win);
 		});
@@ -1544,7 +1564,7 @@
 				Zotero.logError(e);
 			}
 		}
-		let info = { scopeName: sc.name, card: existing || emptyCard(), isNew: !existing, search: featureOn("searchLinks") && !!ZB().searchLinks, tagLists };
+		let info = { scopeName: sc.name, card: existing || emptyCard(), isNew: !existing, search: featureOn("searchLinks") && !!ZB().searchLinks, tagLists, collection: collection || null };
 		let choice;
 		try {
 			choice = await (opts.dialog || cardDialog)(info);

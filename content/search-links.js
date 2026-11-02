@@ -672,6 +672,30 @@
 		runtime.launch(t.url);
 	}
 
+	/**
+	 * Whether opening `t` offers 「📝 記一筆」 in the 檢索日誌 (search-log.js): Chinese, CINAHL, grey literature and
+	 * the user's own sources, while the log and its option are on. Never throws.
+	 */
+	function canLog(t) {
+		let log = scope.ZB && scope.ZB.searchLog;
+		if (!log || !t) return false;
+		try {
+			let src = findSource(readConfig(), t.id);
+			// A target that isn't a configured source but is the user's own (the PICO card's guideline pages)
+			if (!src && t.custom) return log.offerAfterOpen({ id: t.id, name: t.name, custom: true });
+			return !!src && log.offerAfterOpen(Object.assign({}, src, { custom: !src.builtin }));
+		}
+		catch (e) {
+			Zotero.logError(e);
+			return false;
+		}
+	}
+
+	/** 「📝 記一筆」: the entry form prefilled with the database, today and the query (the selected collection's log). */
+	function logTarget(t) {
+		return scope.ZB.searchLog.addFromTarget(Zotero.getMainWindow(), t, {});
+	}
+
 	/** For the Obsidian/Notion note (main.js); never throws. */
 	function calloutFor(data, study) {
 		// 「醫學資料庫搜尋連結」 off: no 🔎 延伸搜尋 in the notes either
@@ -723,6 +747,22 @@
 			r.append(l);
 			return r;
 		};
+		// 「📝 記一筆」 at the end of a row after one of its links opened a database ZotMax can't count: one per row,
+		// for the link opened last; nothing pops up
+		let offerLog = (r, t) => {
+			if (!r || !canLog(t)) return;
+			let b = doc.createElement("button");
+			b.textContent = `📝 記一筆：${t.name}`;
+			b.title = "記到檢索日誌（資料庫、日期和檢索詞已預填）";
+			b.dataset.zb = "log-link";
+			b.setAttribute("style", "padding: 0 6px;");
+			b.addEventListener("click", () => {
+				logTarget(t).catch(e => Zotero.logError(e));
+			});
+			let old = r.querySelector("[data-zb=log-link]");
+			if (old) old.replaceWith(b);
+			else r.append(b);
+		};
 		let link = (t) => {
 			let a = doc.createElement("a");
 			a.textContent = t.name;
@@ -733,6 +773,7 @@
 			a.addEventListener("click", (ev) => {
 				ev.preventDefault();
 				openTarget(t);
+				offerLog(a.parentNode, t);
 			});
 			return a;
 		};
@@ -763,14 +804,15 @@
 		}
 	}
 
-	/** Pick from a list until the user cancels; `entries` are { label, run }. */
+	/** Pick from a list until the user cancels; `entries` are { label, run } (or a function giving them, asked each time). */
 	async function pickLoop(text, entries) {
 		let win = Zotero.getMainWindow();
 		let picked = [];
 		for (;;) {
+			let list = typeof entries === "function" ? entries() : entries;
 			let sel = { value: 0 };
-			if (!Services.prompt.select(win, TITLE, text, entries.map(e => e.label), sel)) break;
-			let entry = entries[sel.value];
+			if (!Services.prompt.select(win, TITLE, text, list.map(e => e.label), sel)) break;
+			let entry = list[sel.value];
 			if (!entry) break;
 			picked.push(entry.label);
 			await entry.run();
@@ -813,13 +855,18 @@
 		return mesh.blocks.map(b => `${b.concept} → ${b.headings.length ? b.headings.map(h => h.heading).join("、") : "（沒有對應的 MeSH，只用關鍵字）"}`).join("\n");
 	}
 
-	async function saveWatch(query, q) {
+	/**
+	 * 「存成 PubMed 新文獻追蹤…」. A watch saved with the MeSH query ZotMax built keeps it as `generated`, so the
+	 * 檢索式體檢 under 測試檢索式 waits until the user changes it; the user's own keywords get no `generated`.
+	 */
+	async function saveWatch(query, q, mesh) {
 		let win = Zotero.getMainWindow();
 		let name = { value: String(q).slice(0, 40) };
 		if (!Services.prompt.prompt(win, TITLE, `PubMed 檢索式：\n${query}\n\n追蹤名稱（會成為標籤「追蹤/名稱」）：`, name, null, { value: false })) return null;
 		let watchName = String(name.value || "").trim();
 		if (!watchName) return null;
-		scope.ZB.pubmedWatch.addWatch({ name: watchName, query });
+		let generated = mesh && mesh.query && mesh.query === query ? query : "";
+		scope.ZB.pubmedWatch.addWatch(Object.assign({ name: watchName, query }, generated ? { generated } : {}));
 		notify(`已新增 PubMed 追蹤「${watchName}」。到 設定 → ZotMax → PubMed 新文獻追蹤 可以測試或調整；ZotMax 按鈕或快速指令 → 檢查新文獻（PubMed 追蹤）立即匯入。`);
 		return watchName;
 	}
@@ -852,14 +899,28 @@
 		if (chinese) lines.push("中文關鍵字：中文資料庫排在前面；英文資料庫建議改用英文關鍵字。");
 		lines.push("選一個開啟；開啟後會回到這個清單，按取消結束。");
 		// 「存成 PubMed 新文獻追蹤」 only while that feature is on
+		// After a database ZotMax can't count opens, the next list starts with 「📝 記一筆」 for it (until used or another opens)
+		let opened = null;
 		let entries = quickEntries(cfg, q, mesh).filter(e => e.kind !== "watch" || featureOn("pubmedWatch")).map(e => Object.assign(e, {
 			run: async () => {
-				if (e.kind === "open") openTarget(e.target);
+				if (e.kind === "open") {
+					openTarget(e.target);
+					opened = canLog(e.target) ? e.target : null;
+				}
 				else if (e.kind === "copy") runtime.copy(e.text);
-				else if (e.kind === "watch") await saveWatch(e.query, q);
+				else if (e.kind === "watch") await saveWatch(e.query, q, mesh);
 			},
 		}));
-		let picked = await pickLoop(lines.join("\n\n"), entries);
+		let withLog = () => (opened ? [{
+			kind: "log",
+			label: `📝 記一筆檢索日誌：${opened.name}（剛開啟）`,
+			run: async () => {
+				let t = opened;
+				opened = null;
+				await logTarget(t);
+			},
+		}, ...entries] : entries);
+		let picked = await pickLoop(lines.join("\n\n"), withLog);
 		return { query: q, mesh, picked };
 	}
 
@@ -888,6 +949,6 @@
 		buildTarget, routeSources, sourceLabel, itemInfo, cleanTitle, findQuery, itemTargets, relatedURL,
 		MESH_STOP, meshTerms, meshLookupURL, picoTerms, englishPhrases, picoQuery, meshConcepts, parseMeshSummary, buildMeshQuery,
 		quickEntries, noteCallout, describeSources,
-		runtime, readConfig, openTarget, calloutFor, renderPaneRow, showMore, suggestMesh, quickSearch, menuTargets, relatedFor,
+		runtime, readConfig, openTarget, canLog, logTarget, calloutFor, renderPaneRow, showMore, suggestMesh, quickSearch, menuTargets, relatedFor,
 	};
 });

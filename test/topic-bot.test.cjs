@@ -216,6 +216,12 @@ test("中文文獻: the card's first Chinese term per element, links to the data
 	] });
 	assert.equal(row, "> [!zm-links] 中文文獻（機器人查不到，請自己查）\n> [華藝線上圖書館](https://www.airitilibrary.com/)（貼上 `住院長者 跌倒`） · [Google Scholar](https://scholar.google.com/scholar?hl=zh-TW&q=%E4%BD%8F)");
 	assert.equal(bot.chineseRow(null), "");
+	// 檢索日誌 on: asks to record the search there, and links the log note when it has a path
+	let targets = [{ name: "華藝線上圖書館", url: "https://www.airitilibrary.com/", copy: true, query: "跌倒" }];
+	assert.equal(bot.chineseRow({ query: "跌倒", targets, logLink: "Zotero/Reviews/檢索日誌/跌倒" }),
+		"> [!zm-links] 中文文獻（機器人查不到，查完請記到檢索日誌）\n> [華藝線上圖書館](https://www.airitilibrary.com/)（貼上 `跌倒`） · [[Zotero/Reviews/檢索日誌/跌倒|📝 檢索日誌]]");
+	assert.equal(bot.chineseRow({ query: "跌倒", targets, logLink: "" }),
+		"> [!zm-links] 中文文獻（機器人查不到，查完請記到檢索日誌）\n> [華藝線上圖書館](https://www.airitilibrary.com/)（貼上 `跌倒`）", "no path yet: the wording, no link");
 	// In the note, after the warnings and before the list
 	let built = bot.buildBotSection("", { at: NOW, counts: { pubmed: 0, citations: 0 }, candidates: [], chinese: { query: "跌倒", targets: [{ name: "華藝線上圖書館", url: "https://www.airitilibrary.com/", copy: true, query: "跌倒" }] } },
 		Object.assign({}, BOT, { exclude: ["children"] }), { layout: "board" });

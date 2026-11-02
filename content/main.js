@@ -1824,6 +1824,8 @@
 		// Automatic PubMed checks (off unless enabled in the settings)
 		ZB.pubmedWatch.init();
 		ZB.topicBot.init();
+		// 檢索日誌 (search-log.js): notices batches tagged 來源/… for 「補記一筆」; nothing pops up
+		ZB.searchLog.init();
 		// Polling of AI batches submitted earlier (ai-batch.js)
 		ZB.aiBatch.init();
 		// 讀懂統計: the button in the PDF reader's text-selection popup (stats-explainer.js)
@@ -1872,6 +1874,7 @@
 		ZB.bibliography.shutdown();
 		ZB.pubmedWatch.shutdown();
 		ZB.topicBot.shutdown();
+		ZB.searchLog.shutdown();
 		ZB.aiBatch.shutdown();
 	}
 
