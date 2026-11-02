@@ -5,14 +5,19 @@
 - **main = 0.39.0**（PR #47 已合併）。v0.39.0 release 已核對：asset sha256 `cdc82319…6b63` = updates.json 的 update_hash。
 - **0.40.0 = 草稿 PR #48**（分支 `claude/nice-cerf-7tnr4g`）：https://github.com/bobyu89/ZotMax/pull/48
   - 程式、測試、xpi、updates.json 都已推上；本機 `npm test` 857/857 通過。
-  - **CI 結果還沒看**：推上後還沒查過檢查狀態。
-  - **README.md 和 DESIGN.md 還沒更新**（見下方「待辦 1」）。
+  - CI 全綠（2026-10-29）；README.md 和 DESIGN.md 已更新（2026-11-02）。
+  - BOB 說「先到這邊」，**還沒合併**。
 - 計畫文件（Claude Docs）：https://claude.ai/artifact/FeCog2pWuFNeJHmiYWGHVM
 - 痛點地圖儀表板：https://claude.ai/artifact/FoMxkWNYpeVZNewAHgeGs9
 
 ## 待辦（依序）
 
-1. **補 0.40.0 文件**：依 `docs/dev/0.40.0-docs-notes.md`（各部分實作者寫的 README/DESIGN 需求、未解問題、審查修正）和 `docs/dev/0.40.0-design.md` 的「README/DESIGN changes」段，更新 README.md、DESIGN.md。**以程式碼為準**，筆記可能已被審查修正改掉。網頁版 site/search.html 的來源表要不要補 0.39.0 新增的三個來源（pubmed-sr、rnao、gin），一併決定。
+1. ~~補 0.40.0 文件~~（已完成）。另有三個小地方還沒改（E 交給 D 但沒做）：
+   - `content/preferences.xhtml` 約 406 行：檢索健康檢查勾選框的說明結尾「不打分數」改掉（避免「分數」字眼）。
+   - 約 399 行：補上「檢索健康檢查」「停止理由」的設定頁搜尋字串。
+   - `content/commands.js`：篩選指令的 keywords 加「檢索健康檢查」「search health」。
+   - 另：檢索日誌輸入表單的錯誤訊息是紅字（`#b00020`），違反 DESIGN 的不用紅字規則，可改成主題變數。
+   原第 1 項：**補 0.40.0 文件**：依 `docs/dev/0.40.0-docs-notes.md`（各部分實作者寫的 README/DESIGN 需求、未解問題、審查修正）和 `docs/dev/0.40.0-design.md` 的「README/DESIGN changes」段，更新 README.md、DESIGN.md。**以程式碼為準**，筆記可能已被審查修正改掉。網頁版 site/search.html 的來源表要不要補 0.39.0 新增的三個來源（pubmed-sr、rnao、gin），一併決定。
 2. **刪掉 `docs/dev/`**（或保留但不放進 release）：這個資料夾只是交班用，0.40.0 合併前移除，或改放到別處。
 3. 查 PR #48 CI；全綠後等 BOB 說「合併」。
 4. 合併流程（固定）：
